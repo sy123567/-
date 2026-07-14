@@ -1,0 +1,19 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+left to right direction
+
+actor 用户 as user
+
+rectangle "社区管理" {
+  usecase "讨论区管理" as c1
+  usecase "攻略社区管理" as c2
+  usecase "一键套用" as c3
+  usecase "行后游记生成与发布" as c4
+}
+
+user --> c1
+user --> c2
+user --> c3
+user --> c4
+@enduml
