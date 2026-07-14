@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Inter", "Noto Sans SC", sans-serif;
+  color: #16223a;
+  background: #f5f7fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 84% -10%, rgba(255, 91, 76, 0.12), transparent 30rem), #f5f7fa;
+}
+
+button, input, select { font: inherit; }
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 3px solid rgba(47, 155, 255, 0.5);
+  outline-offset: 3px;
+}
+
+@keyframes route-draw {
+  from { stroke-dashoffset: 900; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-route { animation: route-draw 1.8s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .card { @apply rounded-card border border-slate-100 bg-surface shadow-soft; }
+  .eyebrow { @apply font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-ink-soft; }
+}
