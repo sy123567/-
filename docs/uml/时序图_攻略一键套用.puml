@@ -1,0 +1,27 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+autonumber
+
+actor 成员 as user
+boundary "React 前端" as web
+control "GuideController" as controller
+control "GuideApplyService" as service
+database "GuideMapper / MySQL" as mysql
+collections "Redis 幂等缓存" as redis
+
+user -> web : 查看攻略详情并点击一键套用
+web -> controller : POST /api/guides/{id}/apply\n(groupId,startDate)
+controller -> service : 校验成员权限与参数
+service -> redis : SETNX apply:dedup:{guide}:{group}:{date}
+redis --> service : 首次请求
+service -> mysql : 查询 GuideTemplate\n与 GuideTemplateNode
+mysql --> service : 相对时间模板
+service -> service : plannedStart = startDate + dayOffset + startTime\nplannedEnd = startDate + dayOffset + endTime
+service -> mysql : 校验成员约束\n创建 Trip/Nodes/Routes
+service -> service : 生成 constraintWarnings\n与裁剪建议
+service -> mysql : 更新 sourceGuideId
+service --> controller : Trip + warnings
+controller --> web : Result<ApplyGuideResponse>
+web --> user : 显示绝对时间预览并进入新行程
+@enduml

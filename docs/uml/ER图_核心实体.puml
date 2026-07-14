@@ -1,0 +1,149 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam linetype ortho
+hide methods
+hide stereotypes
+
+entity users {
+  * id : BIGINT
+  --
+  name : VARCHAR
+  email : VARCHAR
+  role : VARCHAR
+  status : VARCHAR
+}
+entity travel_groups {
+  * id : BIGINT
+  --
+  owner_user_id : BIGINT
+  room_code : VARCHAR
+  member_limit : SMALLINT
+}
+entity group_members {
+  * id : BIGINT
+  --
+  group_id : BIGINT
+  user_id : BIGINT
+  role : VARCHAR
+}
+entity member_constraints {
+  * id : BIGINT
+  --
+  member_id : BIGINT
+  available_from : DATE
+  available_to : DATE
+  max_budget : DECIMAL
+}
+entity trips {
+  * id : BIGINT
+  --
+  group_id : BIGINT
+  source_guide_id : BIGINT
+  status : VARCHAR
+  start_date : DATE
+  end_date : DATE
+}
+entity itinerary_nodes {
+  * id : BIGINT
+  --
+  trip_id : BIGINT
+  planned_start : DATETIME
+  planned_end : DATETIME
+  status : VARCHAR
+}
+entity routes {
+  * id : BIGINT
+  --
+  trip_id : BIGINT
+  from_node_id : BIGINT
+  to_node_id : BIGINT
+}
+entity external_events {
+  * id : BIGINT
+  --
+  event_type : VARCHAR
+  severity : VARCHAR
+  latitude : DOUBLE
+  longitude : DOUBLE
+  start_time : DATETIME
+  end_time : DATETIME
+}
+entity impact_assessments {
+  * id : BIGINT
+  --
+  trip_id : BIGINT
+  event_id : BIGINT
+  affected_node_id : BIGINT
+  impact_level : VARCHAR
+}
+entity alternative_plans {
+  * id : BIGINT
+  --
+  trip_id : BIGINT
+  strategy : VARCHAR
+  status : VARCHAR
+}
+entity node_changes {
+  * id : BIGINT
+  --
+  plan_id : BIGINT
+  original_node_id : BIGINT
+  change_type : VARCHAR
+}
+entity plan_votes {
+  * id : BIGINT
+  --
+  plan_id : BIGINT
+  member_id : BIGINT
+  choice : VARCHAR
+}
+entity change_logs {
+  * id : BIGINT
+  --
+  trip_id : BIGINT
+  related_plan_id : BIGINT
+  extra_cost : DECIMAL
+}
+entity travel_guides {
+  * id : BIGINT
+  --
+  author_id : BIGINT
+  city : VARCHAR
+  days : SMALLINT
+  per_capita_budget : DECIMAL
+}
+entity guide_templates {
+  * id : BIGINT
+  --
+  guide_id : BIGINT
+}
+entity guide_template_nodes {
+  * id : BIGINT
+  --
+  template_id : BIGINT
+  day_offset : SMALLINT
+  start_time : TIME
+}
+
+users ||--o{ travel_groups : owns
+users ||--o{ group_members : joins
+travel_groups ||--o{ group_members : contains
+group_members ||--o| member_constraints : has
+travel_groups ||--o{ trips : plans
+trips ||--o{ itinerary_nodes : contains
+trips ||--o{ routes : connects
+trips ||--o{ impact_assessments : receives
+external_events ||--o{ impact_assessments : triggers
+itinerary_nodes ||--o{ impact_assessments : affects
+trips ||--o{ alternative_plans : proposes
+alternative_plans ||--o{ node_changes : includes
+alternative_plans ||--o{ plan_votes : receives
+group_members ||--o{ plan_votes : casts
+trips ||--o{ change_logs : records
+alternative_plans ||--o{ change_logs : applies
+users ||--o{ travel_guides : authors
+travel_guides ||--|| guide_templates : owns
+guide_templates ||--o{ guide_template_nodes : contains
+travel_guides ..> trips : source_guide_id
+@enduml

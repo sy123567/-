@@ -1,0 +1,27 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+
+start
+:输入房间码;
+:校验格式;
+if (房间码格式正确?) then (是)
+  :Redis 查询 groupId;
+  if (房间码有效?) then (是)
+    :查询小组状态和成员数;
+    if (小组未满且用户未加入?) then (是)
+      :写入 group_members;
+      :创建默认成员约束;
+      :通知群主和成员;
+      :显示加入成功;
+    else (否)
+      :提示容量已满或已加入;
+    endif
+  else (否)
+    :提示房间码无效或已过期;
+  endif
+else (否)
+  :提示房间码格式错误;
+endif
+stop
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+autonumber
+
+actor "事件源/管理员" as source
+actor 群主 as owner
+actor 成员 as member
+boundary "React 前端" as web
+control "EventController" as eventController
+control "ImpactService" as impact
+control "RiskService" as risk
+control "ReplanService" as replan
+control "VotingService" as voting
+control "NotificationService" as notify
+database "MySQL" as mysql
+collections "Redis / WebSocket" as realtime
+
+source -> web : 录入或生成事件
+web -> eventController : POST /api/events
+eventController -> mysql : 保存 ExternalEvent
+eventController -> realtime : 发布 event-ingested
+realtime --> web : 事件已接入
+
+eventController -> impact : assess(tripId)
+impact -> mysql : 查询未来节点与有效事件
+impact -> impact : Haversine + 时间窗相交
+impact -> mysql : 保存 ImpactAssessment\n节点置为 AFFECTED
+impact -> realtime : 发布 impact-assessed
+impact -> risk : calculate(tripId)
+risk -> mysql : 汇总严重度/节点占比/成本/时间缓冲
+risk -> realtime : 发布 risk snapshot
+risk -> replan : generateAlternatives(tripId)
+replan -> mysql : 保存三种 AlternativePlan\n与 NodeChange
+replan -> realtime : 发布 plan-proposed
+
+owner -> web : 发起投票
+web -> voting : POST /api/plans/{id}/start-voting
+voting -> mysql : PROPOSED -> VOTING
+voting -> notify : 通知全体成员
+notify -> realtime : 发布 vote-updated
+
+member -> web : 提交赞成/反对/弃权
+web -> voting : POST /api/plans/{id}/votes
+voting -> mysql : Upsert PlanVote
+voting -> realtime : 发布 vote-updated
+
+owner -> web : 计票
+web -> voting : POST /api/plans/{id}/tally
+voting -> realtime : 获取分布式锁
+voting -> mysql : SELECT plan FOR UPDATE
+voting -> voting : 过半判定
+voting -> mysql : 原子应用 NodeChange\n驳回兄弟方案\n写入 ChangeLog\n更新 Trip
+voting -> notify : 创建 ACCEPTED 通知
+notify -> realtime : 发布 plan-accepted
+realtime --> web : 刷新行程、风险与通知
+@enduml

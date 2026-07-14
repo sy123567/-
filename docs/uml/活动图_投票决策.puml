@@ -1,0 +1,29 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+
+start
+:群主选择一个 PROPOSED 方案;
+:校验群主权限;
+:方案状态变更为 VOTING;
+:通知全部成员;
+repeat
+  :成员提交 APPROVE / REJECT / ABSTAIN;
+  :按(plan_id, member_id)幂等写入;
+repeat while (仍有成员未投票?) is (继续)
+-> 计票;
+:获得 vote:tally 分布式锁;
+:锁定方案并读取最新票数;
+if (approveCount > totalMembers / 2?) then (通过)
+  :状态变更为 ACCEPTED;
+  :原子应用 NodeChange;
+  :驳回同一行程其他方案;
+  :写入 ChangeLog 与退款截止时间;
+  :发布 plan-accepted;
+else (不通过)
+  :状态变更为 REJECTED;
+  :发布投票未通过通知;
+endif
+:释放分布式锁;
+stop
+@enduml

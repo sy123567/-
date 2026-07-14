@@ -1,0 +1,37 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam rectangle {
+  BackgroundColor white
+  BorderColor black
+  FontColor black
+}
+skinparam package {
+  BackgroundColor #F5F5F5
+  BorderColor black
+}
+top to bottom direction
+
+rectangle "行迹应变·多人出行动态规划与中断恢复平台" as system #E8E8E8
+
+rectangle "账号管理\n注册、登录、注销、忘记密码、个人资料管理" as account
+rectangle "社交组队管理\n好友关系管理、出行小组管理、房间码加入" as social
+rectangle "出行规划管理\n成员约束、初始方案、节点、地图、预算" as planning
+rectangle "监测与应变管理\n事件、影响、风险、持续分析、重规划、投票、变更、通知" as adaptive
+rectangle "社区管理\n讨论区、攻略社区、一键套用、行后游记" as community
+rectangle "后台与监控管理\n用户管理、运营后台、统计分析、可观测与配置" as admin
+
+system -down-> account
+system -down-> social
+system -down-> planning
+system -down-> adaptive
+system -down-> community
+system -down-> admin
+
+account -[hidden]right-> social
+social -[hidden]right-> planning
+planning -[hidden]right-> adaptive
+adaptive -[hidden]right-> community
+community -[hidden]right-> admin
+@enduml

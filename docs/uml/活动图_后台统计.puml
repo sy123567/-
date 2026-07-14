@@ -1,0 +1,24 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+
+start
+:管理员登录;
+:打开统计后台;
+:校验 ADMIN 权限;
+if (权限通过?) then (是)
+  :选择日期范围;
+  :读取 Redis 统计缓存;
+  if (缓存存在?) then (是)
+    :返回缓存统计;
+  else (否)
+    :执行 MySQL 聚合查询;
+    :写入短期统计缓存;
+    :返回聚合统计;
+  endif
+  :渲染行程、预算、事件命中率\n和方案采纳率;
+else (否)
+  :返回 403;
+endif
+stop
+@enduml

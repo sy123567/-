@@ -1,0 +1,25 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+
+start
+:打开攻略详情;
+:选择目标小组和出发日期;
+:读取模板节点;
+:相对日期 + 出发日期映射为绝对时间;
+:校验成员日期、预算和必访地点;
+if (存在约束冲突?) then (是)
+  :展示 warnings 和可裁剪节点;
+  if (用户确认继续?) then (继续)
+    :应用裁剪建议;
+  else (取消)
+    stop
+  endif
+else (否)
+  :显示可行预览;
+endif
+:创建 Trip、Node、Route;
+:写入 sourceGuideId;
+:跳转新行程;
+stop
+@enduml

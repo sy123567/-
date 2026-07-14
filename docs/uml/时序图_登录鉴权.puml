@@ -1,0 +1,32 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+autonumber
+
+actor 用户 as user
+boundary "React 前端" as web
+control "AuthController" as controller
+control "AuthService" as service
+database "UserMapper / MySQL" as mysql
+collections "Redis 会话缓存" as redis
+
+user -> web : 输入邮箱与密码
+web -> controller : POST /api/auth/login
+controller -> service : 校验登录请求
+service -> mysql : 查询用户与密码摘要
+mysql --> service : User
+service -> service : BCrypt 校验密码\n生成 JWT(jti)
+service -> redis : SET auth:token:{jti} userId EX TTL
+redis --> service : OK
+service --> controller : token + User
+controller --> web : Result<LoginResponse>
+web --> user : 进入首页
+
+== 后续请求 ==
+web -> controller : GET /api/trips\nAuthorization: Bearer JWT
+controller -> service : SecurityFilter 校验签名
+service -> redis : GET auth:token:{jti}
+redis --> service : userId
+service --> controller : Trip[]
+controller --> web : Result<Trip[]>
+@enduml
