@@ -1,0 +1,157 @@
+digraph TripAdaptivePlatform {
+  graph [
+    rankdir=TB,
+    newrank=true,
+    compound=true,
+    splines=ortho,
+    bgcolor="white",
+    pad="0.35",
+    nodesep="0.55",
+    ranksep="0.85",
+    dpi=150,
+    fontname="WenQuanYi Zen Hei",
+    label="",
+    labelloc="t"
+  ];
+
+  node [
+    shape=box,
+    style="filled",
+    fillcolor="white",
+    color="black",
+    fontcolor="black",
+    fontname="WenQuanYi Zen Hei",
+    fontsize=15,
+    margin="0.18,0.12",
+    penwidth=1.2
+  ];
+
+  edge [
+    color="black",
+    fontname="WenQuanYi Zen Hei",
+    fontsize=12,
+    penwidth=1.0,
+    arrowsize=0.6,
+    arrowhead=none
+  ];
+
+  system [
+    label="行迹应变·多人出行动态规划与中断恢复平台",
+    fillcolor="#E8E8E8",
+    fontsize=20,
+    penwidth=1.8,
+    margin="0.28,0.20"
+  ];
+
+  subgraph cluster_account {
+    label="";
+    color="transparent";
+    penwidth=0;
+    account [label="账号与权限管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    account_user [label="用户账号管理"];
+    account_auth [label="认证与权限管理"];
+    account_compliance [label="协议合规管理"];
+    account -> account_user;
+    account_user -> account_auth;
+    account_auth -> account_compliance;
+  }
+
+  subgraph cluster_social {
+    label="";
+    color="transparent";
+    penwidth=0;
+    social [label="社交组队管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    social_friend [label="好友关系管理"];
+    social_group [label="出行小组管理"];
+    social -> social_friend;
+    social_friend -> social_group;
+  }
+
+  subgraph cluster_planning {
+    label="";
+    color="transparent";
+    penwidth=0;
+    planning [label="出行规划管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    planning_constraints [label="成员约束管理"];
+    planning_initial [label="初始方案生成"];
+    planning_nodes [label="行程节点管理"];
+    planning_map [label="地图路线导航"];
+    planning_budget [label="预算费用管理"];
+    planning -> planning_constraints;
+    planning_constraints -> planning_initial;
+    planning_initial -> planning_nodes;
+    planning_nodes -> planning_map;
+    planning_map -> planning_budget;
+  }
+
+  subgraph cluster_adaptive {
+    label="";
+    color="transparent";
+    penwidth=0;
+    adaptive [label="监测与应变管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    adaptive_ingest [label="事件接入管理"];
+    adaptive_impact [label="影响匹配分析"];
+    adaptive_risk [label="风险评分预警"];
+    adaptive_monitor [label="持续动态分析"];
+    adaptive_replan [label="自动重规划"];
+    adaptive_vote [label="协同投票决策"];
+    adaptive_log [label="变更记录管理"];
+    adaptive_notice [label="消息通知管理"];
+    adaptive -> adaptive_ingest;
+    adaptive_ingest -> adaptive_impact;
+    adaptive_impact -> adaptive_risk;
+    adaptive_risk -> adaptive_monitor;
+    adaptive_monitor -> adaptive_replan;
+    adaptive_replan -> adaptive_vote;
+    adaptive_vote -> adaptive_log;
+    adaptive_log -> adaptive_notice;
+  }
+
+  subgraph cluster_community {
+    label="";
+    color="transparent";
+    penwidth=0;
+    community [label="社区与增值管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    community_settlement [label="AA分账结算"];
+    community_discussion [label="讨论区管理"];
+    community_security [label="文件内容安全"];
+    community_guides [label="攻略社区管理"];
+    community_apply [label="一键套用"];
+    community_diary [label="行后游记"];
+    community -> community_settlement;
+    community_settlement -> community_discussion;
+    community_discussion -> community_security;
+    community_security -> community_guides;
+    community_guides -> community_apply;
+    community_apply -> community_diary;
+  }
+
+  subgraph cluster_admin {
+    label="";
+    color="transparent";
+    penwidth=0;
+    admin [label="后台与监控管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    admin_users [label="用户管理"];
+    admin_operations [label="运营后台管理"];
+    admin_stats [label="数据统计分析"];
+    admin_observability [label="可观测与配置"];
+    admin -> admin_users;
+    admin_users -> admin_operations;
+    admin_operations -> admin_stats;
+    admin_stats -> admin_observability;
+  }
+
+  system -> account;
+  system -> social;
+  system -> planning;
+  system -> adaptive;
+  system -> community;
+  system -> admin;
+
+  { rank=same; account; social; planning; adaptive; community; admin; }
+  account -> social [style=invis, weight=100];
+  social -> planning [style=invis, weight=100];
+  planning -> adaptive [style=invis, weight=100];
+  adaptive -> community [style=invis, weight=100];
+  community -> admin [style=invis, weight=100];
+}
