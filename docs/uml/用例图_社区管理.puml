@@ -8,7 +8,7 @@ actor 用户 as user
 rectangle "社区管理" {
   usecase "讨论区管理" as c1
   usecase "攻略社区管理" as c2
-  usecase "一键套用" as c3
+  usecase "攻略纳用" as c3
   usecase "行后游记生成与发布" as c4
 }
 

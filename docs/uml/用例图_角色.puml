@@ -9,8 +9,9 @@ actor 群主 as owner
 actor 管理员 as admin
 actor "外部事件源" as source
 
-rectangle "行迹应变平台" {
-  usecase "注册 / 登录 / 注销" as auth
+rectangle "智能旅游平台" {
+  usecase "注册和登录" as auth
+  usecase "注销" as logout
   usecase "管理个人资料" as profile
   usecase "管理好友关系" as friends
   usecase "创建/加入出行小组" as groups
@@ -22,12 +23,13 @@ rectangle "行迹应变平台" {
   usecase "生成替代方案" as replan
   usecase "参与协同投票" as vote
   usecase "查看通知与变更记录" as notices
-  usecase "浏览攻略并一键套用" as guides
+  usecase "浏览攻略并攻略纳用" as guides
   usecase "发布讨论与行后游记" as content
-  usecase "运营统计与配置" as operations
+  usecase "运营后台与数据统计" as operations
 }
 
 guest --> auth
+member --> logout
 guest --> guides
 member --> profile
 member --> friends

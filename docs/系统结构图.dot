@@ -36,7 +36,7 @@ digraph TripAdaptivePlatform {
   ];
 
   system [
-    label="行迹应变·多人出行动态规划与中断恢复平台",
+    label="智能旅游平台",
     fillcolor="#E8E8E8",
     fontsize=20,
     penwidth=1.8,
@@ -47,13 +47,13 @@ digraph TripAdaptivePlatform {
     label="";
     color="transparent";
     penwidth=0;
-    account [label="账号与权限管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
-    account_user [label="用户账号管理"];
-    account_auth [label="认证与权限管理"];
-    account_compliance [label="协议合规管理"];
-    account -> account_user;
-    account_user -> account_auth;
-    account_auth -> account_compliance;
+    account [label="账号管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    account_register [label="注册和登录"];
+    account_logout [label="注销"];
+    account_profile [label="个人资料管理"];
+    account -> account_register;
+    account_register -> account_logout;
+    account_logout -> account_profile;
   }
 
   subgraph cluster_social {
@@ -111,19 +111,15 @@ digraph TripAdaptivePlatform {
     label="";
     color="transparent";
     penwidth=0;
-    community [label="社区与增值管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
-    community_settlement [label="AA分账结算"];
+    community [label="社区管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
     community_discussion [label="讨论区管理"];
-    community_security [label="文件内容安全"];
     community_guides [label="攻略社区管理"];
-    community_apply [label="一键套用"];
-    community_diary [label="行后游记"];
-    community -> community_settlement;
-    community_settlement -> community_discussion;
-    community_discussion -> community_security;
-    community_security -> community_guides;
+    community_apply [label="攻略纳用"];
+    community_diary [label="行后游记生成与发布"];
+    community -> community_discussion;
     community_guides -> community_apply;
     community_apply -> community_diary;
+    community_discussion -> community_guides;
   }
 
   subgraph cluster_admin {
@@ -134,11 +130,9 @@ digraph TripAdaptivePlatform {
     admin_users [label="用户管理"];
     admin_operations [label="运营后台管理"];
     admin_stats [label="数据统计分析"];
-    admin_observability [label="可观测与配置"];
     admin -> admin_users;
     admin_users -> admin_operations;
     admin_operations -> admin_stats;
-    admin_stats -> admin_observability;
   }
 
   system -> account;

@@ -5,9 +5,9 @@ left to right direction
 
 actor 用户 as user
 
-rectangle "账号与权限管理" {
-  usecase "注册/登录/注销" as a1
-  usecase "忘记密码" as a2
+rectangle "账号管理" {
+  usecase "注册和登录" as a1
+  usecase "注销" as a2
   usecase "个人资料管理" as a3
 }
 

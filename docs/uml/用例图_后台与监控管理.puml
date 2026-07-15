@@ -9,11 +9,9 @@ rectangle "后台与监控管理" {
   usecase "用户管理" as b1
   usecase "运营后台管理" as b2
   usecase "数据统计分析" as b3
-  usecase "可观测与配置" as b4
 }
 
 admin --> b1
 admin --> b2
 admin --> b3
-admin --> b4
 @enduml
