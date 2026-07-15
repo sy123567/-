@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-ink text-coral">
             <Route size={30} aria-hidden="true" />
           </div>
-          <p className="relative mt-6 font-mono text-[10px] tracking-[0.2em] text-coral">TRIP ADAPTIVE / RECOVERY</p>
+          <p className="relative mt-6 font-mono text-[10px] tracking-[0.2em] text-coral">SMART TRAVEL / RECOVERY</p>
           <h1 className="relative mt-3 font-display text-3xl font-bold">页面出错了</h1>
           <p className="relative mx-auto mt-3 max-w-sm text-sm leading-6 text-ink-soft">
             这条路线暂时偏离了轨道。刷新页面试试；如果问题持续，可以检查后端服务或切换到 Mock 数据。

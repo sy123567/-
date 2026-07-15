@@ -8,7 +8,6 @@ import { AppLayout } from "./layout/AppLayout";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GuidesPage } from "./pages/GuidesPage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { TripDetailPage } from "./pages/TripDetailPage";
 import {
   AdminPage,
@@ -33,20 +32,6 @@ import {
 } from "./pages/Pass2Pages";
 
 const queryClient = new QueryClient();
-const placeholders: [string, string][] = [
-  ["/groups", "我的小组"],
-  ["/friends", "好友与邀请"],
-  ["/trips", "行程总览"],
-  ["/events", "事件监测"],
-  ["/impacts", "影响与风险"],
-  ["/plans", "替代方案"],
-  ["/votes", "投票中心"],
-  ["/discussions", "讨论区"],
-  ["/notifications", "通知"],
-  ["/settings", "个人设置"],
-  ["/trips/new", "新建行程"],
-];
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -76,9 +61,6 @@ function App() {
           <Route path="/notifications" element={<AppLayout><NotificationsPage /></AppLayout>} />
           <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
           <Route path="/admin" element={<AppLayout><AdminPage /></AppLayout>} />
-          {placeholders.filter(([path]) => !["/groups", "/friends", "/trips", "/events", "/impacts", "/plans", "/votes", "/discussions", "/notifications", "/settings", "/trips/new"].includes(path)).map(([path, title]) => (
-            <Route key={path} path={path} element={<AppLayout><PlaceholderPage title={title} /></AppLayout>} />
-          ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
