@@ -2,6 +2,7 @@
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
 autonumber
+title 账号管理
 
 actor 用户 as user
 boundary "React 前端" as web

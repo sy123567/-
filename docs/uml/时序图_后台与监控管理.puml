@@ -2,6 +2,7 @@
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
 autonumber
+title 后台与监控管理
 
 actor 管理员 as admin
 boundary "React 后台" as web

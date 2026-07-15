@@ -1,6 +1,7 @@
 @startuml
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
+title 账号管理
 
 start
 :打开登录页面;

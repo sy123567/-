@@ -2,6 +2,7 @@
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
 autonumber
+title 出行规划管理
 
 actor 群主 as owner
 boundary "React 前端" as web

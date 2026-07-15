@@ -1,6 +1,7 @@
 @startuml
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
+title 社区管理
 
 start
 :打开攻略详情;

@@ -2,6 +2,7 @@
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
 autonumber
+title 监测与应变管理
 
 actor "事件源/管理员" as source
 actor 群主 as owner

@@ -6,6 +6,7 @@ skinparam activity {
   BorderColor black
   FontColor black
 }
+title 监测与应变管理
 
 start
 :接收外部事件;
