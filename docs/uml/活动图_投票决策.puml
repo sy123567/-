@@ -1,6 +1,7 @@
 @startuml
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
+title 监测与应变管理：投票决策补充
 
 start
 :群主选择一个 PROPOSED 方案;

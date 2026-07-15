@@ -1,6 +1,7 @@
 @startuml
 skinparam defaultFontName "WenQuanYi Zen Hei"
 skinparam shadowing false
+title 出行规划管理
 
 start
 :选择小组和出发日期;
