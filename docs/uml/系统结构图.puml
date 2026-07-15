@@ -13,14 +13,14 @@ skinparam package {
 }
 top to bottom direction
 
-rectangle "行迹应变·多人出行动态规划与中断恢复平台" as system #E8E8E8
+rectangle "智能旅游平台" as system #E8E8E8
 
-rectangle "账号管理\n注册、登录、注销、忘记密码、个人资料管理" as account
+rectangle "账号管理\n注册和登录、注销、个人资料管理" as account
 rectangle "社交组队管理\n好友关系管理、出行小组管理、房间码加入" as social
-rectangle "出行规划管理\n成员约束、初始方案、节点、地图、预算" as planning
-rectangle "监测与应变管理\n事件、影响、风险、持续分析、重规划、投票、变更、通知" as adaptive
-rectangle "社区管理\n讨论区、攻略社区、一键套用、行后游记" as community
-rectangle "后台与监控管理\n用户管理、运营后台、统计分析、可观测与配置" as admin
+rectangle "出行规划管理\n成员约束管理、初始方案生成、行程节点管理、地图路线导航、预算费用管理" as planning
+rectangle "监测与应变管理\n事件接入管理、影响匹配分析、风险评分预警、持续动态分析、自动重规划、协同投票决策、变更记录管理、消息通知管理" as adaptive
+rectangle "社区管理\n讨论区管理、攻略社区管理、攻略纳用、行后游记生成与发布" as community
+rectangle "后台与监控管理\n用户管理、运营后台管理、数据统计分析" as admin
 
 system -down-> account
 system -down-> social

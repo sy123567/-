@@ -10,7 +10,7 @@ control "GuideApplyService" as service
 database "GuideMapper / MySQL" as mysql
 collections "Redis 幂等缓存" as redis
 
-user -> web : 查看攻略详情并点击一键套用
+user -> web : 查看攻略详情并点击攻略纳用
 web -> controller : POST /api/guides/{id}/apply\n(groupId,startDate)
 controller -> service : 校验成员权限与参数
 service -> redis : SETNX apply:dedup:{guide}:{group}:{date}
