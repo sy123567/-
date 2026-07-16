@@ -32,4 +32,7 @@ public final class Requests {
       @NotNull Long memberId,
       @NotNull com.trip.adaptive.domain.Enums.VoteChoice choice,
       String comment) {}
+
+  // M04 好友关系
+  public record FriendRequest(@NotNull Long addresseeId) {}
 }
