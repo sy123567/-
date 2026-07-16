@@ -2,6 +2,7 @@ import { ArrowRight, Check, Mail, MapPin, ShieldCheck, Sparkles } from "lucide-r
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Input } from "../components/ui";
+import { signIn } from "../auth";
 
 function RouteArtwork() {
   return (
@@ -39,7 +40,10 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       return;
     }
     setSubmitting(true);
-    window.setTimeout(() => navigate("/"), 420);
+    window.setTimeout(() => {
+      signIn();
+      navigate("/");
+    }, 420);
   };
 
   return (
@@ -134,7 +138,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
                 {!submitting && <ArrowRight size={17} />}
               </Button>
             </form>
-            {!register && <p className="mt-4 text-center text-xs text-ink-soft">演示账号：admin@trip-adaptive.demo · 密码：demo1234</p>}
+            {!register && <div className="mt-4 rounded-xl border border-sky/15 bg-sky/5 p-3 text-xs text-ink-soft"><p>演示账号：<span className="font-mono text-ink">admin@trip-adaptive.demo</span></p><p className="mt-1">密码：<span className="font-mono text-ink">demo1234</span></p><button type="button" className="mt-2 font-semibold text-sky hover:text-ink" onClick={() => { setEmail("admin@trip-adaptive.demo"); setPassword("demo1234"); }}>一键填入演示账号</button></div>}
             <div className="mt-6 flex items-center justify-center gap-2 text-sm text-ink-soft"><Check size={15} className="text-mint" />数据仅用于你的旅行协作</div>
             <p className="mt-8 text-center text-sm text-ink-soft">
               {register ? "已经有账号？" : "还没有账号？"}{" "}

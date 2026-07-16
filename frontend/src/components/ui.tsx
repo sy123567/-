@@ -1,6 +1,9 @@
+import { useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { Check, ChevronRight, CircleAlert, CloudRain, MapPin, Sparkles } from "lucide-react";
+import { Check, ChevronRight, CircleAlert, CloudRain, Info, MapPin, Sparkles } from "lucide-react";
 import type { ItineraryNode, NodeStatus } from "../types";
+import { getPlaceDetail } from "../mocks/places";
+import { PlaceDetailSheet } from "./PlaceDetailSheet";
 
 export function Button({ children, variant = "primary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" }) {
   const styles = {
@@ -44,7 +47,8 @@ export function StatusBadge({ status }: { status: NodeStatus }) {
 }
 
 export function RouteTrail({ nodes, compact = false }: { nodes: ItineraryNode[]; compact?: boolean }) {
-  return <div className={`relative ${compact ? "space-y-4" : "space-y-7"}`}><div className="absolute bottom-6 left-[17px] top-6 border-l-2 border-dashed border-coral/30" />{nodes.map((node) => { const Icon = nodeIcon[node.nodeType]; return <div key={node.id} className="relative flex gap-4"><div className={`z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border-4 border-paper ${node.status === "AFFECTED" ? "bg-coral text-white" : "bg-mint text-white"}`}><Icon size={14} /></div><div className={`min-w-0 flex-1 ${compact ? "pb-1" : "pb-1"}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p><StatusBadge status={node.status} /></div><p className="mt-1 font-semibold text-ink">{node.name}</p><p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>{node.status === "AFFECTED" && <div className="mt-3 flex items-start gap-2 rounded-xl bg-coral/5 px-3 py-2 text-xs leading-5 text-coral-deep"><CircleAlert size={14} className="mt-0.5 shrink-0" />阵雨可能影响此节点，已有 3 位成员关注</div>}</div></div>; })}</div>;
+  const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
+  return <>{<div className={`relative ${compact ? "space-y-4" : "space-y-7"}`}><div className="absolute bottom-6 left-[17px] top-6 border-l-2 border-dashed border-coral/30" />{nodes.map((node) => { const Icon = nodeIcon[node.nodeType]; return <div key={node.id} className="relative flex gap-4"><div className={`z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border-4 border-paper ${node.status === "AFFECTED" ? "bg-coral text-white" : "bg-mint text-white"}`}><Icon size={14} /></div><div className={`min-w-0 flex-1 ${compact ? "pb-1" : "pb-1"}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p><StatusBadge status={node.status} /></div><button type="button" onClick={() => setSelectedNode(node)} className="group mt-1 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:-translate-y-0.5 hover:text-coral focus-visible:outline-offset-2"><span className="truncate">{node.name}</span><Info size={14} className="shrink-0 text-sky opacity-60 transition group-hover:opacity-100" /></button><p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>{node.status === "AFFECTED" && <div className="mt-3 flex items-start gap-2 rounded-xl bg-coral/5 px-3 py-2 text-xs leading-5 text-coral-deep"><CircleAlert size={14} className="mt-0.5 shrink-0" />阵雨可能影响此节点，已有 3 位成员关注</div>}</div></div>; })}</div>}{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}</>;
 }
 
 function formatTime(value: string) { return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }); }

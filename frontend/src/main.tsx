@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { isAuthed } from "./auth";
 import { AppLayout } from "./layout/AppLayout";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -32,6 +33,10 @@ import {
 } from "./pages/Pass2Pages";
 
 const queryClient = new QueryClient();
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  return isAuthed() ? children : <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -39,28 +44,28 @@ function App() {
         <Routes>
           <Route path="/login" element={<AuthPage />} />
           <Route path="/register" element={<AuthPage register />} />
-          <Route path="/" element={<AppLayout><DashboardPage /></AppLayout>} />
-          <Route path="/guides" element={<AppLayout><GuidesPage /></AppLayout>} />
-          <Route path="/guides/:id" element={<AppLayout><GuideDetailPage /></AppLayout>} />
-          <Route path="/trips/:id" element={<AppLayout><TripDetailPage /></AppLayout>} />
-          <Route path="/trips/:id/changelog" element={<AppLayout><ChangelogPage /></AppLayout>} />
-          <Route path="/trips" element={<AppLayout><TripsPage /></AppLayout>} />
-          <Route path="/trips/new" element={<AppLayout><NewTripPage /></AppLayout>} />
-          <Route path="/routes" element={<AppLayout><RouteMapPage /></AppLayout>} />
-          <Route path="/budget" element={<AppLayout><BudgetPage /></AppLayout>} />
-          <Route path="/settlement" element={<AppLayout><SettlementPage /></AppLayout>} />
-          <Route path="/groups" element={<AppLayout><GroupsPage /></AppLayout>} />
-          <Route path="/groups/:id" element={<AppLayout><GroupDetailPage /></AppLayout>} />
-          <Route path="/groups/:id/constraints/:memberId" element={<AppLayout><ConstraintPage /></AppLayout>} />
-          <Route path="/friends" element={<AppLayout><FriendsPage /></AppLayout>} />
-          <Route path="/events" element={<AppLayout><EventsPage /></AppLayout>} />
-          <Route path="/impacts" element={<AppLayout><ImpactsPage /></AppLayout>} />
-          <Route path="/plans" element={<AppLayout><PlansPage /></AppLayout>} />
-          <Route path="/votes" element={<AppLayout><VotesPage /></AppLayout>} />
-          <Route path="/discussions" element={<AppLayout><DiscussionsPage /></AppLayout>} />
-          <Route path="/notifications" element={<AppLayout><NotificationsPage /></AppLayout>} />
-          <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
-          <Route path="/admin" element={<AppLayout><AdminPage /></AppLayout>} />
+          <Route path="/" element={<RequireAuth><AppLayout><DashboardPage /></AppLayout></RequireAuth>} />
+          <Route path="/guides" element={<RequireAuth><AppLayout><GuidesPage /></AppLayout></RequireAuth>} />
+          <Route path="/guides/:id" element={<RequireAuth><AppLayout><GuideDetailPage /></AppLayout></RequireAuth>} />
+          <Route path="/trips/:id" element={<RequireAuth><AppLayout><TripDetailPage /></AppLayout></RequireAuth>} />
+          <Route path="/trips/:id/changelog" element={<RequireAuth><AppLayout><ChangelogPage /></AppLayout></RequireAuth>} />
+          <Route path="/trips" element={<RequireAuth><AppLayout><TripsPage /></AppLayout></RequireAuth>} />
+          <Route path="/trips/new" element={<RequireAuth><AppLayout><NewTripPage /></AppLayout></RequireAuth>} />
+          <Route path="/routes" element={<RequireAuth><AppLayout><RouteMapPage /></AppLayout></RequireAuth>} />
+          <Route path="/budget" element={<RequireAuth><AppLayout><BudgetPage /></AppLayout></RequireAuth>} />
+          <Route path="/settlement" element={<RequireAuth><AppLayout><SettlementPage /></AppLayout></RequireAuth>} />
+          <Route path="/groups" element={<RequireAuth><AppLayout><GroupsPage /></AppLayout></RequireAuth>} />
+          <Route path="/groups/:id" element={<RequireAuth><AppLayout><GroupDetailPage /></AppLayout></RequireAuth>} />
+          <Route path="/groups/:id/constraints/:memberId" element={<RequireAuth><AppLayout><ConstraintPage /></AppLayout></RequireAuth>} />
+          <Route path="/friends" element={<RequireAuth><AppLayout><FriendsPage /></AppLayout></RequireAuth>} />
+          <Route path="/events" element={<RequireAuth><AppLayout><EventsPage /></AppLayout></RequireAuth>} />
+          <Route path="/impacts" element={<RequireAuth><AppLayout><ImpactsPage /></AppLayout></RequireAuth>} />
+          <Route path="/plans" element={<RequireAuth><AppLayout><PlansPage /></AppLayout></RequireAuth>} />
+          <Route path="/votes" element={<RequireAuth><AppLayout><VotesPage /></AppLayout></RequireAuth>} />
+          <Route path="/discussions" element={<RequireAuth><AppLayout><DiscussionsPage /></AppLayout></RequireAuth>} />
+          <Route path="/notifications" element={<RequireAuth><AppLayout><NotificationsPage /></AppLayout></RequireAuth>} />
+          <Route path="/settings" element={<RequireAuth><AppLayout><SettingsPage /></AppLayout></RequireAuth>} />
+          <Route path="/admin" element={<RequireAuth><AppLayout><AdminPage /></AppLayout></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
