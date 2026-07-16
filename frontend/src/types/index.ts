@@ -55,6 +55,24 @@ export interface ItineraryNode {
   status: NodeStatus;
 }
 
+export interface PlaceFood {
+  name: string;
+  desc: string;
+}
+
+export interface PlaceDetail {
+  placeName: string;
+  code?: string;
+  category: string;
+  intro: string;
+  highlights: string[];
+  foods: PlaceFood[];
+  tips?: string;
+  bestTime?: string;
+  ticket?: string;
+  image?: string;
+}
+
 export interface Route {
   id: Id;
   fromNodeId: Id;
