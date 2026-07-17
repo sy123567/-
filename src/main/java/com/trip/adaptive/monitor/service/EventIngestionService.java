@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.service.TripService;
+import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import com.trip.adaptive.domain.Enums;
@@ -14,7 +15,7 @@ import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.ExternalEventRepository;
-
+import com.trip.adaptive.monitor.service.ImpactMatchingService;
 
 
 @Service
@@ -22,10 +23,14 @@ public class EventIngestionService {
   private final ExternalEventRepository events;
   private final TripService trips;
   private final WeatherClient weather;
-  public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w) {
+  private final ImpactMatchingService impactMatching;
+
+  public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w, ImpactMatchingService i) {
     events = e;
     trips = t;
     weather = w;
+    impactMatching = i;
+
   }
 
   public ExternalEvent ingest(ExternalEvent e) {
@@ -65,6 +70,7 @@ public class EventIngestionService {
     return out;
   }
 
+ @Transactional
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
     Trip t = trips.get(tripId);
     List<ExternalEvent> out = new ArrayList<>();
@@ -111,6 +117,8 @@ public class EventIngestionService {
 
       }
     }
+   if (!out.isEmpty())
+     impactMatching.assessTrip(tripId);
     return out;
   }
   //一条 ExternalEvent 除了标题/类型/严重度不同，其余字段（地点、经纬度、影响半径、起止时间、来源）都来自那个行程节点 n，两个分支都要设一遍。与其写两遍，就抽成 fill：
@@ -123,7 +131,7 @@ public class EventIngestionService {
     e.setEndTime(n.getPlannedEnd());
     e.setSource(source);
   }
-//去重后再存库,定时轮询每 10 分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
+//去重后再存库,定时轮询每 100分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
   private void save(java.util.List<ExternalEvent> out, ExternalEvent e) {
     if (!events.existsBySourceAndPlaceNameAndStartTime(
             e.getSource(), e.getPlaceName(), e.getStartTime())) {
