@@ -33,6 +33,10 @@ management:
 app:
   seed:
     enabled: true
+  qweather:
+      key: ${QWEATHER_KEY:}
+      host: ${QWEATHER_HOST:https://openapi.weathercn.com}
+
 
 # MySQL 示例配置：
 # spring:

@@ -9,4 +9,6 @@ import com.trip.adaptive.domain.ExternalEvent;
 
 public interface ExternalEventRepository extends JpaRepository<ExternalEvent, Long> {
   List<ExternalEvent> findByEndTimeAfter(LocalDateTime time);
+  boolean existsBySourceAndPlaceNameAndStartTime(
+          String source, String placeName, java.time.LocalDateTime startTime);
 }

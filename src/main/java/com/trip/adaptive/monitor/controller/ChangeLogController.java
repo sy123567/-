@@ -1,4 +1,4 @@
-package com.trip.adaptive.controller;
+package com.trip.adaptive.monitor.controller;
 
 import java.util.List;
 
