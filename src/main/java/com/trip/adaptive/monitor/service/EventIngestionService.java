@@ -2,7 +2,9 @@ package com.trip.adaptive.monitor.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.service.TripService;
@@ -76,50 +78,57 @@ public class EventIngestionService {
     List<ExternalEvent> out = new ArrayList<>();
     if (!weather.enabled())
       return out;
+    Map<String,List<ItineraryNode>> byCity=new LinkedHashMap<>();
     for (ItineraryNode n : t.getItineraryNodes()) {
-      if (n.getLatitude() == null || n.getLongitude() == null) {
-        continue;
-      }
+      if (n.getLatitude() == null || n.getLongitude() == null) continue;
       String loc = weather.locationKey(n.getLatitude(), n.getLongitude());
       if (loc == null) continue;
-      boolean created = false;
-      //自然灾害预警
-      JsonNode alerts = weather.alerts(loc);
-      if (alerts != null && alerts.isArray() && alerts.size() > 0) {
-        for (JsonNode a : alerts) {
-          ExternalEvent e = new ExternalEvent();
-          e.setEventType(Enums.EventType.WEATHER);
-          e.setTitle(text(a, "Description", "预警"));   // 字段名以真实预警返回为准
-          e.setDescription(a.path("Description").path("Localized").asText("天气预警"));
-          e.setSeverity(Enums.Severity.HIGH);
-          fill(e, n, "weathercn-alert");
-          save(out, e);
-          created = true;
-        }
-        //无灾害,看降水
-        if (!created) {
-          JsonNode fc = weather.dailyForecast(loc);
-          if (fc != null) {
-            JsonNode day = fc.path("DailyForecasts").path(0).path("Day");
-            boolean rain = day.path("HasPrecipitation").asBoolean(false);
-            String headline = fc.path("Headline").path("Text").asText("");
-            if (rain || headline.matches(".*(雨|雪|暴|雷).*")) {
-              ExternalEvent e = new ExternalEvent();
-              e.setEventType(Enums.EventType.WEATHER);
-              e.setTitle(headline.isBlank() ? "预报有降水" : headline);
-              e.setDescription(fc.path("Headline").path("Text").asText("天气预报"));
-              e.setSeverity(Enums.Severity.MEDIUM);
-              fill(e, n, "weathercn-forecast");
-              save(out, e);
-            }
-          }
-        }
-
-      }
+      byCity.computeIfAbsent(loc, k -> new ArrayList<>()).add(n);
     }
+    for(Map.Entry<String,List<ItineraryNode>> entry : byCity.entrySet())
+      ingestForCity(entry.getKey(), entry.getValue(), out);
    if (!out.isEmpty())
      impactMatching.assessTrip(tripId);
     return out;
+  }
+  private void ingestForCity(String loc, List<ItineraryNode> nodes, List<ExternalEvent> out) {
+    boolean createdAlert = false;
+    // 自然灾害预警：每城市只查一次
+    JsonNode alerts = weather.alerts(loc);
+    if (alerts != null && alerts.isArray() && alerts.size() > 0) {
+      for (JsonNode a : alerts) {
+        for (ItineraryNode n : nodes) {
+          ExternalEvent ev = new ExternalEvent();
+          ev.setEventType(Enums.EventType.WEATHER);
+          ev.setTitle(text(a, "Description", "预警"));
+          ev.setDescription(a.path("Description").path("Localized").asText("天气预警"));
+          ev.setSeverity(Enums.Severity.HIGH);
+          fill(ev, n, "weathercn-alert");
+          save(out, ev);
+        }
+        createdAlert = true;
+      }
+    }
+    // 修正：没有任何预警时才看降水（原来这段被错误嵌套在"有预警"分支里）
+    if (!createdAlert) {
+      JsonNode fc = weather.dailyForecast(loc);
+      if (fc != null) {
+        JsonNode day = fc.path("DailyForecasts").path(0).path("Day");
+        boolean rain = day.path("HasPrecipitation").asBoolean(false);
+        String headline = fc.path("Headline").path("Text").asText("");
+        if (rain || headline.matches(".*(雨|雪|暴|雷).*")) {
+          for (ItineraryNode n : nodes) {
+            ExternalEvent ev = new ExternalEvent();
+            ev.setEventType(Enums.EventType.WEATHER);
+            ev.setTitle(headline.isBlank() ? "预报有降水" : headline);
+            ev.setDescription(fc.path("Headline").path("Text").asText("天气预报"));
+            ev.setSeverity(Enums.Severity.MEDIUM);
+            fill(ev, n, "weathercn-forecast");
+            save(out, ev);
+          }
+        }
+      }
+    }
   }
   //一条 ExternalEvent 除了标题/类型/严重度不同，其余字段（地点、经纬度、影响半径、起止时间、来源）都来自那个行程节点 n，两个分支都要设一遍。与其写两遍，就抽成 fill：
   private void fill(ExternalEvent e, ItineraryNode n, String source) {
