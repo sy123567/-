@@ -9,6 +9,8 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.service.TripService;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
 
 import com.trip.adaptive.domain.Enums;
@@ -26,7 +28,11 @@ public class EventIngestionService {
   private final TripService trips;
   private final WeatherClient weather;
   private final ImpactMatchingService impactMatching;
-
+  @Value("${weather.forecast-window-days:3}")
+  private int forecastWindowDays;
+  public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
+    return ingestWeatherForTrip(tripId, false);
+  }
   public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w, ImpactMatchingService i) {
     events = e;
     trips = t;
@@ -73,14 +79,20 @@ public class EventIngestionService {
   }
 
  @Transactional
-  public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
+  public List<ExternalEvent> ingestWeatherForTrip(Long tripId, boolean force) {
     Trip t = trips.get(tripId);
     List<ExternalEvent> out = new ArrayList<>();
     if (!weather.enabled())
       return out;
+    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime cutoff = now.plusDays(forecastWindowDays);
     Map<String,List<ItineraryNode>> byCity=new LinkedHashMap<>();
     for (ItineraryNode n : t.getItineraryNodes()) {
       if (n.getLatitude() == null || n.getLongitude() == null) continue;
+      if(force){
+        if (n.getPlannedEnd() != null && n.getPlannedEnd().isBefore(now)) continue;
+        if (n.getPlannedStart() != null && n.getPlannedStart().isAfter(cutoff)) continue;
+      }
       String loc = weather.locationKey(n.getLatitude(), n.getLongitude());
       if (loc == null) continue;
       byCity.computeIfAbsent(loc, k -> new ArrayList<>()).add(n);

@@ -20,6 +20,11 @@ spring:
   web:
     resources:
       add-mappings: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -40,15 +45,10 @@ app:
       key: ${QWEATHER_KEY:}
       host: ${QWEATHER_HOST:https://openapi.weathercn.com}
 
-data:
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-
 weather:
   cache-ttl-minutes: ${WEATHER_CACHE_TTL:60}   # alerts/forecast 缓存 30 分钟
   poll-enabled: ${WEATHER_POLL:false}          # 定时轮询开关,默认关,避免烧配额
-  poll-interval-ms: 36000000                     # 30 分钟
+  poll-interval-ms: 3600000                    # 60 分钟
   forecast-window-days: 3                       # 只查近 3 天内的节点
 # MySQL 示例配置：
 # spring:
