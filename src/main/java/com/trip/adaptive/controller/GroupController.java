@@ -6,12 +6,14 @@ import java.util.List;
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trip.adaptive.domain.GroupMember;
@@ -64,5 +66,22 @@ public class GroupController {
     c.setAccessibilityNeeds(
         r.accessibilityNeeds() == null ? new ArrayList<>() : r.accessibilityNeeds());
     return s.setConstraint(memberId, c);
+  }
+
+  @DeleteMapping("/{id}/members/{memberId}")
+  public ResponseEntity<Void> remove(
+      @PathVariable Long id,
+      @PathVariable Long memberId,
+      @RequestParam(defaultValue = "1") Long operatorId) {
+    s.removeMember(id, memberId, operatorId);
+    return ResponseEntity.noContent().build();
+  }
+
+  @PutMapping("/{id}/transfer")
+  public TravelGroup transfer(
+      @PathVariable Long id,
+      @RequestParam Long newOwnerId,
+      @RequestParam(defaultValue = "1") Long operatorId) {
+    return s.transferOwner(id, newOwnerId, operatorId);
   }
 }

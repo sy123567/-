@@ -66,4 +66,44 @@ public class GroupService {
     c.setMember(m);
     return constraints.save(c);
   }
+
+  @Transactional
+  public void removeMember(Long groupId, Long memberId, Long operatorId) {
+    TravelGroup group = get(groupId);
+    GroupMember member =
+        members.findById(memberId).orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
+    if (!member.getGroup().getId().equals(groupId)) {
+      throw new com.trip.adaptive.exception.BusinessException("成员不属于该群组");
+    }
+    if (member.getRole() == Enums.MemberRole.OWNER) {
+      throw new com.trip.adaptive.exception.BusinessException("不能删除群主，请先转移群主");
+    }
+    members.delete(member);
+  }
+
+  @Transactional
+  public TravelGroup transferOwner(Long groupId, Long newOwnerId, Long operatorId) {
+    TravelGroup group = get(groupId);
+    GroupMember newOwner =
+        members.findById(newOwnerId).orElseThrow(() -> new ResourceNotFoundException("成员不存在"));
+    if (!newOwner.getGroup().getId().equals(groupId)) {
+      throw new com.trip.adaptive.exception.BusinessException("成员不属于该群组");
+    }
+    if (newOwner.getRole() == Enums.MemberRole.OWNER) {
+      throw new com.trip.adaptive.exception.BusinessException("该成员已经是群主");
+    }
+    GroupMember currentOwner =
+        members
+            .findById(operatorId)
+            .orElseThrow(() -> new ResourceNotFoundException("操作人不存在"));
+    if (currentOwner.getRole() != Enums.MemberRole.OWNER) {
+      throw new com.trip.adaptive.exception.BusinessException("只有群主可以转移群主身份");
+    }
+    currentOwner.setRole(Enums.MemberRole.MEMBER);
+    members.save(currentOwner);
+    newOwner.setRole(Enums.MemberRole.OWNER);
+    members.save(newOwner);
+    group.setOwnerUser(newOwner.getUser());
+    return groups.save(group);
+  }
 }
