@@ -3,9 +3,9 @@ package com.trip.adaptive.controller;
 import java.util.List;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,46 +38,50 @@ public class FriendshipController {
   // M04-2 发起好友申请
   @PostMapping("/request")
   public ResponseEntity<Friendship> sendRequest(
-      @RequestParam @NotNull Long requesterId, @Valid @RequestBody FriendRequest r) {
-    Friendship f = s.sendRequest(requesterId, r.addresseeId());
+      Authentication authentication, @Valid @RequestBody FriendRequest r) {
+    Friendship f = s.sendRequest(currentUser(authentication).getId(), r.addresseeId());
     return ResponseEntity.status(201).body(f);
   }
 
   // M04-3 同意好友申请
   @PostMapping("/requests/{id}/accept")
-  public Friendship accept(@PathVariable Long id, @RequestParam @NotNull Long userId) {
-    return s.acceptRequest(id, userId);
+  public Friendship accept(@PathVariable Long id, Authentication authentication) {
+    return s.acceptRequest(id, currentUser(authentication).getId());
   }
 
   // M04-3 拒绝好友申请
   @PostMapping("/requests/{id}/reject")
-  public Friendship reject(@PathVariable Long id, @RequestParam @NotNull Long userId) {
-    return s.rejectRequest(id, userId);
+  public Friendship reject(@PathVariable Long id, Authentication authentication) {
+    return s.rejectRequest(id, currentUser(authentication).getId());
   }
 
   // M04-4 查看好友列表
   @GetMapping
-  public List<User> getFriends(@RequestParam @NotNull Long userId) {
-    return s.getFriends(userId);
+  public List<User> getFriends(Authentication authentication) {
+    return s.getFriends(currentUser(authentication).getId());
   }
 
   // 查看收到的好友申请（待处理）
   @GetMapping("/requests/incoming")
-  public List<Friendship> getIncomingRequests(@RequestParam @NotNull Long userId) {
-    return s.getPendingRequests(userId);
+  public List<Friendship> getIncomingRequests(Authentication authentication) {
+    return s.getPendingRequests(currentUser(authentication).getId());
   }
 
   // 查看发出的好友申请
   @GetMapping("/requests/outgoing")
-  public List<Friendship> getOutgoingRequests(@RequestParam @NotNull Long userId) {
-    return s.getSentRequests(userId);
+  public List<Friendship> getOutgoingRequests(Authentication authentication) {
+    return s.getSentRequests(currentUser(authentication).getId());
   }
 
   // M04-5 删除好友
   @DeleteMapping("/{friendId}")
   public ResponseEntity<Void> deleteFriend(
-      @RequestParam @NotNull Long userId, @PathVariable Long friendId) {
-    s.deleteFriend(userId, friendId);
+      Authentication authentication, @PathVariable Long friendId) {
+    s.deleteFriend(currentUser(authentication).getId(), friendId);
     return ResponseEntity.noContent().build();
+  }
+
+  private User currentUser(Authentication authentication) {
+    return (User) authentication.getPrincipal();
   }
 }

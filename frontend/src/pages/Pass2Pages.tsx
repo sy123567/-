@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { activeTrip, groupMembers, guides, plans } from "../mocks/data";
 import { getPlaceDetail } from "../mocks/places";
@@ -112,9 +112,156 @@ export function ConstraintPage() {
 
 export function FriendsPage() {
   const [tab, setTab] = useState("全部");
+  const [keyword, setKeyword] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast, show } = useToast();
-  const friends = [{ name: "阿麦去远方", detail: "最近在计划杭州西湖", avatar: "https://i.pravatar.cc/100?img=32" }, { name: "林听雨", detail: "共同加入 2 个小组", avatar: "https://i.pravatar.cc/100?img=45" }, { name: "周知远", detail: "上海 · 周末慢游组", avatar: "https://i.pravatar.cc/100?img=13" }];
-  return <><PageHeader eyebrow="PEOPLE YOU TRAVEL WITH" title="好友与邀请" description="把一起走过的路，变成下一次出发的默契。" action={<div className="flex gap-2"><Input placeholder="搜索用户" /><Button onClick={() => show("已发送好友申请")}><UserPlus size={16} className="mr-2 inline" />添加</Button></div>} /><div className="mb-5 flex gap-2">{["全部", "好友", "收到的申请", "发出的申请"].map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === item ? "bg-ink text-white" : "bg-white text-ink-soft"}`}>{item}</button>)}</div><Card className="divide-y divide-slate-100 p-5">{(tab === "收到的申请" ? [{ name: "山川有信", detail: "想加入你的好友列表", avatar: "https://i.pravatar.cc/100?img=68" }] : friends).map((friend) => <div key={friend.name} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"><div className="flex items-center gap-3"><img src={friend.avatar} alt="" className="h-11 w-11 rounded-full" /><div><p className="font-semibold text-ink">{friend.name}</p><p className="mt-1 text-xs text-ink-soft">{friend.detail}</p></div></div>{tab === "收到的申请" ? <div className="flex gap-2"><Button onClick={() => show(`已接受 ${friend.name} 的申请`)}>接受</Button><Button variant="ghost" onClick={() => show("已忽略申请")}>忽略</Button></div> : <Button variant="ghost" onClick={() => show(`已邀请 ${friend.name} 加入小组`)}>邀请进组</Button>}</div>)}</Card>{toast}</>;
+  const queryClient = useQueryClient();
+  const friendsQuery = useQuery({ queryKey: ["friends"], queryFn: api.friends });
+  const incomingQuery = useQuery({ queryKey: ["friend-requests", "incoming"], queryFn: api.incomingFriendRequests });
+  const outgoingQuery = useQuery({ queryKey: ["friend-requests", "outgoing"], queryFn: api.outgoingFriendRequests });
+  const searchQuery = useQuery({
+    queryKey: ["friend-search", searchTerm],
+    queryFn: () => api.searchFriends(searchTerm),
+    enabled: searchTerm.trim().length > 0,
+  });
+  const refreshFriends = () => {
+    void queryClient.invalidateQueries({ queryKey: ["friends"] });
+    void queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+  };
+  const action = useMutation({
+    mutationFn: async (request: { type: "send" | "accept" | "reject" | "delete"; id: number }) => {
+      if (request.type === "send") return api.sendFriendRequest(request.id);
+      if (request.type === "accept") return api.acceptFriendRequest(request.id);
+      if (request.type === "reject") return api.rejectFriendRequest(request.id);
+      return api.deleteFriend(request.id);
+    },
+    onSuccess: () => {
+      refreshFriends();
+      show("操作已完成");
+    },
+    onError: (error) => show(error instanceof Error ? error.message : "操作失败"),
+  });
+  const friends = friendsQuery.data ?? [];
+  const incoming = incomingQuery.data ?? [];
+  const outgoing = outgoingQuery.data ?? [];
+  const loading = friendsQuery.isLoading || incomingQuery.isLoading || outgoingQuery.isLoading;
+  const error = friendsQuery.error ?? incomingQuery.error ?? outgoingQuery.error;
+  const avatar = (name: string) => name.slice(0, 1);
+  return (
+    <>
+      <PageHeader
+        eyebrow="PEOPLE YOU TRAVEL WITH"
+        title="好友与邀请"
+        description="把一起走过的路，变成下一次出发的默契。"
+        action={
+          <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearchTerm(keyword);
+            }}
+          >
+            <Input placeholder="搜索姓名或邮箱" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+            <Button type="submit">
+              <UserPlus size={16} className="mr-2 inline" />搜索
+            </Button>
+          </form>
+        }
+      />
+      {searchQuery.data && searchQuery.data.length > 0 && (
+        <Card className="mb-5 divide-y divide-slate-100 p-5">
+          <p className="pb-3 text-sm font-semibold text-ink">搜索结果</p>
+          {searchQuery.data.map((user) => (
+            <div key={user.id} className="flex items-center justify-between gap-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{avatar(user.name)}</div>
+                <div>
+                  <p className="font-semibold text-ink">{user.name}</p>
+                  <p className="text-xs text-ink-soft">{user.email}</p>
+                </div>
+              </div>
+              <Button onClick={() => action.mutate({ type: "send", id: user.id })} disabled={action.isPending}>添加好友</Button>
+            </div>
+          ))}
+        </Card>
+      )}
+      <div className="mb-5 flex gap-2">
+        {["全部", "好友", "收到的申请", "发出的申请"].map((item) => (
+          <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === item ? "bg-ink text-white" : "bg-white text-ink-soft"}`}>
+            {item}
+          </button>
+        ))}
+      </div>
+      {loading ? (
+        <LoadingState label="正在读取好友关系…" />
+      ) : error ? (
+        <ErrorState message={error instanceof Error ? error.message : undefined} onRetry={() => refreshFriends()} />
+      ) : (
+        <Card className="divide-y divide-slate-100 p-5">
+          {tab === "收到的申请" &&
+            incoming.map((request) => (
+              <FriendRow
+                key={request.id}
+                name={request.requester.name}
+                detail={request.requester.email}
+                initial={avatar(request.requester.name)}
+                actions={
+                  <div className="flex gap-2">
+                    <Button onClick={() => action.mutate({ type: "accept", id: request.id })}>接受</Button>
+                    <Button variant="ghost" onClick={() => action.mutate({ type: "reject", id: request.id })}>忽略</Button>
+                  </div>
+                }
+              />
+            ))}
+          {tab === "发出的申请" &&
+            outgoing.map((request) => (
+              <FriendRow key={request.id} name={request.addressee.name} detail="等待对方确认" initial={avatar(request.addressee.name)} />
+            ))}
+          {(tab === "全部" || tab === "好友") &&
+            friends.map((friend) => (
+              <FriendRow
+                key={friend.id}
+                name={friend.name}
+                detail={friend.email}
+                initial={avatar(friend.name)}
+                actions={<Button variant="ghost" onClick={() => action.mutate({ type: "delete", id: friend.id })}>删除好友</Button>}
+              />
+            ))}
+          {((tab === "收到的申请" && incoming.length === 0) ||
+            (tab === "发出的申请" && outgoing.length === 0) ||
+            ((tab === "全部" || tab === "好友") && friends.length === 0)) && (
+            <p className="py-8 text-center text-sm text-ink-soft">这里还没有关系记录。</p>
+          )}
+        </Card>
+      )}
+      {toast}
+    </>
+  );
+}
+
+function FriendRow({
+  name,
+  detail,
+  initial,
+  actions,
+}: {
+  name: string;
+  detail: string;
+  initial: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-3">
+        <div className="grid h-11 w-11 place-items-center rounded-full bg-coral/10 font-semibold text-coral">{initial}</div>
+        <div>
+          <p className="font-semibold text-ink">{name}</p>
+          <p className="mt-1 text-xs text-ink-soft">{detail}</p>
+        </div>
+      </div>
+      {actions}
+    </div>
+  );
 }
 
 export function TripsPage() {

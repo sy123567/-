@@ -44,6 +44,9 @@ app:
   qweather:
       key: ${QWEATHER_KEY:}
       host: ${QWEATHER_HOST:https://openapi.weathercn.com}
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-to-a-long-random-value}
+    expiration: ${JWT_EXPIRATION:86400000}
 
 weather:
   cache-ttl-minutes: ${WEATHER_CACHE_TTL:60}   # alerts/forecast 缓存 30 分钟

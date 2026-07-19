@@ -11,27 +11,34 @@ import com.trip.adaptive.repository.UserRepository;
 public class AuthService {
   private final UserRepository users;
   private final PasswordEncoder encoder;
+  private final JwtService jwtService;
 
-  public AuthService(UserRepository users, PasswordEncoder encoder) {
+  public AuthService(UserRepository users, PasswordEncoder encoder, JwtService jwtService) {
     this.users = users;
     this.encoder = encoder;
+    this.jwtService = jwtService;
   }
 
-  public LoginResult login(String email, String password) {
+  public AuthResponse login(String email, String password) {
     User user = users.findByEmail(email).orElseThrow(() -> new BusinessException("邮箱或密码错误"));
     if (!encoder.matches(password, user.getPassword())) {
       throw new BusinessException("邮箱或密码错误");
     }
-    return new LoginResult(user.getId(), user.getName(), user.getEmail(), user.getPhone());
+    return response(user);
   }
 
-  public User register(String name, String email, String password, String phone) {
+  public AuthResponse register(String name, String email, String password, String phone) {
     if (users.findByEmail(email).isPresent()) {
       throw new BusinessException("该邮箱已被注册");
     }
     User user = new User(name, email, encoder.encode(password), phone);
-    return users.save(user);
+    return response(users.save(user));
   }
 
-  public record LoginResult(Long userId, String name, String email, String phone) {}
+  public AuthResponse response(User user) {
+    return new AuthResponse(
+        jwtService.issue(user), user.getId(), user.getName(), user.getEmail(), user.getPhone());
+  }
+
+  public record AuthResponse(String token, Long userId, String name, String email, String phone) {}
 }

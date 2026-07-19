@@ -46,6 +46,10 @@ public class GroupService {
     return groups.findById(id).orElseThrow(() -> new ResourceNotFoundException("群组不存在: " + id));
   }
 
+  public List<TravelGroup> forUser(Long userId) {
+    return groups.findDistinctByMembersUserId(userId);
+  }
+
   public List<GroupMember> members(Long id) {
     return members.findByGroupId(id);
   }
