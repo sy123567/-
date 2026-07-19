@@ -1,5 +1,5 @@
 import { getToken, type AuthUser } from "../auth";
-import { activeTrip, changeLogs, events, groupMembers, guides, mockDashboard, plans } from "../mocks/data";
+import { activeTrip, changeLogs, events, guides, mockDashboard, plans } from "../mocks/data";
 import type { DashboardData, GroupMember, TravelGuide, TravelGroup, Trip } from "../types";
 
 const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
@@ -136,29 +136,24 @@ export const api = {
     return request<Trip>(`/api/trips/${id}`);
   },
   async groups() {
-    if (useMocks) return [{ ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" }];
     return request<TravelGroup[]>("/api/groups");
   },
   async group(id: number): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" };
     return request<TravelGroup>(`/api/groups/${id}`);
   },
   async createGroup(name: string, description?: string): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, id: Date.now(), name, description: description ?? "", roomCode: "HZ25-8Q" };
     return request<TravelGroup>("/api/groups", {
       method: "POST",
       body: JSON.stringify({ name, description }),
     });
   },
   async joinGroup(roomCode: string): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: roomCode.toUpperCase() };
     return request<TravelGroup>("/api/groups/join", {
       method: "POST",
       body: JSON.stringify({ roomCode }),
     });
   },
   async members(groupId: number): Promise<GroupMember[]> {
-    if (useMocks) return groupMembers;
     return request<GroupMember[]>(`/api/groups/${groupId}/members`);
   },
   async events() { return events; },

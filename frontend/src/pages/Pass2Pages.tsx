@@ -9,7 +9,7 @@ import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, Ri
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
-import { signOut, updateCurrentUser } from "../auth";
+import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -165,6 +165,8 @@ export function FriendsPage() {
   const friends = friendsQuery.data ?? [];
   const incoming = incomingQuery.data ?? [];
   const outgoing = outgoingQuery.data ?? [];
+  const currentUser = getCurrentUser();
+  const searchResults = (searchQuery.data ?? []).filter((user) => user.id !== currentUser?.id);
   const loading = friendsQuery.isLoading || incomingQuery.isLoading || outgoingQuery.isLoading;
   const error = friendsQuery.error ?? incomingQuery.error ?? outgoingQuery.error;
   const avatar = (name: string) => name.slice(0, 1);
@@ -189,21 +191,39 @@ export function FriendsPage() {
           </form>
         }
       />
-      {searchQuery.data && searchQuery.data.length > 0 && (
+      {searchResults.length > 0 && (
         <Card className="mb-5 divide-y divide-slate-100 p-5">
           <p className="pb-3 text-sm font-semibold text-ink">搜索结果</p>
-          {searchQuery.data.map((user) => (
-            <div key={user.id} className="flex items-center justify-between gap-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{avatar(user.name)}</div>
-                <div>
-                  <p className="font-semibold text-ink">{user.name}</p>
-                  <p className="text-xs text-ink-soft">{user.email}</p>
+          {searchResults.map((user) => {
+            const isFriend = friends.some((friend) => friend.id === user.id);
+            const hasOutgoingRequest = outgoing.some((request) => request.addressee.id === user.id);
+            const hasIncomingRequest = incoming.some((request) => request.requester.id === user.id);
+            const relationshipLabel = isFriend
+              ? "已是好友"
+              : hasOutgoingRequest
+                ? "等待对方同意"
+                : hasIncomingRequest
+                  ? "待你确认"
+                  : "添加好友";
+            return (
+              <div key={user.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{avatar(user.name)}</div>
+                  <div>
+                    <p className="font-semibold text-ink">{user.name}</p>
+                    <p className="text-xs text-ink-soft">{user.email}</p>
+                  </div>
                 </div>
+                <Button
+                  onClick={() => action.mutate({ type: "send", id: user.id })}
+                  disabled={action.isPending || isFriend || hasOutgoingRequest || hasIncomingRequest}
+                  variant={isFriend || hasOutgoingRequest || hasIncomingRequest ? "ghost" : "primary"}
+                >
+                  {relationshipLabel}
+                </Button>
               </div>
-              <Button onClick={() => action.mutate({ type: "send", id: user.id })} disabled={action.isPending}>添加好友</Button>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       )}
       <div className="mb-5 flex gap-2">
@@ -236,7 +256,7 @@ export function FriendsPage() {
             ))}
           {tab === "发出的申请" &&
             outgoing.map((request) => (
-              <FriendRow key={request.id} name={request.addressee.name} detail="等待对方确认" initial={avatar(request.addressee.name)} />
+              <FriendRow key={request.id} name={request.addressee.name} detail="等待对方同意" initial={avatar(request.addressee.name)} />
             ))}
           {(tab === "全部" || tab === "好友") &&
             friends.map((friend) => (
