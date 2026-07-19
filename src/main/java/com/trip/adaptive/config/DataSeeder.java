@@ -73,9 +73,9 @@ public class DataSeeder implements CommandLineRunner {
     User wangwu = ensureUser("王五", "wangwu@example.com", "13800000005");
     ensureUser("赵六", "zhaoliu@example.com", "13800000006");
 
-    if (groups.findByRoomCode("CN-DEMO-01").isEmpty()) {
+    if (groups.findByRoomCode("CN-DEMO").isEmpty()) {
       TravelGroup nationwide = new TravelGroup("全国漫游示例", "全国城市示例行程", a);
-      nationwide.setRoomCode("CN-DEMO-01");
+      nationwide.setRoomCode("CN-DEMO");
       nationwide = groups.save(nationwide);
       members.save(new GroupMember(nationwide, a, Enums.MemberRole.OWNER));
       seedNationwideTrips(nationwide);
