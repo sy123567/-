@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Bell, Compass, LayoutDashboard, Menu, Search, Settings, Users, X } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
-import { user } from "../mocks/data";
+import { getCurrentUser } from "../auth";
 
 const groups = [
   { label: "社交", items: [{ label: "我的小组", to: "/groups", icon: Users }, { label: "好友与邀请", to: "/friends", icon: Users }] },
@@ -26,5 +26,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 function TopBar({ onMenu }: { onMenu: () => void }) {
-  return <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-paper/85 px-5 py-4 backdrop-blur md:px-8 lg:px-10"><div className="flex items-center justify-between gap-4"><button className="text-ink lg:hidden" onClick={onMenu} aria-label="打开导航"><Menu /></button><div className="relative hidden max-w-md flex-1 md:block"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" /><input className="w-full rounded-xl border-0 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky/30" placeholder="搜索行程、攻略或城市" /></div><div className="ml-auto flex items-center gap-2"><button className="relative grid h-10 w-10 place-items-center rounded-xl text-ink-soft transition hover:bg-white hover:text-ink" aria-label="通知"><Bell size={19} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-coral" /></button><div className="ml-2 flex items-center gap-2 border-l border-slate-200 pl-4"><img src={user.avatar} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-white" /><div className="hidden sm:block"><p className="text-sm font-semibold text-ink">{user.name}</p><p className="text-[11px] text-ink-soft">周末旅行家</p></div></div></div></div></header>;
+  const current = getCurrentUser();
+  const name = current?.name ?? "未登录";
+  const initial = name.slice(0, 1);
+  return <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-paper/85 px-5 py-4 backdrop-blur md:px-8 lg:px-10"><div className="flex items-center justify-between gap-4"><button className="text-ink lg:hidden" onClick={onMenu} aria-label="打开导航"><Menu /></button><div className="relative hidden max-w-md flex-1 md:block"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" /><input className="w-full rounded-xl border-0 bg-white py-2.5 pl-10 pr-4 text-sm shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky/30" placeholder="搜索行程、攻略或城市" /></div><div className="ml-auto flex items-center gap-2"><button className="relative grid h-10 w-10 place-items-center rounded-xl text-ink-soft transition hover:bg-white hover:text-ink" aria-label="通知"><Bell size={19} /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-coral" /></button><div className="ml-2 flex items-center gap-2 border-l border-slate-200 pl-4"><div className="grid h-9 w-9 place-items-center rounded-full bg-mint/15 font-semibold text-ink ring-2 ring-white">{initial}</div><div className="hidden sm:block"><p className="text-sm font-semibold text-ink">{name}</p><p className="text-[11px] text-ink-soft">{current?.email ?? "周末旅行家"}</p></div></div></div></div></header>;
 }

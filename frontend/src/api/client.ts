@@ -121,7 +121,7 @@ export const api = {
   },
   async dashboard(): Promise<DashboardData> {
     if (useMocks) return mockDashboard;
-    const [trips, user] = await Promise.all([request<Trip[]>("/api/trips"), this.me()]);
+    const [trips, user] = await Promise.all([request<Trip[]>("/api/trips"), api.me()]);
     return { ...mockDashboard, user, trips, activeTrip: trips[0] };
   },
   async guides(): Promise<TravelGuide[]> {
