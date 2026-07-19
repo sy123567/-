@@ -1,4 +1,4 @@
-package com.trip.adaptive.controller;
+package com.trip.adaptive.monitor.controller;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import com.trip.adaptive.domain.AlternativePlan;
 import com.trip.adaptive.domain.PlanVote;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.dto.Requests.VoteRequest;
-import com.trip.adaptive.service.VotingService;
+import com.trip.adaptive.monitor.service.VotingService;
 
 @RestController
 @RequestMapping("/api/plans")

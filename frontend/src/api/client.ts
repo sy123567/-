@@ -1,5 +1,6 @@
+import { getToken, type AuthUser } from "../auth";
 import { activeTrip, changeLogs, events, groupMembers, guides, mockDashboard, plans } from "../mocks/data";
-import type { DashboardData, TravelGuide, Trip } from "../types";
+import type { DashboardData, GroupMember, TravelGuide, TravelGroup, Trip } from "../types";
 
 const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
@@ -18,20 +19,44 @@ export class ApiError extends Error {
   }
 }
 
+export type AuthResponse = {
+  token: string;
+  userId: number;
+  name: string;
+  email: string;
+  phone?: string;
+};
+
+export type FriendshipRequest = {
+  id: number;
+  requester: AuthUser;
+  addressee: AuthUser;
+  status: "PENDING" | "ACCEPTED" | "REJECTED";
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const endpoint = `${apiBase}${path}`;
+  const token = getToken();
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
   try {
-    response = await fetch(endpoint, {
-      headers: { "Content-Type": "application/json", ...init?.headers },
-      ...init,
-    });
+    response = await fetch(endpoint, { ...init, headers });
   } catch {
     throw new ApiError(`无法连接后端服务：${apiBase}`, { endpoint, isNetworkError: true });
   }
   if (!response.ok) {
-    throw new ApiError(`后端请求失败（${response.status}）`, { endpoint, status: response.status });
+    let message = `后端请求失败（${response.status}）`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body.message) message = body.message;
+    } catch {
+      // Keep the HTTP status message when the response is not JSON.
+    }
+    throw new ApiError(message, { endpoint, status: response.status });
   }
+  if (response.status === 204) return undefined as T;
   try {
     return (await response.json()) as T;
   } catch {
@@ -40,10 +65,67 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  async login(email: string, password: string): Promise<AuthResponse> {
+    return request<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  },
+  async register(name: string, email: string, password: string, phone?: string): Promise<AuthResponse> {
+    return request<AuthResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password, phone }),
+    });
+  },
+  async me(): Promise<AuthUser> {
+    return request<AuthUser>("/api/auth/me");
+  },
+  async updateProfile(profile: Pick<AuthUser, "name" | "email" | "phone">): Promise<AuthUser> {
+    return request<AuthUser>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(profile),
+    });
+  },
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return request<void>("/api/auth/me/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  async deleteAccount(): Promise<void> {
+    return request<void>("/api/auth/me", { method: "DELETE" });
+  },
+  async searchFriends(keyword: string): Promise<AuthUser[]> {
+    return request<AuthUser[]>(`/api/friends/search?keyword=${encodeURIComponent(keyword)}`);
+  },
+  async friends(): Promise<AuthUser[]> {
+    return request<AuthUser[]>("/api/friends");
+  },
+  async incomingFriendRequests(): Promise<FriendshipRequest[]> {
+    return request<FriendshipRequest[]>("/api/friends/requests/incoming");
+  },
+  async outgoingFriendRequests(): Promise<FriendshipRequest[]> {
+    return request<FriendshipRequest[]>("/api/friends/requests/outgoing");
+  },
+  async sendFriendRequest(addresseeId: number): Promise<FriendshipRequest> {
+    return request<FriendshipRequest>("/api/friends/request", {
+      method: "POST",
+      body: JSON.stringify({ addresseeId }),
+    });
+  },
+  async acceptFriendRequest(id: number): Promise<FriendshipRequest> {
+    return request<FriendshipRequest>(`/api/friends/requests/${id}/accept`, { method: "POST" });
+  },
+  async rejectFriendRequest(id: number): Promise<FriendshipRequest> {
+    return request<FriendshipRequest>(`/api/friends/requests/${id}/reject`, { method: "POST" });
+  },
+  async deleteFriend(friendId: number): Promise<void> {
+    return request<void>(`/api/friends/${friendId}`, { method: "DELETE" });
+  },
   async dashboard(): Promise<DashboardData> {
     if (useMocks) return mockDashboard;
-    const [trips, users] = await Promise.all([request<Trip[]>("/api/trips"), request<DashboardData["user"][]>("/api/users")]);
-    return { ...mockDashboard, user: users[0], trips, activeTrip: trips[0] };
+    const [trips, user] = await Promise.all([request<Trip[]>("/api/trips"), api.me()]);
+    return { ...mockDashboard, user, trips, activeTrip: trips[0] };
   },
   async guides(): Promise<TravelGuide[]> {
     if (useMocks) return guides;
@@ -53,10 +135,43 @@ export const api = {
     if (useMocks) return mockDashboard.trips.find((trip) => trip.id === id) ?? mockDashboard.activeTrip;
     return request<Trip>(`/api/trips/${id}`);
   },
-  async groups() { return [{ ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" }]; },
-  async members() { return groupMembers; },
+  async groups() {
+    if (useMocks) return [{ ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" }];
+    return request<TravelGroup[]>("/api/groups");
+  },
+  async group(id: number): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" };
+    return request<TravelGroup>(`/api/groups/${id}`);
+  },
+  async createGroup(name: string, description?: string): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, id: Date.now(), name, description: description ?? "", roomCode: "HZ25-8Q" };
+    return request<TravelGroup>("/api/groups", {
+      method: "POST",
+      body: JSON.stringify({ name, description }),
+    });
+  },
+  async joinGroup(roomCode: string): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: roomCode.toUpperCase() };
+    return request<TravelGroup>("/api/groups/join", {
+      method: "POST",
+      body: JSON.stringify({ roomCode }),
+    });
+  },
+  async members(groupId: number): Promise<GroupMember[]> {
+    if (useMocks) return groupMembers;
+    return request<GroupMember[]>(`/api/groups/${groupId}/members`);
+  },
   async events() { return events; },
   async plans() { return plans; },
   async changelogs() { return changeLogs; },
   async risk() { return { score: activeTrip.riskScore, factors: [{ label: "事件严重度", value: 30, detail: "1 个 HIGH 级天气事件" }, { label: "受影响节点占比", value: 22, detail: "1 / 4 个节点" }, { label: "成本暴露", value: 8, detail: "额外成本约 ¥160" }, { label: "时间缓冲", value: 8, detail: "距离节点开始还有 4 小时" }] }; },
+  async removeMember(groupId: number, memberId: number): Promise<void> {
+    await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });
+  },
+  async transferOwner(groupId: number, newOwnerId: number): Promise<TravelGroup> {
+    return request<TravelGroup>(
+      `/api/groups/${groupId}/transfer?newOwnerId=${newOwnerId}`,
+      { method: "PUT" },
+    );
+  },
 };

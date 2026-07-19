@@ -1,4 +1,4 @@
-package com.trip.adaptive.controller;
+package com.trip.adaptive.monitor.controller;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.trip.adaptive.service.ImpactMatchingService;
-import com.trip.adaptive.service.RiskScoringService;
+import com.trip.adaptive.monitor.service.ImpactMatchingService;
+import com.trip.adaptive.monitor.service.RiskScoringService;
 
 @RestController
 @RequestMapping("/api/trips")

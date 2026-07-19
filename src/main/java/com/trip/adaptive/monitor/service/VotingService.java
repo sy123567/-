@@ -1,4 +1,4 @@
-package com.trip.adaptive.service;
+package com.trip.adaptive.monitor.service;
 
 import java.time.LocalDateTime;
 import java.util.List;

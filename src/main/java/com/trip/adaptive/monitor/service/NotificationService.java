@@ -1,4 +1,4 @@
-package com.trip.adaptive.service;
+package com.trip.adaptive.monitor.service;
 
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;

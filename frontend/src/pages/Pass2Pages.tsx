@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { activeTrip, groupMembers, guides, plans } from "../mocks/data";
 import { getPlaceDetail } from "../mocks/places";
@@ -9,7 +9,7 @@ import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, Ri
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
-import { signOut } from "../auth";
+import { signOut, updateCurrentUser } from "../auth";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -20,21 +20,106 @@ export function GroupsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow="YOUR CREW" title="我的小组" description="和旅伴共享约束、一起确认每一次路线变化。" action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setJoinOpen(true)}><UserPlus size={16} className="mr-2 inline" />加入小组</Button><Button onClick={() => setCreateOpen(true)}><Plus size={16} className="mr-2 inline" />创建小组</Button></div>} /><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3"><Card className="relative overflow-hidden bg-ink p-6 text-white"><div className="absolute -right-12 -top-12 h-40 w-40 rounded-full border-[20px] border-white/5" /><p className="eyebrow text-coral">ACTIVE ROOM</p><h2 className="mt-3 font-display text-2xl font-bold">周末慢游组</h2><p className="mt-2 text-sm leading-6 text-white/55">一起把周末过成一张好看的地图</p><div className="mt-7 flex items-center justify-between border-t border-white/10 pt-4"><span className="flex items-center gap-2 text-sm text-white/65"><Users size={16} />4 位成员</span><span className="font-mono text-xs text-coral">SH24-7K</span></div><Link to="/groups/1" className="mt-5 flex items-center gap-1 text-sm font-semibold text-white hover:text-coral">查看小组详情<ChevronRight size={15} /></Link></Card><Card className="p-6"><p className="eyebrow">NEXT ACTION</p><h2 className="mt-3 font-display text-xl font-bold text-ink">补齐成员约束</h2><p className="mt-2 text-sm leading-6 text-ink-soft">还有 1 位成员没有填写可用日期，补齐后才能生成更稳的初始方案。</p><Link to="/groups/1" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-sky">去查看成员<ArrowRight size={16} /></Link></Card><Card className="flex flex-col items-center justify-center p-6 text-center"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-coral/10 text-coral"><Plus /></div><h2 className="mt-4 font-display text-lg font-bold">还有旅伴没上车？</h2><p className="mt-2 text-sm text-ink-soft">生成一个房间码，邀请他们加入。</p><Button variant="ghost" className="mt-3" onClick={() => setJoinOpen(true)}>输入房间码</Button></Card></div><Modal open={createOpen} title="创建一个新小组" onClose={() => setCreateOpen(false)}><CreateGroupForm onDone={(code) => { setCreateOpen(false); show(`小组已创建，房间码 ${code}`); }} /></Modal><Modal open={joinOpen} title="加入旅伴的小组" onClose={() => setJoinOpen(false)}><JoinForm onDone={() => { setJoinOpen(false); show("已发送加入申请，等群主确认"); }} /></Modal>{toast}</>;
+  const queryClient = useQueryClient();
+  const groupsQuery = useQuery({ queryKey: ["groups"], queryFn: api.groups });
+  const groups = groupsQuery.data ?? [];
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["groups"] });
+  return (
+    <>
+      <PageHeader
+        eyebrow="YOUR CREW"
+        title="我的小组"
+        description="和旅伴共享约束、一起确认每一次路线变化。"
+        action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setJoinOpen(true)}><UserPlus size={16} className="mr-2 inline" />加入小组</Button><Button onClick={() => setCreateOpen(true)}><Plus size={16} className="mr-2 inline" />创建小组</Button></div>}
+      />
+      {groupsQuery.isLoading && <LoadingState label="正在读取小组…" />}
+      {groupsQuery.isError && <ErrorState message={groupsQuery.error instanceof Error ? groupsQuery.error.message : "无法读取小组"} onRetry={() => void groupsQuery.refetch()} />}
+      {!groupsQuery.isLoading && !groupsQuery.isError && groups.length === 0 && <EmptyState title="还没有加入小组" message="创建一个小组，或输入旅伴分享的房间码加入。" />}
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {groups.map((group, index) => (
+          <Card key={group.id} className={`relative overflow-hidden p-6 ${index === 0 ? "bg-ink text-white" : ""}`}>
+            {index === 0 && <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full border-[20px] border-white/5" />}
+            <p className={`eyebrow ${index === 0 ? "text-coral" : ""}`}>TRAVEL ROOM</p>
+            <h2 className="relative mt-3 font-display text-2xl font-bold">{group.name}</h2>
+            <p className={`relative mt-2 text-sm leading-6 ${index === 0 ? "text-white/55" : "text-ink-soft"}`}>{group.description || "和旅伴一起规划下一段路。"}</p>
+            <div className={`relative mt-7 flex items-center justify-between border-t pt-4 ${index === 0 ? "border-white/10" : "border-slate-100"}`}>
+              <span className={`flex items-center gap-2 text-sm ${index === 0 ? "text-white/65" : "text-ink-soft"}`}><Users size={16} />{group.members?.length ?? 0} 位成员</span>
+              <span className={`font-mono text-xs ${index === 0 ? "text-coral" : "text-sky"}`}>{group.roomCode}</span>
+            </div>
+            <Link to={`/groups/${group.id}`} className={`relative mt-5 flex items-center gap-1 text-sm font-semibold ${index === 0 ? "text-white hover:text-coral" : "text-sky"}`}>查看小组详情<ChevronRight size={15} /></Link>
+          </Card>
+        ))}
+      </div>
+      <Modal open={createOpen} title="创建一个新小组" onClose={() => setCreateOpen(false)}><CreateGroupForm onDone={(group) => { setCreateOpen(false); refresh(); show(`小组已创建，房间码 ${group.roomCode}`); }} /></Modal>
+      <Modal open={joinOpen} title="加入旅伴的小组" onClose={() => setJoinOpen(false)}><JoinForm onDone={(group) => { setJoinOpen(false); refresh(); show(`已加入 ${group.name}`); }} /></Modal>
+      {toast}
+    </>
+  );
 }
 
-function CreateGroupForm({ onDone }: { onDone: (code: string) => void }) {
+function CreateGroupForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.createGroup>>) => void }) {
   const [name, setName] = useState("");
-  return <form onSubmit={(event) => { event.preventDefault(); onDone("HZ25-8Q"); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" /><Button className="w-full" disabled={!name}>生成房间码</Button></form>;
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const mutation = useMutation({ mutationFn: () => api.createGroup(name.trim(), description.trim()), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "创建小组失败") });
+  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" value={description} onChange={(event) => setDescription(event.target.value)} />{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!name.trim() || mutation.isPending}>{mutation.isPending ? "创建中…" : "生成房间码"}</Button></form>;
 }
 
-function JoinForm({ onDone }: { onDone: () => void }) {
-  return <form onSubmit={(event) => { event.preventDefault(); onDone(); }} className="space-y-4"><p className="text-sm leading-6 text-ink-soft">输入旅伴分享给你的 6 位房间码，即可申请加入。</p><Input className="font-mono uppercase tracking-[0.2em]" placeholder="例如 SH24-7K" maxLength={7} required /><Button className="w-full">发送加入申请</Button></form>;
+function JoinForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.joinGroup>>) => void }) {
+  const [roomCode, setRoomCode] = useState("");
+  const [error, setError] = useState("");
+  const mutation = useMutation({ mutationFn: () => api.joinGroup(roomCode.trim()), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "加入小组失败") });
+  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><p className="text-sm leading-6 text-ink-soft">输入旅伴分享的房间码即可加入小组。</p><Input className="font-mono uppercase tracking-[0.2em]" placeholder="例如 SH24-7K" value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase())} maxLength={7} required />{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!roomCode.trim() || mutation.isPending}>{mutation.isPending ? "加入中…" : "加入小组"}</Button></form>;
 }
 
 export function GroupDetailPage() {
+  const { id } = useParams();
+  const groupId = Number(id);
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow="GROUP / SH24-7K" title="周末慢游组" description="4 位成员 · 房间码 SH24-7K · 创建于 2025 年 3 月" action={<Button variant="ghost" onClick={() => { navigator.clipboard?.writeText("SH24-7K"); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button>} /><div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">4 / 8 人</Badge></div><div className="mt-6 divide-y divide-slate-100">{groupMembers.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><img src={member.user.avatar} alt="" className="h-11 w-11 rounded-full object-cover" /><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/1/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => show(`已移除 ${member.user.name}`)} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div></Card><Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><div className="mt-6 space-y-4"><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码有效期</p><p className="mt-1 text-xs text-ink-soft">2025-06-30 前有效，只有群主可以转移所有权。</p></div></div><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Wallet size={18} className="mt-0.5 text-sun" /><div><p className="text-sm font-semibold text-ink">当前预算基线</p><p className="mt-1 text-xs text-ink-soft">按成员最低预算 ¥1,800 生成方案，避免有人被迫超支。</p></div></div><button onClick={() => show("转移群主需要对方先确认")} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-ink hover:border-coral">转移群主 <span className="float-right text-ink-soft">需要确认 →</span></button></div></Card></div>{toast}</>;
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const groupQuery = useQuery({ queryKey: ["group", groupId], queryFn: () => api.group(groupId), enabled: Number.isFinite(groupId) });
+  const membersQuery = useQuery({ queryKey: ["group", groupId, "members"], queryFn: () => api.members(groupId), enabled: Number.isFinite(groupId) });
+  const members = membersQuery.data ?? [];
+  const mutation = useMutation({
+    mutationFn: async (request: { type: "remove" | "transfer"; memberId: number }) => {
+      if (request.type === "remove") await api.removeMember(groupId, request.memberId);
+      else await api.transferOwner(groupId, request.memberId);
+    },
+    onSuccess: (_, request) => {
+      void queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      void queryClient.invalidateQueries({ queryKey: ["group", groupId, "members"] });
+      setTransferOpen(false);
+      setNewOwnerId(null);
+      show(request.type === "remove" ? "成员已移除" : "群主已转移");
+    },
+    onError: (error) => show(error instanceof Error ? error.message : "操作失败"),
+  });
+  if (!Number.isFinite(groupId)) return <ErrorState message="无效的小组地址" onRetry={() => undefined} />;
+  if (groupQuery.isLoading || membersQuery.isLoading) return <LoadingState label="正在加载小组…" />;
+  if (groupQuery.isError || membersQuery.isError || !groupQuery.data) return <ErrorState message="无法读取小组信息" onRetry={() => { void groupQuery.refetch(); void membersQuery.refetch(); }} />;
+  const group = groupQuery.data;
+  const transferableMembers = members.filter((member) => member.role !== "OWNER");
+  return (
+    <>
+      <PageHeader
+        eyebrow={`GROUP / ${group.roomCode}`}
+        title={group.name}
+        description={`${members.length} 位成员 · 房间码 ${group.roomCode}`}
+        action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
+      />
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="p-6">
+          <div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">{members.length} 位成员</Badge></div>
+          <div className="mt-6 divide-y divide-slate-100">{members.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-coral/10 font-display text-lg font-bold text-coral">{member.user.name.slice(0, 1)}</div><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/${groupId}/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => mutation.mutate({ type: "remove", memberId: member.id })} disabled={mutation.isPending} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div>
+        </Card>
+        <Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><p className="mt-3 text-sm leading-6 text-ink-soft">{group.description || "和旅伴一起规划下一段路。"}</p><div className="mt-6 flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码</p><p className="mt-1 font-mono text-xs text-ink-soft">{group.roomCode} · 仅分享给你的旅伴</p></div></div></Card>
+      </div>
+      {toast}
+      <Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((member) => <option key={member.id} value={member.id}>{member.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || mutation.isPending} onClick={() => newOwnerId && mutation.mutate({ type: "transfer", memberId: newOwnerId })}>确认转移</Button></div></Modal>
+    </>
+  );
 }
 
 export function ConstraintPage() {
@@ -48,9 +133,156 @@ export function ConstraintPage() {
 
 export function FriendsPage() {
   const [tab, setTab] = useState("全部");
+  const [keyword, setKeyword] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const { toast, show } = useToast();
-  const friends = [{ name: "阿麦去远方", detail: "最近在计划杭州西湖", avatar: "https://i.pravatar.cc/100?img=32" }, { name: "林听雨", detail: "共同加入 2 个小组", avatar: "https://i.pravatar.cc/100?img=45" }, { name: "周知远", detail: "上海 · 周末慢游组", avatar: "https://i.pravatar.cc/100?img=13" }];
-  return <><PageHeader eyebrow="PEOPLE YOU TRAVEL WITH" title="好友与邀请" description="把一起走过的路，变成下一次出发的默契。" action={<div className="flex gap-2"><Input placeholder="搜索用户" /><Button onClick={() => show("已发送好友申请")}><UserPlus size={16} className="mr-2 inline" />添加</Button></div>} /><div className="mb-5 flex gap-2">{["全部", "好友", "收到的申请", "发出的申请"].map((item) => <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === item ? "bg-ink text-white" : "bg-white text-ink-soft"}`}>{item}</button>)}</div><Card className="divide-y divide-slate-100 p-5">{(tab === "收到的申请" ? [{ name: "山川有信", detail: "想加入你的好友列表", avatar: "https://i.pravatar.cc/100?img=68" }] : friends).map((friend) => <div key={friend.name} className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"><div className="flex items-center gap-3"><img src={friend.avatar} alt="" className="h-11 w-11 rounded-full" /><div><p className="font-semibold text-ink">{friend.name}</p><p className="mt-1 text-xs text-ink-soft">{friend.detail}</p></div></div>{tab === "收到的申请" ? <div className="flex gap-2"><Button onClick={() => show(`已接受 ${friend.name} 的申请`)}>接受</Button><Button variant="ghost" onClick={() => show("已忽略申请")}>忽略</Button></div> : <Button variant="ghost" onClick={() => show(`已邀请 ${friend.name} 加入小组`)}>邀请进组</Button>}</div>)}</Card>{toast}</>;
+  const queryClient = useQueryClient();
+  const friendsQuery = useQuery({ queryKey: ["friends"], queryFn: api.friends });
+  const incomingQuery = useQuery({ queryKey: ["friend-requests", "incoming"], queryFn: api.incomingFriendRequests });
+  const outgoingQuery = useQuery({ queryKey: ["friend-requests", "outgoing"], queryFn: api.outgoingFriendRequests });
+  const searchQuery = useQuery({
+    queryKey: ["friend-search", searchTerm],
+    queryFn: () => api.searchFriends(searchTerm),
+    enabled: searchTerm.trim().length > 0,
+  });
+  const refreshFriends = () => {
+    void queryClient.invalidateQueries({ queryKey: ["friends"] });
+    void queryClient.invalidateQueries({ queryKey: ["friend-requests"] });
+  };
+  const action = useMutation({
+    mutationFn: async (request: { type: "send" | "accept" | "reject" | "delete"; id: number }) => {
+      if (request.type === "send") return api.sendFriendRequest(request.id);
+      if (request.type === "accept") return api.acceptFriendRequest(request.id);
+      if (request.type === "reject") return api.rejectFriendRequest(request.id);
+      return api.deleteFriend(request.id);
+    },
+    onSuccess: () => {
+      refreshFriends();
+      show("操作已完成");
+    },
+    onError: (error) => show(error instanceof Error ? error.message : "操作失败"),
+  });
+  const friends = friendsQuery.data ?? [];
+  const incoming = incomingQuery.data ?? [];
+  const outgoing = outgoingQuery.data ?? [];
+  const loading = friendsQuery.isLoading || incomingQuery.isLoading || outgoingQuery.isLoading;
+  const error = friendsQuery.error ?? incomingQuery.error ?? outgoingQuery.error;
+  const avatar = (name: string) => name.slice(0, 1);
+  return (
+    <>
+      <PageHeader
+        eyebrow="PEOPLE YOU TRAVEL WITH"
+        title="好友与邀请"
+        description="把一起走过的路，变成下一次出发的默契。"
+        action={
+          <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearchTerm(keyword);
+            }}
+          >
+            <Input placeholder="搜索姓名或邮箱" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+            <Button type="submit">
+              <UserPlus size={16} className="mr-2 inline" />搜索
+            </Button>
+          </form>
+        }
+      />
+      {searchQuery.data && searchQuery.data.length > 0 && (
+        <Card className="mb-5 divide-y divide-slate-100 p-5">
+          <p className="pb-3 text-sm font-semibold text-ink">搜索结果</p>
+          {searchQuery.data.map((user) => (
+            <div key={user.id} className="flex items-center justify-between gap-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{avatar(user.name)}</div>
+                <div>
+                  <p className="font-semibold text-ink">{user.name}</p>
+                  <p className="text-xs text-ink-soft">{user.email}</p>
+                </div>
+              </div>
+              <Button onClick={() => action.mutate({ type: "send", id: user.id })} disabled={action.isPending}>添加好友</Button>
+            </div>
+          ))}
+        </Card>
+      )}
+      <div className="mb-5 flex gap-2">
+        {["全部", "好友", "收到的申请", "发出的申请"].map((item) => (
+          <button key={item} onClick={() => setTab(item)} className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === item ? "bg-ink text-white" : "bg-white text-ink-soft"}`}>
+            {item}
+          </button>
+        ))}
+      </div>
+      {loading ? (
+        <LoadingState label="正在读取好友关系…" />
+      ) : error ? (
+        <ErrorState message={error instanceof Error ? error.message : undefined} onRetry={() => refreshFriends()} />
+      ) : (
+        <Card className="divide-y divide-slate-100 p-5">
+          {tab === "收到的申请" &&
+            incoming.map((request) => (
+              <FriendRow
+                key={request.id}
+                name={request.requester.name}
+                detail={request.requester.email}
+                initial={avatar(request.requester.name)}
+                actions={
+                  <div className="flex gap-2">
+                    <Button onClick={() => action.mutate({ type: "accept", id: request.id })}>接受</Button>
+                    <Button variant="ghost" onClick={() => action.mutate({ type: "reject", id: request.id })}>忽略</Button>
+                  </div>
+                }
+              />
+            ))}
+          {tab === "发出的申请" &&
+            outgoing.map((request) => (
+              <FriendRow key={request.id} name={request.addressee.name} detail="等待对方确认" initial={avatar(request.addressee.name)} />
+            ))}
+          {(tab === "全部" || tab === "好友") &&
+            friends.map((friend) => (
+              <FriendRow
+                key={friend.id}
+                name={friend.name}
+                detail={friend.email}
+                initial={avatar(friend.name)}
+                actions={<Button variant="ghost" onClick={() => action.mutate({ type: "delete", id: friend.id })}>删除好友</Button>}
+              />
+            ))}
+          {((tab === "收到的申请" && incoming.length === 0) ||
+            (tab === "发出的申请" && outgoing.length === 0) ||
+            ((tab === "全部" || tab === "好友") && friends.length === 0)) && (
+            <p className="py-8 text-center text-sm text-ink-soft">这里还没有关系记录。</p>
+          )}
+        </Card>
+      )}
+      {toast}
+    </>
+  );
+}
+
+function FriendRow({
+  name,
+  detail,
+  initial,
+  actions,
+}: {
+  name: string;
+  detail: string;
+  initial: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-3">
+        <div className="grid h-11 w-11 place-items-center rounded-full bg-coral/10 font-semibold text-coral">{initial}</div>
+        <div>
+          <p className="font-semibold text-ink">{name}</p>
+          <p className="mt-1 text-xs text-ink-soft">{detail}</p>
+        </div>
+      </div>
+      {actions}
+    </div>
+  );
 }
 
 export function TripsPage() {
@@ -140,8 +372,123 @@ function BellIcon({ type }: { type: string }) { return type === "事件" ? <Circ
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
-  return <><PageHeader eyebrow="YOUR IDENTITY" title="个人设置" description="让旅伴知道该怎么称呼你，也让每一次协作都更顺畅。" /><div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"><Card className="flex flex-col items-center p-7 text-center"><img src="https://i.pravatar.cc/100?img=47" alt="林小满" className="h-24 w-24 rounded-full ring-4 ring-coral/10" /><h2 className="mt-4 font-display text-xl font-bold">林小满</h2><p className="mt-1 text-sm text-ink-soft">周末旅行家 · 加入于 2025 年 2 月</p><Button variant="ghost" className="mt-5">更换头像</Button></Card><Card className="p-6"><h2 className="font-display text-xl font-bold">个人资料</h2><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">昵称<Input className="mt-2" defaultValue="林小满" /></label><label className="text-sm font-semibold">邮箱<Input className="mt-2" defaultValue="xiaoman@example.com" /></label><label className="text-sm font-semibold">手机号<Input className="mt-2" defaultValue="138****2048" /></label><label className="text-sm font-semibold">所在城市<Input className="mt-2" defaultValue="上海" /></label></div><div className="mt-6 flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-5"><button className="text-sm font-semibold text-coral" onClick={() => { signOut(); navigate("/login"); }}>退出登录</button><Button onClick={() => setSaved(true)}>{saved ? "已保存" : "保存资料"}</Button></div></Card></div></>;
+  const userQuery = useQuery({ queryKey: ["auth", "me"], queryFn: api.me });
+  if (userQuery.isLoading) return <LoadingState label="正在读取个人资料…" />;
+  if (userQuery.isError || !userQuery.data) {
+    return <ErrorState message={userQuery.error instanceof Error ? userQuery.error.message : "无法读取个人资料"} onRetry={() => void userQuery.refetch()} />;
+  }
+  return <SettingsContent user={userQuery.data} navigate={navigate} />;
+}
+
+function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser; navigate: ReturnType<typeof useNavigate> }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [profileMessage, setProfileMessage] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const profileMutation = useMutation({
+    mutationFn: () => api.updateProfile({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined }),
+    onSuccess: (updatedUser) => {
+      updateCurrentUser(updatedUser);
+      void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      setProfileError("");
+      setProfileMessage("资料已保存");
+    },
+    onError: (error) => {
+      setProfileMessage("");
+      setProfileError(error instanceof Error ? error.message : "保存资料失败");
+    },
+  });
+  const passwordMutation = useMutation({
+    mutationFn: () => api.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordError("");
+      setPasswordMessage("密码已更新");
+    },
+    onError: (error) => {
+      setPasswordMessage("");
+      setPasswordError(error instanceof Error ? error.message : "修改密码失败");
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteAccount,
+    onSuccess: () => {
+      signOut();
+      navigate("/login");
+    },
+    onError: (error) => {
+      setDeleteError(error instanceof Error ? error.message : "注销账号失败");
+    },
+  });
+  const initial = user.name.slice(0, 1);
+  return (
+    <>
+      <PageHeader eyebrow="YOUR IDENTITY" title="个人设置" description="你的资料来自账户数据库，更新后会立即同步到所有协作页面。" />
+      <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+        <Card className="flex flex-col items-center p-7 text-center">
+          <div className="grid h-24 w-24 place-items-center rounded-full bg-coral/10 font-display text-4xl font-bold text-coral ring-4 ring-coral/10">{initial}</div>
+          <h2 className="mt-4 font-display text-xl font-bold">{user.name}</h2>
+          <p className="mt-1 text-sm text-ink-soft">{user.email}</p>
+          <p className="mt-2 text-xs text-ink-soft">{user.phone || "尚未填写手机号"}</p>
+          <button className="mt-6 text-sm font-semibold text-coral" onClick={() => { signOut(); navigate("/login"); }}>退出登录</button>
+        </Card>
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="font-display text-xl font-bold">个人资料</h2>
+            <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setProfileMessage(""); setProfileError(""); profileMutation.mutate(); }}>
+              <label className="text-sm font-semibold">昵称<Input className="mt-2" value={name} onChange={(event) => setName(event.target.value)} required /></label>
+              <label className="text-sm font-semibold">邮箱<Input className="mt-2" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+              <label className="text-sm font-semibold sm:col-span-2">手机号<Input className="mt-2" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                {profileError ? <p className="text-sm text-coral-deep" role="alert">{profileError}</p> : <p className="text-sm text-mint">{profileMessage}</p>}
+                <Button type="submit" disabled={profileMutation.isPending}>{profileMutation.isPending ? "保存中…" : "保存资料"}</Button>
+              </div>
+            </form>
+          </Card>
+          <Card className="p-6">
+            <h2 className="font-display text-xl font-bold">修改密码</h2>
+            <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setPasswordMessage(""); setPasswordError(""); passwordMutation.mutate(); }}>
+              <label className="text-sm font-semibold sm:col-span-2">当前密码<Input className="mt-2" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} minLength={6} required /></label>
+              <label className="text-sm font-semibold sm:col-span-2">新密码<Input className="mt-2" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required /></label>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                {passwordError ? <p className="text-sm text-coral-deep" role="alert">{passwordError}</p> : <p className="text-sm text-mint">{passwordMessage}</p>}
+                <Button type="submit" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? "更新中…" : "更新密码"}</Button>
+              </div>
+            </form>
+          </Card>
+          <Card className="border border-coral/25 bg-coral/5 p-6">
+            <div className="flex items-start gap-3">
+              <Trash2 className="mt-0.5 shrink-0 text-coral" size={18} />
+              <div className="min-w-0">
+                <h2 className="font-display text-xl font-bold text-ink">注销账号</h2>
+                <p className="mt-2 text-sm leading-6 text-ink-soft">注销后将删除你的好友关系和小组成员资料，操作不可撤销。</p>
+                {deleteError && <p className="mt-3 text-sm text-coral-deep" role="alert">{deleteError}</p>}
+                <Button type="button" variant="ghost" className="mt-4 border border-coral/30 text-coral-deep hover:bg-coral/10" onClick={() => { setDeleteError(""); setDeleteOpen(true); }}>注销账号</Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+      <Modal open={deleteOpen} title="确认注销账号" onClose={() => { if (!deleteMutation.isPending) setDeleteOpen(false); }}>
+        <div className="space-y-5">
+          <p className="text-sm leading-6 text-ink-soft">此操作会永久删除账号及其好友关系、群组成员资料。若你是任何群组的群主，请先转移群主或解散群组。</p>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleteMutation.isPending}>取消</Button>
+            <Button type="button" className="bg-coral-deep hover:bg-coral" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "注销中…" : "确认注销"}</Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
 }
 
 export function GuideDetailPage() {

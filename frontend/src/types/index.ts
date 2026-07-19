@@ -20,8 +20,9 @@ export interface TravelGroup {
   name: string;
   description: string;
   ownerUser: User;
-  memberCount: number;
-  roomCode?: string;
+  members?: GroupMember[];
+  memberCount?: number;
+  roomCode: string;
 }
 
 export interface GroupMember {

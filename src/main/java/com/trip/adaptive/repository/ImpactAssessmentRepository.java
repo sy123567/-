@@ -8,4 +8,6 @@ import com.trip.adaptive.domain.ImpactAssessment;
 
 public interface ImpactAssessmentRepository extends JpaRepository<ImpactAssessment, Long> {
   List<ImpactAssessment> findByTripId(Long tripId);
+
+  void deleteByEvent_Id(Long eventId);
 }

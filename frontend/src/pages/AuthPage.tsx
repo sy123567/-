@@ -1,6 +1,7 @@
 import { ArrowRight, Check, Mail, MapPin, ShieldCheck, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 import { Button, Input } from "../components/ui";
 import { signIn } from "../auth";
 
@@ -24,7 +25,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     if (register && name.trim().length < 2) {
@@ -40,10 +41,22 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       return;
     }
     setSubmitting(true);
-    window.setTimeout(() => {
-      signIn();
+    try {
+      const response = register
+        ? await api.register(name.trim(), email.trim(), password)
+        : await api.login(email.trim(), password);
+      signIn(response.token, {
+        id: response.userId,
+        name: response.name,
+        email: response.email,
+        phone: response.phone,
+      });
       navigate("/");
-    }, 420);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "登录失败，请稍后重试。");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -138,7 +151,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
                 {!submitting && <ArrowRight size={17} />}
               </Button>
             </form>
-            {!register && <div className="mt-4 rounded-xl border border-sky/15 bg-sky/5 p-3 text-xs text-ink-soft"><p>演示账号：<span className="font-mono text-ink">admin@trip-adaptive.demo</span></p><p className="mt-1">密码：<span className="font-mono text-ink">demo1234</span></p><button type="button" className="mt-2 font-semibold text-sky hover:text-ink" onClick={() => { setEmail("admin@trip-adaptive.demo"); setPassword("demo1234"); }}>一键填入演示账号</button></div>}
+            {!register && <div className="mt-4 rounded-xl border border-sky/15 bg-sky/5 p-3 text-xs text-ink-soft"><p>演示账号：<span className="font-mono text-ink">zhangsan@example.com</span></p><p className="mt-1">密码：<span className="font-mono text-ink">password123</span></p><button type="button" className="mt-2 font-semibold text-sky hover:text-ink" onClick={() => { setEmail("zhangsan@example.com"); setPassword("password123"); }}>一键填入演示账号</button></div>}
             <div className="mt-6 flex items-center justify-center gap-2 text-sm text-ink-soft"><Check size={15} className="text-mint" />数据仅用于你的旅行协作</div>
             <p className="mt-8 text-center text-sm text-ink-soft">
               {register ? "已经有账号？" : "还没有账号？"}{" "}

@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
-import com.trip.adaptive.service.ImpactMatchingService;
+import com.trip.adaptive.monitor.service.ImpactMatchingService;
 
 class ImpactMatchingServiceTest {
   @Test
