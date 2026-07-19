@@ -12,4 +12,6 @@ public interface ExternalEventRepository extends JpaRepository<ExternalEvent, Lo
 
   boolean existsBySourceAndPlaceNameAndStartTime(
       String source, String placeName, java.time.LocalDateTime startTime);
+
+  List<ExternalEvent> findBySourceStartingWithAndPlaceName(String source, String placeName);
 }

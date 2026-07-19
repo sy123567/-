@@ -53,6 +53,8 @@ weather:
   poll-enabled: ${WEATHER_POLL:false}          # 定时轮询开关,默认关,避免烧配额
   poll-interval-ms: 3600000                    # 60 分钟
   forecast-window-days: 3                       # 只查近 3 天内的节点
+  replan-risk-threshold: ${WEATHER_REPLAN_THRESHOLD:HIGH}
+  replan-buffer-minutes: ${WEATHER_REPLAN_BUFFER_MINUTES:30}
 # MySQL 示例配置：
 # spring:
 #   datasource:

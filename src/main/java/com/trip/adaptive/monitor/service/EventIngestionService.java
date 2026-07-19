@@ -16,8 +16,10 @@ import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.ExternalEvent;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.Trip;
+import com.trip.adaptive.dto.TripRiskResult;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.ExternalEventRepository;
+import com.trip.adaptive.repository.ImpactAssessmentRepository;
 import com.trip.adaptive.service.TripService;
 
 @Service
@@ -27,9 +29,14 @@ public class EventIngestionService {
   private final WeatherClient weather;
   private final ImpactMatchingService impactMatching;
   private final RiskScoringService riskScoring;
+  private final ImpactAssessmentRepository assessments;
+  private final ReplanningService replanning;
 
   @Value("${weather.forecast-window-days:3}")
   private int forecastWindowDays;
+
+  @Value("${weather.replan-risk-threshold:HIGH}")
+  private String replanRiskThreshold;
 
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
     return ingestWeatherForTrip(tripId, false);
@@ -40,12 +47,16 @@ public class EventIngestionService {
       TripService t,
       WeatherClient w,
       ImpactMatchingService i,
-      RiskScoringService rs) {
+      RiskScoringService rs,
+      ImpactAssessmentRepository a,
+      ReplanningService r) {
     events = e;
     trips = t;
     weather = w;
     impactMatching = i;
     riskScoring = rs;
+    assessments = a;
+    replanning = r;
   }
 
   public ExternalEvent ingest(ExternalEvent e) {
@@ -99,15 +110,38 @@ public class EventIngestionService {
         if (n.getPlannedEnd() != null && n.getPlannedEnd().isBefore(now)) continue;
         if (n.getPlannedStart() != null && n.getPlannedStart().isAfter(cutoff)) continue;
       }
+      refreshWeatherEvents(n);
       String loc = weather.locationKey(n.getLatitude(), n.getLongitude());
       if (loc == null) continue;
       byCity.computeIfAbsent(loc, k -> new ArrayList<>()).add(n);
     }
     for (Map.Entry<String, List<ItineraryNode>> entry : byCity.entrySet())
       ingestForCity(entry.getKey(), entry.getValue(), out);
-    if (!out.isEmpty()) impactMatching.assessTrip(tripId);
-    riskScoring.scoreTrip(tripId);
+    impactMatching.assessTrip(tripId);
+    TripRiskResult result = riskScoring.scoreTrip(tripId);
+    if (rank(result.riskLevel()) >= rank(replanRiskThreshold)) replanning.generate(tripId);
+    else replanning.clearProposed(tripId);
     return out;
+  }
+
+  private void refreshWeatherEvents(ItineraryNode node) {
+    if (node.getPlaceName() == null) return;
+    for (ExternalEvent event :
+        events.findBySourceStartingWithAndPlaceName("weathercn", node.getPlaceName())) {
+      assessments.deleteByEvent_Id(event.getId());
+      events.delete(event);
+    }
+  }
+
+  private int rank(String level) {
+    if (level == null) return 100;
+    return switch (level.trim().toUpperCase()) {
+      case "LOW" -> 0;
+      case "MEDIUM" -> 1;
+      case "HIGH" -> 2;
+      case "CRITICAL" -> 3;
+      default -> 100;
+    };
   }
 
   private void ingestForCity(String loc, List<ItineraryNode> nodes, List<ExternalEvent> out) {
