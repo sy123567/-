@@ -3,13 +3,14 @@ import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprint
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { activeTrip, groupMembers, guides } from "../mocks/data";
+import { groupMembers, guides } from "../mocks/data";
 import { getPlaceDetail } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
 import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
+import type { ItineraryNode } from "../types";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -561,21 +562,29 @@ export function AdminPage() {
 }
 
 export function RouteMapPage() {
-  const nodes = activeTrip.itineraryNodes;
-  const [modes, setModes] = useState<Record<number, RouteModeType>>(() => Object.fromEntries(nodes.slice(0, -1).map((node) => [node.id, "DRIVE"])) as Record<number, RouteModeType>);
-  const [selectedNode, setSelectedNode] = useState<{ node: typeof nodes[number] } | null>(null);
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const tripQuery = useQuery({ queryKey: ["trip", tripId], queryFn: () => api.trip(tripId as number), enabled: tripId !== undefined });
+  const [modes, setModes] = useState<Record<number, RouteModeType>>({});
+  const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
+  if (dashboardQuery.isLoading || tripQuery.isLoading) return <LoadingState label="正在加载路线…" />;
+  if (dashboardQuery.isError || tripQuery.isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void tripQuery.refetch(); }} />;
+  if (!tripQuery.data) return <EmptyState title="暂无可展示路线" message="先创建一段包含至少两个节点的行程。" />;
+  const trip = tripQuery.data;
+  const nodes = trip.itineraryNodes ?? [];
+  if (nodes.length < 2) return <EmptyState title="路线节点不足" message="至少需要两个行程节点才能展示路线。" />;
   const segments = nodes.slice(0, -1).map((from, index) => {
     const to = nodes[index + 1];
     const baseDistance = haversine(from.latitude, from.longitude, to.latitude, to.longitude);
     return { from, to, baseDistance };
   });
-  const totalDistance = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id]).distance, 0);
-  const totalMinutes = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id]).minutes, 0);
-  return <><PageHeader eyebrow="SH24-7K · TODAY'S LEGS" title={activeTrip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段 · 估算距离（降级）`} action={<Button>重新规划路线</Button>} /><section className="relative mb-6 overflow-hidden rounded-card bg-gradient-to-br from-ink via-[#1d4e83] to-sky p-6 text-white shadow-soft md:p-8"><div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border-[38px] border-white/10" /><div className="absolute inset-0 opacity-30"><svg className="h-full w-full" viewBox="0 0 900 260" preserveAspectRatio="none"><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="9 12" className="animate-route" /><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#fff" strokeWidth="1" strokeDasharray="2 16" /></svg></div><div className="relative max-w-xl"><p className="font-mono text-[10px] tracking-[0.24em] text-coral">BOARDING PASS / ROUTE MAP</p><h2 className="mt-4 font-display text-3xl font-bold md:text-4xl">一段一段，飞向下一站。</h2><div className="mt-7 flex flex-wrap gap-3 text-xs text-white/70"><span className="rounded-full bg-white/10 px-3 py-2">出发 SH</span><span className="rounded-full bg-white/10 px-3 py-2">抵达 {getPlaceDetail(nodes[nodes.length - 1].placeName, nodes[nodes.length - 1].nodeType).code ?? "WP" + nodes[nodes.length - 1].sequenceOrder}</span><span className="rounded-full bg-white/10 px-3 py-2">共 {segments.length} 个航段</span></div></div></section><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id]} onModeChange={(mode) => setModes({ ...modes, [segment.from.id]: mode })} onPlaceClick={(node) => setSelectedNode({ node })} />)}</div><div className="relative mt-6 overflow-hidden rounded-card border border-slate-100 bg-[#eaf5fb] p-5"><svg className="h-40 w-full" viewBox="0 0 800 180" preserveAspectRatio="none" aria-hidden="true"><circle cx="104" cy="112" r="4" fill="#2F9BFF" /><circle cx="390" cy="54" r="5" fill="#17C3A2" /><circle cx="686" cy="115" r="4" fill="#FF5B4C" /><path d="M104 112 C 220 10, 300 150, 390 54 S 580 12, 686 115" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="8 10" className="animate-route" /></svg><p className="text-center text-xs text-ink-soft">路线图使用节点坐标进行估算，未接入外部地图服务时仍可继续规划。</p></div>{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.node.placeName, selectedNode.node.nodeType)} node={selectedNode.node} onClose={() => setSelectedNode(null)} />}</>;
+  const totalDistance = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").distance, 0);
+  const totalMinutes = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").minutes, 0);
+  return <><PageHeader eyebrow="TRIP · TODAY'S LEGS" title={trip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段 · 估算距离（降级）`} action={<Button>重新规划路线</Button>} /><section className="relative mb-6 overflow-hidden rounded-card bg-gradient-to-br from-ink via-[#1d4e83] to-sky p-6 text-white shadow-soft md:p-8"><div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border-[38px] border-white/10" /><div className="absolute inset-0 opacity-30"><svg className="h-full w-full" viewBox="0 0 900 260" preserveAspectRatio="none"><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="9 12" className="animate-route" /><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#fff" strokeWidth="1" strokeDasharray="2 16" /></svg></div><div className="relative max-w-xl"><p className="font-mono text-[10px] tracking-[0.24em] text-coral">BOARDING PASS / ROUTE MAP</p><h2 className="mt-4 font-display text-3xl font-bold md:text-4xl">一段一段，飞向下一站。</h2><div className="mt-7 flex flex-wrap gap-3 text-xs text-white/70"><span className="rounded-full bg-white/10 px-3 py-2">出发 SH</span><span className="rounded-full bg-white/10 px-3 py-2">抵达 {getPlaceDetail(nodes[nodes.length - 1].placeName, nodes[nodes.length - 1].nodeType).code ?? "WP" + nodes[nodes.length - 1].sequenceOrder}</span><span className="rounded-full bg-white/10 px-3 py-2">共 {segments.length} 个航段</span></div></div></section><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id] ?? "DRIVE"} onModeChange={(mode) => setModes({ ...modes, [segment.from.id]: mode })} onPlaceClick={(node) => setSelectedNode(node)} />)}</div><div className="relative mt-6 overflow-hidden rounded-card border border-slate-100 bg-[#eaf5fb] p-5"><svg className="h-40 w-full" viewBox="0 0 800 180" preserveAspectRatio="none" aria-hidden="true"><circle cx="104" cy="112" r="4" fill="#2F9BFF" /><circle cx="390" cy="54" r="5" fill="#17C3A2" /><circle cx="686" cy="115" r="4" fill="#FF5B4C" /><path d="M104 112 C 220 10, 300 150, 390 54 S 580 12, 686 115" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="8 10" className="animate-route" /></svg><p className="text-center text-xs text-ink-soft">路线图使用节点坐标进行估算，未接入外部地图服务时仍可继续规划。</p></div>{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}</>;
 }
 
 type RouteModeType = "WALK" | "DRIVE" | "TRANSIT";
-function RouteLeg({ index, from, to, distance, mode, onModeChange, onPlaceClick }: { index: number; from: typeof activeTrip.itineraryNodes[number]; to: typeof activeTrip.itineraryNodes[number]; distance: number; mode: RouteModeType; onModeChange: (mode: RouteModeType) => void; onPlaceClick: (node: typeof activeTrip.itineraryNodes[number]) => void }) {
+function RouteLeg({ index, from, to, distance, mode, onModeChange, onPlaceClick }: { index: number; from: ItineraryNode; to: ItineraryNode; distance: number; mode: RouteModeType; onModeChange: (mode: RouteModeType) => void; onPlaceClick: (node: ItineraryNode) => void }) {
   const options: { value: RouteModeType; label: string; icon: typeof Car }[] = [{ value: "WALK", label: "步行", icon: Footprints }, { value: "DRIVE", label: "驾车", icon: Car }, { value: "TRANSIT", label: "公交", icon: Bus }];
   const selected = estimateSegment(distance, mode);
   const ModeIcon = options.find((option) => option.value === mode)?.icon ?? Car;
@@ -584,7 +593,7 @@ function RouteLeg({ index, from, to, distance, mode, onModeChange, onPlaceClick 
   return <article className="relative overflow-hidden rounded-card border border-slate-100 bg-surface shadow-soft"><div className="absolute -left-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className="absolute -right-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className="grid gap-5 p-5 md:grid-cols-[1fr_auto_1fr] md:items-center md:p-6"><PlaceStop label="出发" node={from} detail={fromDetail} onClick={() => onPlaceClick(from)} /><div className="flex items-center gap-3 text-coral md:flex-col"><span className="font-mono text-[10px] text-ink-soft">LEG {String(index + 1).padStart(2, "0")}</span><div className="flex flex-1 items-center md:w-28"><span className="h-px flex-1 border-t-2 border-dashed border-coral/40" /><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-coral/10 text-coral"><ModeIcon size={17} /></span><span className="h-px flex-1 border-t-2 border-dashed border-coral/40 animate-route" /></div><span className="font-mono text-[10px] text-ink-soft">{selected.distance.toFixed(1)} KM</span></div><PlaceStop label="到达" node={to} detail={toDetail} onClick={() => onPlaceClick(to)} /></div><div className="flex flex-wrap gap-2 border-t border-dashed border-slate-200 p-4 md:px-6">{options.map(({ value, label, icon: Icon }) => { const estimate = estimateSegment(distance, value); return <button type="button" key={value} onClick={() => onModeChange(value)} className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition focus-visible:outline-offset-2 ${mode === value ? "bg-ink text-white" : "bg-paper text-ink-soft hover:text-ink"}`}><Icon size={14} />{label}<span className={mode === value ? "text-white/60" : "text-ink-soft"}>{estimate.distance.toFixed(1)} km · {estimate.minutes} 分</span></button>; })}</div></article>;
 }
 
-function PlaceStop({ label, node, detail, onClick }: { label: string; node: typeof activeTrip.itineraryNodes[number]; detail: ReturnType<typeof getPlaceDetail>; onClick: () => void }) {
+function PlaceStop({ label, node, detail, onClick }: { label: string; node: ItineraryNode; detail: ReturnType<typeof getPlaceDetail>; onClick: () => void }) {
   return <button type="button" onClick={onClick} className="min-w-0 text-left transition hover:-translate-y-0.5 focus-visible:outline-offset-2"><p className="font-mono text-[10px] tracking-[0.18em] text-ink-soft">{label} · {detail.code ?? `WP${node.sequenceOrder}`}</p><p className="mt-2 truncate font-display text-xl font-bold text-ink">{node.placeName}</p><p className="mt-1 font-mono text-xs text-ink-soft">{formatLegTime(node.plannedStart)}—{formatLegTime(node.plannedEnd)}</p><p className="mt-2 text-xs text-sky">查看地点详情 →</p></button>;
 }
 
