@@ -63,31 +63,24 @@ public class DataSeeder implements CommandLineRunner {
   }
 
   public void run(String... args) {
-    if (!enabled || users.count() > 0) return;
-    User a =
-        users.save(
-            new User(
-                "张三",
-                "zhangsan@example.com",
-                passwordEncoder.encode("password123"),
-                "13800000001"));
-    User b =
-        users.save(
-            new User(
-                "李四", "lisi@example.com", passwordEncoder.encode("password123"), "13800000002"));
-    User wangwu =
-        users.save(
-            new User(
-                "王五", "wangwu@example.com", passwordEncoder.encode("password123"), "13800000005"));
-    User zhaoliu =
-        users.save(
-            new User(
-                "赵六", "zhaoliu@example.com", passwordEncoder.encode("password123"), "13800000006"));
+    if (!enabled) return;
 
-    Friendship accepted = new Friendship(a, b);
-    accepted.setStatus(Enums.FriendshipStatus.ACCEPTED);
-    friendships.save(accepted);
-    Friendship pending = friendships.save(new Friendship(wangwu, a));
+    // Demo accounts are created only when missing (keyed by email), so an
+    // already-populated database keeps its rows and simply gains the accounts
+    // that are still absent. Existing rows are never overwritten or duplicated.
+    User a = ensureUser("张三", "zhangsan@example.com", "13800000001");
+    User b = ensureUser("李四", "lisi@example.com", "13800000002");
+    User wangwu = ensureUser("王五", "wangwu@example.com", "13800000005");
+    ensureUser("赵六", "zhaoliu@example.com", "13800000006");
+
+    // The social bundle (friendships, group, members, trip, nodes) is seeded once,
+    // anchored on the demo group. Once it exists the bundle is skipped, so
+    // intentional deletes (removing a friend/member, deleting the trip) are not
+    // resurrected on the next startup.
+    if (groups.findByRoomCode("SH24-7K").isPresent()) return;
+
+    ensureFriendship(a, b, Enums.FriendshipStatus.ACCEPTED);
+    ensureFriendship(wangwu, a, Enums.FriendshipStatus.PENDING);
 
     TravelGroup g = new TravelGroup("上海周末小队", "演示群组", a);
     g.setRoomCode("SH24-7K");
@@ -147,17 +140,32 @@ public class DataSeeder implements CommandLineRunner {
         new BigDecimal("60"));
 
     log.info(
-        "seeded users {},{},{},{}; accepted friendship {}, pending friendship {}; group {} members {},{}; trip {} with 3 nodes",
-        a.getId(),
-        b.getId(),
-        wangwu.getId(),
-        zhaoliu.getId(),
-        accepted.getId(),
-        pending.getId(),
+        "seeded social bundle: group {} members {},{}; trip {} with 3 nodes",
         g.getId(),
         ma.getId(),
         mb.getId(),
         trip.getId());
+  }
+
+  private User ensureUser(String name, String email, String phone) {
+    return users
+        .findByEmail(email)
+        .orElseGet(
+            () -> users.save(new User(name, email, passwordEncoder.encode("password123"), phone)));
+  }
+
+  private void ensureFriendship(User requester, User addressee, Enums.FriendshipStatus status) {
+    if (friendships
+            .findByRequesterIdAndAddresseeId(requester.getId(), addressee.getId())
+            .isPresent()
+        || friendships
+            .findByRequesterIdAndAddresseeId(addressee.getId(), requester.getId())
+            .isPresent()) {
+      return;
+    }
+    Friendship f = new Friendship(requester, addressee);
+    f.setStatus(status);
+    friendships.save(f);
   }
 
   private void saveNode(
