@@ -31,12 +31,18 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   to { stroke-dashoffset: 0; }
 }
 
+@keyframes route-plane {
+  0%, 100% { transform: translateY(-35%) rotate(90deg); opacity: 0.45; }
+  50% { transform: translateY(35%) rotate(90deg); opacity: 1; }
+}
+
 @keyframes slide-in-right {
   from { opacity: 0; transform: translateX(2rem); }
   to { opacity: 1; transform: translateX(0); }
 }
 
 .animate-route { animation: route-draw 1.8s ease-out both; }
+.route-plane { animation: route-plane 2.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
