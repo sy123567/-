@@ -3,6 +3,7 @@ package com.trip.adaptive.controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,8 +28,8 @@ public class TripController {
   }
 
   @GetMapping
-  public List<Trip> all() {
-    return s.all();
+  public List<Trip> all(Authentication authentication) {
+    return s.all(currentUser(authentication));
   }
 
   @GetMapping("/{id}")
@@ -60,5 +61,9 @@ public class TripController {
   @GetMapping("/{id}/routes")
   public List<Route> routes(@PathVariable Long id) {
     return s.routes(id);
+  }
+
+  private com.trip.adaptive.domain.User currentUser(Authentication authentication) {
+    return (com.trip.adaptive.domain.User) authentication.getPrincipal();
   }
 }

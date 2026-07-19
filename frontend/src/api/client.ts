@@ -1,8 +1,17 @@
 import { getToken, type AuthUser } from "../auth";
-import { activeTrip, changeLogs, events, groupMembers, guides, mockDashboard, plans } from "../mocks/data";
-import type { DashboardData, GroupMember, TravelGuide, TravelGroup, Trip } from "../types";
+import { guides } from "../mocks/data";
+import type {
+  AlternativePlan,
+  ChangeLog,
+  DashboardData,
+  ExternalEvent,
+  GroupMember,
+  ImpactAssessment,
+  TravelGuide,
+  TravelGroup,
+  Trip,
+} from "../types";
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 
 export class ApiError extends Error {
@@ -32,6 +41,15 @@ export type FriendshipRequest = {
   requester: AuthUser;
   addressee: AuthUser;
   status: "PENDING" | "ACCEPTED" | "REJECTED";
+};
+
+export type TripRisk = {
+  tripId: number;
+  overallScore: number;
+  riskLevel: string;
+  totalNodes: number;
+  affectedNodes: number;
+  assessments: ImpactAssessment[];
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -123,48 +141,56 @@ export const api = {
     return request<void>(`/api/friends/${friendId}`, { method: "DELETE" });
   },
   async dashboard(): Promise<DashboardData> {
-    if (useMocks) return mockDashboard;
-    const [trips, user] = await Promise.all([request<Trip[]>("/api/trips"), api.me()]);
-    return { ...mockDashboard, user, trips, activeTrip: trips[0] };
+    const [trips, user, events] = await Promise.all([
+      request<Trip[]>("/api/trips"),
+      api.me(),
+      request<ExternalEvent[]>("/api/events/active"),
+    ]);
+    const activeTrip = trips.find((trip) => trip.status === "ONGOING") ?? trips[0];
+    return { user, trips, activeTrip, events, notifications: [] };
   },
   async guides(): Promise<TravelGuide[]> {
-    if (useMocks) return guides;
-    return request<TravelGuide[]>("/api/guides");
+    return guides;
   },
   async trip(id: number): Promise<Trip> {
-    if (useMocks) return mockDashboard.trips.find((trip) => trip.id === id) ?? mockDashboard.activeTrip;
     return request<Trip>(`/api/trips/${id}`);
   },
   async groups() {
-    if (useMocks) return [{ ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" }];
     return request<TravelGroup[]>("/api/groups");
   },
   async group(id: number): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" };
     return request<TravelGroup>(`/api/groups/${id}`);
   },
   async createGroup(name: string, description?: string): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, id: Date.now(), name, description: description ?? "", roomCode: "HZ25-8Q" };
     return request<TravelGroup>("/api/groups", {
       method: "POST",
       body: JSON.stringify({ name, description }),
     });
   },
   async joinGroup(roomCode: string): Promise<TravelGroup> {
-    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: roomCode.toUpperCase() };
     return request<TravelGroup>("/api/groups/join", {
       method: "POST",
       body: JSON.stringify({ roomCode }),
     });
   },
   async members(groupId: number): Promise<GroupMember[]> {
-    if (useMocks) return groupMembers;
     return request<GroupMember[]>(`/api/groups/${groupId}/members`);
   },
-  async events() { return events; },
-  async plans() { return plans; },
-  async changelogs() { return changeLogs; },
-  async risk() { return { score: activeTrip.riskScore, factors: [{ label: "事件严重度", value: 30, detail: "1 个 HIGH 级天气事件" }, { label: "受影响节点占比", value: 22, detail: "1 / 4 个节点" }, { label: "成本暴露", value: 8, detail: "额外成本约 ¥160" }, { label: "时间缓冲", value: 8, detail: "距离节点开始还有 4 小时" }] }; },
+  async events(): Promise<ExternalEvent[]> {
+    return request<ExternalEvent[]>("/api/events/active");
+  },
+  async impacts(tripId: number): Promise<ImpactAssessment[]> {
+    return request<ImpactAssessment[]>(`/api/trips/${tripId}/impacts`);
+  },
+  async plans(tripId: number): Promise<AlternativePlan[]> {
+    return request<AlternativePlan[]>(`/api/trips/${tripId}/plans`);
+  },
+  async changelogs(tripId: number): Promise<ChangeLog[]> {
+    return request<ChangeLog[]>(`/api/trips/${tripId}/changelogs`);
+  },
+  async risk(tripId: number): Promise<TripRisk> {
+    return request<TripRisk>(`/api/trips/${tripId}/risk`);
+  },
   async removeMember(groupId: number, memberId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });
   },

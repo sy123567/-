@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.Friendship;
@@ -22,8 +24,12 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Long> {
   List<Friendship> findByAddresseeIdAndStatus(Long addresseeId, Enums.FriendshipStatus status);
 
   // 查找用户的所有好友关系（已接受）
-  List<Friendship> findByRequesterIdOrAddresseeIdAndStatus(
-      Long requesterId, Long addresseeId, Enums.FriendshipStatus status);
+  @Query(
+      "select f from Friendship f where "
+          + "(f.requester.id = :userId or f.addressee.id = :userId) "
+          + "and f.status = :status")
+  List<Friendship> findAllByUserAndStatus(
+      @Param("userId") Long userId, @Param("status") Enums.FriendshipStatus status);
 
   // 检查两个用户之间是否已有好友关系
   boolean existsByRequesterIdAndAddresseeId(Long requesterId, Long addresseeId);
