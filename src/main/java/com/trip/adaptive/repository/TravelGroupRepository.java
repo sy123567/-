@@ -8,4 +8,6 @@ import com.trip.adaptive.domain.TravelGroup;
 
 public interface TravelGroupRepository extends JpaRepository<TravelGroup, Long> {
   List<TravelGroup> findDistinctByMembersUserId(Long userId);
+
+  List<TravelGroup> findByOwnerUserId(Long userId);
 }

@@ -13,6 +13,8 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Long> {
   // 查找两个用户之间的好友关系（无论谁发起）
   Optional<Friendship> findByRequesterIdAndAddresseeId(Long requesterId, Long addresseeId);
 
+  List<Friendship> findByRequesterIdOrAddresseeId(Long requesterId, Long addresseeId);
+
   // 查找用户发出的好友申请
   List<Friendship> findByRequesterIdAndStatus(Long requesterId, Enums.FriendshipStatus status);
 

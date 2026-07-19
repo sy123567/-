@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +46,12 @@ public class AuthController {
   @GetMapping("/me")
   public User me(Authentication authentication) {
     return (User) authentication.getPrincipal();
+  }
+
+  @DeleteMapping("/me")
+  public ResponseEntity<Void> deleteAccount(Authentication authentication) {
+    userService.deleteAccount((User) authentication.getPrincipal());
+    return ResponseEntity.noContent().build();
   }
 
   @PatchMapping("/me")

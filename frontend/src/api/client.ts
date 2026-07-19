@@ -92,6 +92,9 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
+  async deleteAccount(): Promise<void> {
+    return request<void>("/api/auth/me", { method: "DELETE" });
+  },
   async searchFriends(keyword: string): Promise<AuthUser[]> {
     return request<AuthUser[]>(`/api/friends/search?keyword=${encodeURIComponent(keyword)}`);
   },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -370,6 +370,8 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
   const [passwordMessage, setPasswordMessage] = useState("");
   const [profileError, setProfileError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const profileMutation = useMutation({
     mutationFn: () => api.updateProfile({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined }),
     onSuccess: (updatedUser) => {
@@ -394,6 +396,16 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
     onError: (error) => {
       setPasswordMessage("");
       setPasswordError(error instanceof Error ? error.message : "修改密码失败");
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteAccount,
+    onSuccess: () => {
+      signOut();
+      navigate("/login");
+    },
+    onError: (error) => {
+      setDeleteError(error instanceof Error ? error.message : "注销账号失败");
     },
   });
   const initial = user.name.slice(0, 1);
@@ -432,8 +444,28 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
               </div>
             </form>
           </Card>
+          <Card className="border border-coral/25 bg-coral/5 p-6">
+            <div className="flex items-start gap-3">
+              <Trash2 className="mt-0.5 shrink-0 text-coral" size={18} />
+              <div className="min-w-0">
+                <h2 className="font-display text-xl font-bold text-ink">注销账号</h2>
+                <p className="mt-2 text-sm leading-6 text-ink-soft">注销后将删除你的好友关系和小组成员资料，操作不可撤销。</p>
+                {deleteError && <p className="mt-3 text-sm text-coral-deep" role="alert">{deleteError}</p>}
+                <Button type="button" variant="ghost" className="mt-4 border border-coral/30 text-coral-deep hover:bg-coral/10" onClick={() => { setDeleteError(""); setDeleteOpen(true); }}>注销账号</Button>
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
+      <Modal open={deleteOpen} title="确认注销账号" onClose={() => { if (!deleteMutation.isPending) setDeleteOpen(false); }}>
+        <div className="space-y-5">
+          <p className="text-sm leading-6 text-ink-soft">此操作会永久删除账号及其好友关系、群组成员资料。若你是任何群组的群主，请先转移群主或解散群组。</p>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleteMutation.isPending}>取消</Button>
+            <Button type="button" className="bg-coral-deep hover:bg-coral" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "注销中…" : "确认注销"}</Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
