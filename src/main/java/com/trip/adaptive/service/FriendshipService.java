@@ -115,8 +115,7 @@ public class FriendshipService {
   // M04-4 查看好友列表
   public List<User> getFriends(Long userId) {
     List<Friendship> accepted =
-        friendships.findByRequesterIdOrAddresseeIdAndStatus(
-            userId, userId, Enums.FriendshipStatus.ACCEPTED);
+        friendships.findAllByUserAndStatus(userId, Enums.FriendshipStatus.ACCEPTED);
 
     return accepted.stream()
         .map(f -> f.getRequester().getId().equals(userId) ? f.getAddressee() : f.getRequester())
