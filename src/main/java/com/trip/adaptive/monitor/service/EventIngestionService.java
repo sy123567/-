@@ -38,6 +38,7 @@ public class EventIngestionService {
   @Value("${weather.replan-risk-threshold:HIGH}")
   private String replanRiskThreshold;
 
+  @Transactional
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
     return ingestWeatherForTrip(tripId, false);
   }
