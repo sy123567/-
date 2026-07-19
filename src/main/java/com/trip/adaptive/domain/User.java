@@ -68,4 +68,8 @@ public class User {
   public void setPhone(String v) {
     phone = v;
   }
+
+  public void setPassword(String v) {
+    password = v;
+  }
 }

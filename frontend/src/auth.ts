@@ -48,6 +48,10 @@ export function signIn(token: string, user: AuthUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+export function updateCurrentUser(user: AuthUser) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function signOut() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);

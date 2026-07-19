@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 public final class Requests {
   private Requests() {}
@@ -17,6 +18,12 @@ public final class Requests {
       @Email @NotBlank String email,
       @NotBlank String password,
       String phone) {}
+
+  public record ProfileUpdateRequest(
+      @NotBlank String name, @Email @NotBlank String email, String phone) {}
+
+  public record ChangePasswordRequest(
+      @NotBlank String currentPassword, @NotBlank @Size(min = 6) String newPassword) {}
 
   public record GroupRequest(
       @NotBlank String name, String description, @NotNull Long ownerUserId) {}

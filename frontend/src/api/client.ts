@@ -80,6 +80,18 @@ export const api = {
   async me(): Promise<AuthUser> {
     return request<AuthUser>("/api/auth/me");
   },
+  async updateProfile(profile: Pick<AuthUser, "name" | "email" | "phone">): Promise<AuthUser> {
+    return request<AuthUser>("/api/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(profile),
+    });
+  },
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return request<void>("/api/auth/me/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
   async searchFriends(keyword: string): Promise<AuthUser[]> {
     return request<AuthUser[]>(`/api/friends/search?keyword=${encodeURIComponent(keyword)}`);
   },
@@ -109,8 +121,8 @@ export const api = {
   },
   async dashboard(): Promise<DashboardData> {
     if (useMocks) return mockDashboard;
-    const [trips, users] = await Promise.all([request<Trip[]>("/api/trips"), request<DashboardData["user"][]>("/api/users")]);
-    return { ...mockDashboard, user: users[0], trips, activeTrip: trips[0] };
+    const [trips, user] = await Promise.all([request<Trip[]>("/api/trips"), this.me()]);
+    return { ...mockDashboard, user, trips, activeTrip: trips[0] };
   },
   async guides(): Promise<TravelGuide[]> {
     if (useMocks) return guides;

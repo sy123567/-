@@ -9,7 +9,7 @@ import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, Ri
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
-import { signOut } from "../auth";
+import { signOut, updateCurrentUser } from "../auth";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -351,8 +351,91 @@ function BellIcon({ type }: { type: string }) { return type === "事件" ? <Circ
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const [saved, setSaved] = useState(false);
-  return <><PageHeader eyebrow="YOUR IDENTITY" title="个人设置" description="让旅伴知道该怎么称呼你，也让每一次协作都更顺畅。" /><div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"><Card className="flex flex-col items-center p-7 text-center"><img src="https://i.pravatar.cc/100?img=47" alt="林小满" className="h-24 w-24 rounded-full ring-4 ring-coral/10" /><h2 className="mt-4 font-display text-xl font-bold">林小满</h2><p className="mt-1 text-sm text-ink-soft">周末旅行家 · 加入于 2025 年 2 月</p><Button variant="ghost" className="mt-5">更换头像</Button></Card><Card className="p-6"><h2 className="font-display text-xl font-bold">个人资料</h2><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">昵称<Input className="mt-2" defaultValue="林小满" /></label><label className="text-sm font-semibold">邮箱<Input className="mt-2" defaultValue="xiaoman@example.com" /></label><label className="text-sm font-semibold">手机号<Input className="mt-2" defaultValue="138****2048" /></label><label className="text-sm font-semibold">所在城市<Input className="mt-2" defaultValue="上海" /></label></div><div className="mt-6 flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-5"><button className="text-sm font-semibold text-coral" onClick={() => { signOut(); navigate("/login"); }}>退出登录</button><Button onClick={() => setSaved(true)}>{saved ? "已保存" : "保存资料"}</Button></div></Card></div></>;
+  const userQuery = useQuery({ queryKey: ["auth", "me"], queryFn: api.me });
+  if (userQuery.isLoading) return <LoadingState label="正在读取个人资料…" />;
+  if (userQuery.isError || !userQuery.data) {
+    return <ErrorState message={userQuery.error instanceof Error ? userQuery.error.message : "无法读取个人资料"} onRetry={() => void userQuery.refetch()} />;
+  }
+  return <SettingsContent user={userQuery.data} navigate={navigate} />;
+}
+
+function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser; navigate: ReturnType<typeof useNavigate> }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [profileMessage, setProfileMessage] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const profileMutation = useMutation({
+    mutationFn: () => api.updateProfile({ name: name.trim(), email: email.trim(), phone: phone.trim() || undefined }),
+    onSuccess: (updatedUser) => {
+      updateCurrentUser(updatedUser);
+      void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      setProfileError("");
+      setProfileMessage("资料已保存");
+    },
+    onError: (error) => {
+      setProfileMessage("");
+      setProfileError(error instanceof Error ? error.message : "保存资料失败");
+    },
+  });
+  const passwordMutation = useMutation({
+    mutationFn: () => api.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordError("");
+      setPasswordMessage("密码已更新");
+    },
+    onError: (error) => {
+      setPasswordMessage("");
+      setPasswordError(error instanceof Error ? error.message : "修改密码失败");
+    },
+  });
+  const initial = user.name.slice(0, 1);
+  return (
+    <>
+      <PageHeader eyebrow="YOUR IDENTITY" title="个人设置" description="你的资料来自账户数据库，更新后会立即同步到所有协作页面。" />
+      <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
+        <Card className="flex flex-col items-center p-7 text-center">
+          <div className="grid h-24 w-24 place-items-center rounded-full bg-coral/10 font-display text-4xl font-bold text-coral ring-4 ring-coral/10">{initial}</div>
+          <h2 className="mt-4 font-display text-xl font-bold">{user.name}</h2>
+          <p className="mt-1 text-sm text-ink-soft">{user.email}</p>
+          <p className="mt-2 text-xs text-ink-soft">{user.phone || "尚未填写手机号"}</p>
+          <button className="mt-6 text-sm font-semibold text-coral" onClick={() => { signOut(); navigate("/login"); }}>退出登录</button>
+        </Card>
+        <div className="space-y-6">
+          <Card className="p-6">
+            <h2 className="font-display text-xl font-bold">个人资料</h2>
+            <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setProfileMessage(""); setProfileError(""); profileMutation.mutate(); }}>
+              <label className="text-sm font-semibold">昵称<Input className="mt-2" value={name} onChange={(event) => setName(event.target.value)} required /></label>
+              <label className="text-sm font-semibold">邮箱<Input className="mt-2" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
+              <label className="text-sm font-semibold sm:col-span-2">手机号<Input className="mt-2" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                {profileError ? <p className="text-sm text-coral-deep" role="alert">{profileError}</p> : <p className="text-sm text-mint">{profileMessage}</p>}
+                <Button type="submit" disabled={profileMutation.isPending}>{profileMutation.isPending ? "保存中…" : "保存资料"}</Button>
+              </div>
+            </form>
+          </Card>
+          <Card className="p-6">
+            <h2 className="font-display text-xl font-bold">修改密码</h2>
+            <form className="mt-6 grid gap-4 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); setPasswordMessage(""); setPasswordError(""); passwordMutation.mutate(); }}>
+              <label className="text-sm font-semibold sm:col-span-2">当前密码<Input className="mt-2" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} minLength={6} required /></label>
+              <label className="text-sm font-semibold sm:col-span-2">新密码<Input className="mt-2" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required /></label>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                {passwordError ? <p className="text-sm text-coral-deep" role="alert">{passwordError}</p> : <p className="text-sm text-mint">{passwordMessage}</p>}
+                <Button type="submit" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? "更新中…" : "更新密码"}</Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
 }
 
 export function GuideDetailPage() {
