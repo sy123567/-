@@ -7,7 +7,9 @@ import org.springframework.stereotype.Service;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.Route;
 import com.trip.adaptive.domain.Trip;
+import com.trip.adaptive.domain.User;
 import com.trip.adaptive.exception.ResourceNotFoundException;
+import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.ItineraryNodeRepository;
 import com.trip.adaptive.repository.RouteRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
@@ -17,13 +19,19 @@ import com.trip.adaptive.repository.TripRepository;
 public class TripService {
   private final TripRepository trips;
   private final TravelGroupRepository groups;
+  private final GroupMemberRepository members;
   private final ItineraryNodeRepository nodes;
   private final RouteRepository routes;
 
   public TripService(
-      TripRepository t, TravelGroupRepository g, ItineraryNodeRepository n, RouteRepository r) {
+      TripRepository t,
+      TravelGroupRepository g,
+      GroupMemberRepository m,
+      ItineraryNodeRepository n,
+      RouteRepository r) {
     trips = t;
     groups = g;
+    members = m;
     nodes = n;
     routes = r;
   }
@@ -34,6 +42,13 @@ public class TripService {
 
   public List<Trip> all() {
     return trips.findAll();
+  }
+
+  public List<Trip> all(User user) {
+    return members.findByUserId(user.getId()).stream()
+        .flatMap(member -> trips.findByGroupId(member.getGroup().getId()).stream())
+        .distinct()
+        .toList();
   }
 
   public Trip create(Trip t, Long groupId) {

@@ -91,45 +91,57 @@ export interface Trip {
   startDate: string;
   endDate: string;
   totalBudget: number;
-  spentBudget: number;
-  group: TravelGroup;
+  spentBudget?: number;
+  group?: TravelGroup;
   itineraryNodes: ItineraryNode[];
   routes: Route[];
-  riskScore: number;
-  riskLabel: string;
-  destination: string;
-  roomCode: string;
+  riskScore?: number;
+  riskLabel?: string;
+  destination?: string;
+  roomCode?: string;
 }
 
 export interface ExternalEvent {
   id: Id;
-  eventType: EventType;
-  title: string;
-  description: string;
-  placeName: string;
-  severity: Severity;
-  startTime: string;
-  endTime: string;
+  eventType?: EventType;
+  title?: string;
+  description?: string;
+  placeName?: string;
+  severity?: Severity;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface ImpactAssessment {
   id: Id;
-  event: ExternalEvent;
-  affectedNode: ItineraryNode;
-  riskScore: number;
-  impactLevel: ImpactLevel;
-  description: string;
+  event?: ExternalEvent;
+  affectedNode?: ItineraryNode;
+  riskScore?: number;
+  impactLevel?: ImpactLevel;
+  description?: string;
 }
 
 export interface AlternativePlan {
   id: Id;
-  title: string;
-  strategy: "MIN_EXTRA_COST" | "MIN_DELAY" | "MIN_CHANGE";
-  extraCost: number;
-  extraDelayMinutes: number;
-  changedNodeCount: number;
-  summary: string;
-  status: "PROPOSED" | "VOTING" | "ACCEPTED" | "REJECTED";
+  title?: string;
+  strategy?: "MIN_EXTRA_COST" | "MIN_DELAY" | "MIN_CHANGE";
+  extraCost?: number;
+  extraDelayMinutes?: number;
+  changedNodeCount?: number;
+  summary?: string;
+  status?: "PROPOSED" | "VOTING" | "ACCEPTED" | "REJECTED";
+  proposedNodeChanges?: NodeChange[];
+}
+
+export interface NodeChange {
+  id: Id;
+  originalNode?: ItineraryNode;
+  changeType?: "RESCHEDULE" | "REPLACE" | "REMOVE" | "ADD";
+  newPlaceName?: string;
+  newStart?: string;
+  newEnd?: string;
+  newCost?: number;
+  note?: string;
 }
 
 export interface PlanVote {
@@ -140,9 +152,11 @@ export interface PlanVote {
 
 export interface ChangeLog {
   id: Id;
-  description: string;
-  extraCost: number;
-  createdAt: string;
+  description?: string;
+  extraCost?: number;
+  refundDeadline?: string;
+  createdAt?: string;
+  relatedPlan?: AlternativePlan;
 }
 
 export interface TravelGuide {
@@ -164,7 +178,7 @@ export interface TravelGuide {
 export interface DashboardData {
   user: User;
   trips: Trip[];
-  activeTrip: Trip;
+  activeTrip?: Trip;
   events: ExternalEvent[];
   notifications: { id: Id; title: string; detail: string; time: string; tone: "coral" | "mint" | "sky" }[];
 }
