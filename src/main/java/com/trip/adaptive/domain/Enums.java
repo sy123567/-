@@ -93,4 +93,10 @@ public final class Enums {
     REJECT,
     ABSTAIN
   }
+
+  public enum FriendshipStatus {
+    PENDING,
+    ACCEPTED,
+    REJECTED
+  }
 }

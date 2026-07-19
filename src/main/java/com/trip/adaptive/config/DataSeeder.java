@@ -44,8 +44,8 @@ public class DataSeeder implements CommandLineRunner {
 
   public void run(String... args) {
     if (!enabled || users.count() > 0) return;
-    User a = users.save(new User("张三", "zhangsan@example.com", "13800000001"));
-    User b = users.save(new User("李四", "lisi@example.com", "13800000002"));
+    User a = users.save(new User("张三", "zhangsan@example.com", "password123", "13800000001"));
+    User b = users.save(new User("李四", "lisi@example.com", "password123", "13800000002"));
     TravelGroup g = groups.save(new TravelGroup("上海周末小队", "演示群组", a));
     GroupMember ma = members.save(new GroupMember(g, a, Enums.MemberRole.OWNER));
     GroupMember mb = members.save(new GroupMember(g, b, Enums.MemberRole.MEMBER));

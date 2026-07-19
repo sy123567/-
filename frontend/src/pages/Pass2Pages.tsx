@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -34,7 +34,71 @@ function JoinForm({ onDone }: { onDone: () => void }) {
 
 export function GroupDetailPage() {
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow="GROUP / SH24-7K" title="周末慢游组" description="4 位成员 · 房间码 SH24-7K · 创建于 2025 年 3 月" action={<Button variant="ghost" onClick={() => { navigator.clipboard?.writeText("SH24-7K"); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button>} /><div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">4 / 8 人</Badge></div><div className="mt-6 divide-y divide-slate-100">{groupMembers.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><img src={member.user.avatar} alt="" className="h-11 w-11 rounded-full object-cover" /><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/1/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => show(`已移除 ${member.user.name}`)} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div></Card><Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><div className="mt-6 space-y-4"><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码有效期</p><p className="mt-1 text-xs text-ink-soft">2025-06-30 前有效，只有群主可以转移所有权。</p></div></div><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Wallet size={18} className="mt-0.5 text-sun" /><div><p className="text-sm font-semibold text-ink">当前预算基线</p><p className="mt-1 text-xs text-ink-soft">按成员最低预算 ¥1,800 生成方案，避免有人被迫超支。</p></div></div><button onClick={() => show("转移群主需要对方先确认")} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-ink hover:border-coral">转移群主 <span className="float-right text-ink-soft">需要确认 →</span></button></div></Card></div>{toast}</>;
+  const [members, setMembers] = useState<typeof groupMembers>([]);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    api.members(1).then((data) => {
+      setMembers(data.map((m: any) => ({
+        ...m,
+        user: {
+          ...m.user,
+          avatar: m.user.avatar ?? `https://i.pravatar.cc/100?img=${m.id}`,
+        },
+      })));
+      setIsLoading(false);
+    }).catch(() => {
+      setMembers(groupMembers);
+      setIsLoading(false);
+    });
+  }, []);
+
+  const handleRemoveMember = async (memberId: number) => {
+    const member = members.find((m) => m.id === memberId);
+    if (!member) return;
+    setIsSubmitting(true);
+    try {
+      await api.removeMember(1, memberId, 1);
+      setMembers(members.filter((m) => m.id !== memberId));
+      show(`已移除 ${member.user.name}`);
+    } catch (error) {
+      show(`删除失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleTransferOwner = async () => {
+    if (!newOwnerId) return;
+    const newOwner = members.find((m) => m.id === newOwnerId);
+    if (!newOwner) return;
+    setIsSubmitting(true);
+    try {
+      await api.transferOwner(1, newOwnerId, 1);
+      setMembers(members.map((m) => ({
+        ...m,
+        role: m.id === newOwnerId ? "OWNER" : (m.role === "OWNER" ? "MEMBER" : m.role),
+      })));
+      setTransferOpen(false);
+      setNewOwnerId(null);
+      show(`已将群主转移给 ${newOwner.user.name}`);
+    } catch (error) {
+      show(`转移失败：${error instanceof Error ? error.message : "未知错误"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const transferableMembers = members.filter((m) => m.role !== "OWNER");
+
+  if (isLoading) {
+    return <LoadingState label="正在加载成员列表…" />;
+  }
+
+  return <><PageHeader eyebrow="GROUP / SH24-7K" title="周末慢游组" description="4 位成员 · 房间码 SH24-7K · 创建于 2025 年 3 月" action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { navigator.clipboard?.writeText("SH24-7K"); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>} /><div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">{members.length} / 8 人</Badge></div><div className="mt-6 divide-y divide-slate-100">{members.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><img src={member.user.avatar} alt="" className="h-11 w-11 rounded-full object-cover" /><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/1/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => handleRemoveMember(member.id)} disabled={isSubmitting} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div></Card><Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><div className="mt-6 space-y-4"><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码有效期</p><p className="mt-1 text-xs text-ink-soft">2025-06-30 前有效，只有群主可以转移所有权。</p></div></div><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Wallet size={18} className="mt-0.5 text-sun" /><div><p className="text-sm font-semibold text-ink">当前预算基线</p><p className="mt-1 text-xs text-ink-soft">按成员最低预算 ¥1,800 生成方案，避免有人被迫超支。</p></div></div><button onClick={() => show("转移群主需要对方先确认")} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-ink hover:border-coral">转移群主 <span className="float-right text-ink-soft">需要确认 →</span></button></div></Card></div>{toast}<Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((m) => <option key={m.id} value={m.id}>{m.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || isSubmitting} onClick={handleTransferOwner}>确认转移</Button></div></Modal></>;
 }
 
 export function ConstraintPage() {
