@@ -26,12 +26,14 @@ public class TravelGroup {
 
   private String description;
 
+  @Column(nullable = false, unique = true, length = 7)
+  private String roomCode;
+
   @ManyToOne(optional = false)
   private User ownerUser;
 
   private LocalDateTime createdAt;
 
-  @JsonIgnore
   @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<GroupMember> members = new ArrayList<>();
 
@@ -48,6 +50,14 @@ public class TravelGroup {
     this.name = name;
     this.description = description;
     this.ownerUser = owner;
+  }
+
+  public String getRoomCode() {
+    return roomCode;
+  }
+
+  public void setRoomCode(String v) {
+    roomCode = v;
   }
 
   public Long getId() {

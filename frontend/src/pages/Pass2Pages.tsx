@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users, Wallet } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -20,85 +20,106 @@ export function GroupsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow="YOUR CREW" title="我的小组" description="和旅伴共享约束、一起确认每一次路线变化。" action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setJoinOpen(true)}><UserPlus size={16} className="mr-2 inline" />加入小组</Button><Button onClick={() => setCreateOpen(true)}><Plus size={16} className="mr-2 inline" />创建小组</Button></div>} /><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3"><Card className="relative overflow-hidden bg-ink p-6 text-white"><div className="absolute -right-12 -top-12 h-40 w-40 rounded-full border-[20px] border-white/5" /><p className="eyebrow text-coral">ACTIVE ROOM</p><h2 className="mt-3 font-display text-2xl font-bold">周末慢游组</h2><p className="mt-2 text-sm leading-6 text-white/55">一起把周末过成一张好看的地图</p><div className="mt-7 flex items-center justify-between border-t border-white/10 pt-4"><span className="flex items-center gap-2 text-sm text-white/65"><Users size={16} />4 位成员</span><span className="font-mono text-xs text-coral">SH24-7K</span></div><Link to="/groups/1" className="mt-5 flex items-center gap-1 text-sm font-semibold text-white hover:text-coral">查看小组详情<ChevronRight size={15} /></Link></Card><Card className="p-6"><p className="eyebrow">NEXT ACTION</p><h2 className="mt-3 font-display text-xl font-bold text-ink">补齐成员约束</h2><p className="mt-2 text-sm leading-6 text-ink-soft">还有 1 位成员没有填写可用日期，补齐后才能生成更稳的初始方案。</p><Link to="/groups/1" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-sky">去查看成员<ArrowRight size={16} /></Link></Card><Card className="flex flex-col items-center justify-center p-6 text-center"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-coral/10 text-coral"><Plus /></div><h2 className="mt-4 font-display text-lg font-bold">还有旅伴没上车？</h2><p className="mt-2 text-sm text-ink-soft">生成一个房间码，邀请他们加入。</p><Button variant="ghost" className="mt-3" onClick={() => setJoinOpen(true)}>输入房间码</Button></Card></div><Modal open={createOpen} title="创建一个新小组" onClose={() => setCreateOpen(false)}><CreateGroupForm onDone={(code) => { setCreateOpen(false); show(`小组已创建，房间码 ${code}`); }} /></Modal><Modal open={joinOpen} title="加入旅伴的小组" onClose={() => setJoinOpen(false)}><JoinForm onDone={() => { setJoinOpen(false); show("已发送加入申请，等群主确认"); }} /></Modal>{toast}</>;
+  const queryClient = useQueryClient();
+  const groupsQuery = useQuery({ queryKey: ["groups"], queryFn: api.groups });
+  const groups = groupsQuery.data ?? [];
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["groups"] });
+  return (
+    <>
+      <PageHeader
+        eyebrow="YOUR CREW"
+        title="我的小组"
+        description="和旅伴共享约束、一起确认每一次路线变化。"
+        action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setJoinOpen(true)}><UserPlus size={16} className="mr-2 inline" />加入小组</Button><Button onClick={() => setCreateOpen(true)}><Plus size={16} className="mr-2 inline" />创建小组</Button></div>}
+      />
+      {groupsQuery.isLoading && <LoadingState label="正在读取小组…" />}
+      {groupsQuery.isError && <ErrorState message={groupsQuery.error instanceof Error ? groupsQuery.error.message : "无法读取小组"} onRetry={() => void groupsQuery.refetch()} />}
+      {!groupsQuery.isLoading && !groupsQuery.isError && groups.length === 0 && <EmptyState title="还没有加入小组" message="创建一个小组，或输入旅伴分享的房间码加入。" />}
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {groups.map((group, index) => (
+          <Card key={group.id} className={`relative overflow-hidden p-6 ${index === 0 ? "bg-ink text-white" : ""}`}>
+            {index === 0 && <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full border-[20px] border-white/5" />}
+            <p className={`eyebrow ${index === 0 ? "text-coral" : ""}`}>TRAVEL ROOM</p>
+            <h2 className="relative mt-3 font-display text-2xl font-bold">{group.name}</h2>
+            <p className={`relative mt-2 text-sm leading-6 ${index === 0 ? "text-white/55" : "text-ink-soft"}`}>{group.description || "和旅伴一起规划下一段路。"}</p>
+            <div className={`relative mt-7 flex items-center justify-between border-t pt-4 ${index === 0 ? "border-white/10" : "border-slate-100"}`}>
+              <span className={`flex items-center gap-2 text-sm ${index === 0 ? "text-white/65" : "text-ink-soft"}`}><Users size={16} />{group.members?.length ?? 0} 位成员</span>
+              <span className={`font-mono text-xs ${index === 0 ? "text-coral" : "text-sky"}`}>{group.roomCode}</span>
+            </div>
+            <Link to={`/groups/${group.id}`} className={`relative mt-5 flex items-center gap-1 text-sm font-semibold ${index === 0 ? "text-white hover:text-coral" : "text-sky"}`}>查看小组详情<ChevronRight size={15} /></Link>
+          </Card>
+        ))}
+      </div>
+      <Modal open={createOpen} title="创建一个新小组" onClose={() => setCreateOpen(false)}><CreateGroupForm onDone={(group) => { setCreateOpen(false); refresh(); show(`小组已创建，房间码 ${group.roomCode}`); }} /></Modal>
+      <Modal open={joinOpen} title="加入旅伴的小组" onClose={() => setJoinOpen(false)}><JoinForm onDone={(group) => { setJoinOpen(false); refresh(); show(`已加入 ${group.name}`); }} /></Modal>
+      {toast}
+    </>
+  );
 }
 
-function CreateGroupForm({ onDone }: { onDone: (code: string) => void }) {
+function CreateGroupForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.createGroup>>) => void }) {
   const [name, setName] = useState("");
-  return <form onSubmit={(event) => { event.preventDefault(); onDone("HZ25-8Q"); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" /><Button className="w-full" disabled={!name}>生成房间码</Button></form>;
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState("");
+  const mutation = useMutation({ mutationFn: () => api.createGroup(name.trim(), description.trim()), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "创建小组失败") });
+  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" value={description} onChange={(event) => setDescription(event.target.value)} />{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!name.trim() || mutation.isPending}>{mutation.isPending ? "创建中…" : "生成房间码"}</Button></form>;
 }
 
-function JoinForm({ onDone }: { onDone: () => void }) {
-  return <form onSubmit={(event) => { event.preventDefault(); onDone(); }} className="space-y-4"><p className="text-sm leading-6 text-ink-soft">输入旅伴分享给你的 6 位房间码，即可申请加入。</p><Input className="font-mono uppercase tracking-[0.2em]" placeholder="例如 SH24-7K" maxLength={7} required /><Button className="w-full">发送加入申请</Button></form>;
+function JoinForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.joinGroup>>) => void }) {
+  const [roomCode, setRoomCode] = useState("");
+  const [error, setError] = useState("");
+  const mutation = useMutation({ mutationFn: () => api.joinGroup(roomCode.trim()), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "加入小组失败") });
+  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><p className="text-sm leading-6 text-ink-soft">输入旅伴分享的房间码即可加入小组。</p><Input className="font-mono uppercase tracking-[0.2em]" placeholder="例如 SH24-7K" value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase())} maxLength={7} required />{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!roomCode.trim() || mutation.isPending}>{mutation.isPending ? "加入中…" : "加入小组"}</Button></form>;
 }
 
 export function GroupDetailPage() {
+  const { id } = useParams();
+  const groupId = Number(id);
   const { toast, show } = useToast();
-  const [members, setMembers] = useState<typeof groupMembers>([]);
   const [transferOpen, setTransferOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    api.members(1).then((data) => {
-      setMembers(data.map((m: any) => ({
-        ...m,
-        user: {
-          ...m.user,
-          avatar: m.user.avatar ?? `https://i.pravatar.cc/100?img=${m.id}`,
-        },
-      })));
-      setIsLoading(false);
-    }).catch(() => {
-      setMembers(groupMembers);
-      setIsLoading(false);
-    });
-  }, []);
-
-  const handleRemoveMember = async (memberId: number) => {
-    const member = members.find((m) => m.id === memberId);
-    if (!member) return;
-    setIsSubmitting(true);
-    try {
-      await api.removeMember(1, memberId, 1);
-      setMembers(members.filter((m) => m.id !== memberId));
-      show(`已移除 ${member.user.name}`);
-    } catch (error) {
-      show(`删除失败：${error instanceof Error ? error.message : "未知错误"}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleTransferOwner = async () => {
-    if (!newOwnerId) return;
-    const newOwner = members.find((m) => m.id === newOwnerId);
-    if (!newOwner) return;
-    setIsSubmitting(true);
-    try {
-      await api.transferOwner(1, newOwnerId, 1);
-      setMembers(members.map((m) => ({
-        ...m,
-        role: m.id === newOwnerId ? "OWNER" : (m.role === "OWNER" ? "MEMBER" : m.role),
-      })));
+  const queryClient = useQueryClient();
+  const groupQuery = useQuery({ queryKey: ["group", groupId], queryFn: () => api.group(groupId), enabled: Number.isFinite(groupId) });
+  const membersQuery = useQuery({ queryKey: ["group", groupId, "members"], queryFn: () => api.members(groupId), enabled: Number.isFinite(groupId) });
+  const members = membersQuery.data ?? [];
+  const mutation = useMutation({
+    mutationFn: async (request: { type: "remove" | "transfer"; memberId: number }) => {
+      if (request.type === "remove") await api.removeMember(groupId, request.memberId);
+      else await api.transferOwner(groupId, request.memberId);
+    },
+    onSuccess: (_, request) => {
+      void queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      void queryClient.invalidateQueries({ queryKey: ["group", groupId, "members"] });
       setTransferOpen(false);
       setNewOwnerId(null);
-      show(`已将群主转移给 ${newOwner.user.name}`);
-    } catch (error) {
-      show(`转移失败：${error instanceof Error ? error.message : "未知错误"}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const transferableMembers = members.filter((m) => m.role !== "OWNER");
-
-  if (isLoading) {
-    return <LoadingState label="正在加载成员列表…" />;
-  }
-
-  return <><PageHeader eyebrow="GROUP / SH24-7K" title="周末慢游组" description="4 位成员 · 房间码 SH24-7K · 创建于 2025 年 3 月" action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { navigator.clipboard?.writeText("SH24-7K"); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>} /><div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">{members.length} / 8 人</Badge></div><div className="mt-6 divide-y divide-slate-100">{members.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><img src={member.user.avatar} alt="" className="h-11 w-11 rounded-full object-cover" /><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/1/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => handleRemoveMember(member.id)} disabled={isSubmitting} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div></Card><Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><div className="mt-6 space-y-4"><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码有效期</p><p className="mt-1 text-xs text-ink-soft">2025-06-30 前有效，只有群主可以转移所有权。</p></div></div><div className="flex items-start gap-3 rounded-xl bg-paper p-4"><Wallet size={18} className="mt-0.5 text-sun" /><div><p className="text-sm font-semibold text-ink">当前预算基线</p><p className="mt-1 text-xs text-ink-soft">按成员最低预算 ¥1,800 生成方案，避免有人被迫超支。</p></div></div><button onClick={() => show("转移群主需要对方先确认")} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-semibold text-ink hover:border-coral">转移群主 <span className="float-right text-ink-soft">需要确认 →</span></button></div></Card></div>{toast}<Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((m) => <option key={m.id} value={m.id}>{m.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || isSubmitting} onClick={handleTransferOwner}>确认转移</Button></div></Modal></>;
+      show(request.type === "remove" ? "成员已移除" : "群主已转移");
+    },
+    onError: (error) => show(error instanceof Error ? error.message : "操作失败"),
+  });
+  if (!Number.isFinite(groupId)) return <ErrorState message="无效的小组地址" onRetry={() => undefined} />;
+  if (groupQuery.isLoading || membersQuery.isLoading) return <LoadingState label="正在加载小组…" />;
+  if (groupQuery.isError || membersQuery.isError || !groupQuery.data) return <ErrorState message="无法读取小组信息" onRetry={() => { void groupQuery.refetch(); void membersQuery.refetch(); }} />;
+  const group = groupQuery.data;
+  const transferableMembers = members.filter((member) => member.role !== "OWNER");
+  return (
+    <>
+      <PageHeader
+        eyebrow={`GROUP / ${group.roomCode}`}
+        title={group.name}
+        description={`${members.length} 位成员 · 房间码 ${group.roomCode}`}
+        action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
+      />
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="p-6">
+          <div className="flex items-center justify-between"><div><p className="eyebrow">TRAVEL CREW</p><h2 className="mt-2 font-display text-xl font-bold">成员列表</h2></div><Badge tone="mint">{members.length} 位成员</Badge></div>
+          <div className="mt-6 divide-y divide-slate-100">{members.map((member) => <div key={member.id} className="flex items-center justify-between gap-4 py-4 first:pt-0"><div className="flex min-w-0 items-center gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-coral/10 font-display text-lg font-bold text-coral">{member.user.name.slice(0, 1)}</div><div><p className="font-semibold text-ink">{member.user.name} {member.role === "OWNER" && <Badge tone="coral">群主</Badge>}</p><p className="mt-1 truncate text-xs text-ink-soft">{member.user.email}</p></div></div><div className="flex shrink-0 gap-2"><Link to={`/groups/${groupId}/constraints/${member.id}`} className="rounded-lg px-3 py-2 text-xs font-semibold text-sky hover:bg-sky/5">成员约束</Link>{member.role === "MEMBER" && <button onClick={() => mutation.mutate({ type: "remove", memberId: member.id })} disabled={mutation.isPending} className="rounded-lg p-2 text-ink-soft hover:bg-coral/5 hover:text-coral" aria-label={`移除${member.user.name}`}><UserMinus size={16} /></button>}</div></div>)}</div>
+        </Card>
+        <Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><p className="mt-3 text-sm leading-6 text-ink-soft">{group.description || "和旅伴一起规划下一段路。"}</p><div className="mt-6 flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码</p><p className="mt-1 font-mono text-xs text-ink-soft">{group.roomCode} · 仅分享给你的旅伴</p></div></div></Card>
+      </div>
+      {toast}
+      <Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((member) => <option key={member.id} value={member.id}>{member.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || mutation.isPending} onClick={() => newOwnerId && mutation.mutate({ type: "transfer", memberId: newOwnerId })}>确认转移</Button></div></Modal>
+    </>
+  );
 }
 
 export function ConstraintPage() {

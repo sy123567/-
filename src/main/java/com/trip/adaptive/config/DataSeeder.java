@@ -89,7 +89,9 @@ public class DataSeeder implements CommandLineRunner {
     friendships.save(accepted);
     Friendship pending = friendships.save(new Friendship(wangwu, a));
 
-    TravelGroup g = groups.save(new TravelGroup("上海周末小队", "演示群组", a));
+    TravelGroup g = new TravelGroup("上海周末小队", "演示群组", a);
+    g.setRoomCode("SH24-7K");
+    g = groups.save(g);
     GroupMember ma = members.save(new GroupMember(g, a, Enums.MemberRole.OWNER));
     GroupMember mb = members.save(new GroupMember(g, b, Enums.MemberRole.MEMBER));
     for (GroupMember m : List.of(ma, mb)) {

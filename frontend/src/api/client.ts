@@ -1,6 +1,6 @@
 import { getToken, type AuthUser } from "../auth";
 import { activeTrip, changeLogs, events, groupMembers, guides, mockDashboard, plans } from "../mocks/data";
-import type { DashboardData, TravelGuide, Trip } from "../types";
+import type { DashboardData, GroupMember, TravelGuide, TravelGroup, Trip } from "../types";
 
 const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
@@ -137,22 +137,40 @@ export const api = {
   },
   async groups() {
     if (useMocks) return [{ ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" }];
-    return request<{ id: number; name: string; description: string }[]>("/api/groups");
+    return request<TravelGroup[]>("/api/groups");
   },
-  async members(groupId: number) {
+  async group(id: number): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: "SH24-7K" };
+    return request<TravelGroup>(`/api/groups/${id}`);
+  },
+  async createGroup(name: string, description?: string): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, id: Date.now(), name, description: description ?? "", roomCode: "HZ25-8Q" };
+    return request<TravelGroup>("/api/groups", {
+      method: "POST",
+      body: JSON.stringify({ name, description }),
+    });
+  },
+  async joinGroup(roomCode: string): Promise<TravelGroup> {
+    if (useMocks) return { ...mockDashboard.activeTrip.group, roomCode: roomCode.toUpperCase() };
+    return request<TravelGroup>("/api/groups/join", {
+      method: "POST",
+      body: JSON.stringify({ roomCode }),
+    });
+  },
+  async members(groupId: number): Promise<GroupMember[]> {
     if (useMocks) return groupMembers;
-    return request<any[]>(`/api/groups/${groupId}/members`);
+    return request<GroupMember[]>(`/api/groups/${groupId}/members`);
   },
   async events() { return events; },
   async plans() { return plans; },
   async changelogs() { return changeLogs; },
   async risk() { return { score: activeTrip.riskScore, factors: [{ label: "事件严重度", value: 30, detail: "1 个 HIGH 级天气事件" }, { label: "受影响节点占比", value: 22, detail: "1 / 4 个节点" }, { label: "成本暴露", value: 8, detail: "额外成本约 ¥160" }, { label: "时间缓冲", value: 8, detail: "距离节点开始还有 4 小时" }] }; },
-  async removeMember(groupId: number, memberId: number, operatorId: number = 1): Promise<void> {
-    await request<void>(`/api/groups/${groupId}/members/${memberId}?operatorId=${operatorId}`, { method: "DELETE" });
+  async removeMember(groupId: number, memberId: number): Promise<void> {
+    await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });
   },
-  async transferOwner(groupId: number, newOwnerId: number, operatorId: number = 1): Promise<{ id: number; name: string; roomCode?: string }> {
-    return request<{ id: number; name: string; roomCode?: string }>(
-      `/api/groups/${groupId}/transfer?newOwnerId=${newOwnerId}&operatorId=${operatorId}`,
+  async transferOwner(groupId: number, newOwnerId: number): Promise<TravelGroup> {
+    return request<TravelGroup>(
+      `/api/groups/${groupId}/transfer?newOwnerId=${newOwnerId}`,
       { method: "PUT" },
     );
   },

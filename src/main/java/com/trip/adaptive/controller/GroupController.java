@@ -22,6 +22,7 @@ import com.trip.adaptive.domain.MemberConstraint;
 import com.trip.adaptive.domain.TravelGroup;
 import com.trip.adaptive.dto.Requests.ConstraintRequest;
 import com.trip.adaptive.dto.Requests.GroupRequest;
+import com.trip.adaptive.dto.Requests.JoinGroupRequest;
 import com.trip.adaptive.dto.Requests.MemberRequest;
 import com.trip.adaptive.service.GroupService;
 
@@ -35,8 +36,15 @@ public class GroupController {
   }
 
   @PostMapping
-  public ResponseEntity<TravelGroup> create(@Valid @RequestBody GroupRequest r) {
-    return ResponseEntity.status(201).body(s.create(r.name(), r.description(), r.ownerUserId()));
+  public ResponseEntity<TravelGroup> create(
+      Authentication authentication, @Valid @RequestBody GroupRequest r) {
+    return ResponseEntity.status(201)
+        .body(s.create(r.name(), r.description(), currentUser(authentication)));
+  }
+
+  @PostMapping("/join")
+  public TravelGroup join(Authentication authentication, @Valid @RequestBody JoinGroupRequest r) {
+    return s.join(r.roomCode(), currentUser(authentication));
   }
 
   @GetMapping
@@ -76,18 +84,18 @@ public class GroupController {
 
   @DeleteMapping("/{id}/members/{memberId}")
   public ResponseEntity<Void> remove(
-      @PathVariable Long id,
-      @PathVariable Long memberId,
-      @RequestParam(defaultValue = "1") Long operatorId) {
-    s.removeMember(id, memberId, operatorId);
+      Authentication authentication, @PathVariable Long id, @PathVariable Long memberId) {
+    s.removeMember(id, memberId, currentUser(authentication));
     return ResponseEntity.noContent().build();
   }
 
   @PutMapping("/{id}/transfer")
   public TravelGroup transfer(
-      @PathVariable Long id,
-      @RequestParam Long newOwnerId,
-      @RequestParam(defaultValue = "1") Long operatorId) {
-    return s.transferOwner(id, newOwnerId, operatorId);
+      Authentication authentication, @PathVariable Long id, @RequestParam Long newOwnerId) {
+    return s.transferOwner(id, newOwnerId, currentUser(authentication));
+  }
+
+  private com.trip.adaptive.domain.User currentUser(Authentication authentication) {
+    return (com.trip.adaptive.domain.User) authentication.getPrincipal();
   }
 }
