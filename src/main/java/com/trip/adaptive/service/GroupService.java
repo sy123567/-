@@ -93,9 +93,7 @@ public class GroupService {
       throw new com.trip.adaptive.exception.BusinessException("该成员已经是群主");
     }
     GroupMember currentOwner =
-        members
-            .findById(operatorId)
-            .orElseThrow(() -> new ResourceNotFoundException("操作人不存在"));
+        members.findById(operatorId).orElseThrow(() -> new ResourceNotFoundException("操作人不存在"));
     if (currentOwner.getRole() != Enums.MemberRole.OWNER) {
       throw new com.trip.adaptive.exception.BusinessException("只有群主可以转移群主身份");
     }

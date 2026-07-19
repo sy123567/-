@@ -1,6 +1,6 @@
 package com.trip.adaptive.service;
 
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.trip.adaptive.domain.User;
@@ -10,16 +10,15 @@ import com.trip.adaptive.repository.UserRepository;
 @Service
 public class AuthService {
   private final UserRepository users;
-  private final BCryptPasswordEncoder encoder;
+  private final PasswordEncoder encoder;
 
-  public AuthService(UserRepository users) {
+  public AuthService(UserRepository users, PasswordEncoder encoder) {
     this.users = users;
-    this.encoder = new BCryptPasswordEncoder();
+    this.encoder = encoder;
   }
 
   public LoginResult login(String email, String password) {
-    User user = users.findByEmail(email)
-        .orElseThrow(() -> new BusinessException("邮箱或密码错误"));
+    User user = users.findByEmail(email).orElseThrow(() -> new BusinessException("邮箱或密码错误"));
     if (!encoder.matches(password, user.getPassword())) {
       throw new BusinessException("邮箱或密码错误");
     }

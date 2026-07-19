@@ -12,7 +12,11 @@ import jakarta.validation.constraints.Positive;
 public final class Requests {
   private Requests() {}
 
-  public record UserRequest(@NotBlank String name, @Email @NotBlank String email, String phone) {}
+  public record UserRequest(
+      @NotBlank String name,
+      @Email @NotBlank String email,
+      @NotBlank String password,
+      String phone) {}
 
   public record GroupRequest(
       @NotBlank String name, String description, @NotNull Long ownerUserId) {}

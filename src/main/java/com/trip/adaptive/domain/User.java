@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 @Entity
 @Table(name = "users")
 public class User {
@@ -20,18 +22,13 @@ public class User {
   @Column(nullable = false, unique = true)
   private String email;
 
+  @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
   @Column(nullable = false)
   private String password;
 
   private String phone;
 
   public User() {}
-
-  public User(String name, String email, String phone) {
-    this.name = name;
-    this.email = email;
-    this.phone = phone;
-  }
 
   public User(String name, String email, String password, String phone) {
     this.name = name;

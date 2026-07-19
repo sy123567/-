@@ -24,7 +24,8 @@ public class AuthController {
 
   @PostMapping("/register")
   public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-    return ResponseEntity.status(201).body(authService.register(request.name, request.email, request.password, request.phone));
+    return ResponseEntity.status(201)
+        .body(authService.register(request.name, request.email, request.password, request.phone));
   }
 
   public record LoginRequest(String email, String password) {}

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import com.trip.adaptive.domain.Enums;
@@ -27,6 +28,7 @@ public class DataSeeder implements CommandLineRunner {
   private final TravelGroupRepository groups;
   private final GroupMemberRepository members;
   private final MemberConstraintRepository constraints;
+  private final PasswordEncoder passwordEncoder;
 
   @Value("${app.seed.enabled:true}")
   boolean enabled;
@@ -35,17 +37,28 @@ public class DataSeeder implements CommandLineRunner {
       UserRepository u,
       TravelGroupRepository g,
       GroupMemberRepository m,
-      MemberConstraintRepository c) {
+      MemberConstraintRepository c,
+      PasswordEncoder p) {
     users = u;
     groups = g;
     members = m;
     constraints = c;
+    passwordEncoder = p;
   }
 
   public void run(String... args) {
     if (!enabled || users.count() > 0) return;
-    User a = users.save(new User("张三", "zhangsan@example.com", "password123", "13800000001"));
-    User b = users.save(new User("李四", "lisi@example.com", "password123", "13800000002"));
+    User a =
+        users.save(
+            new User(
+                "张三",
+                "zhangsan@example.com",
+                passwordEncoder.encode("password123"),
+                "13800000001"));
+    User b =
+        users.save(
+            new User(
+                "李四", "lisi@example.com", passwordEncoder.encode("password123"), "13800000002"));
     TravelGroup g = groups.save(new TravelGroup("上海周末小队", "演示群组", a));
     GroupMember ma = members.save(new GroupMember(g, a, Enums.MemberRole.OWNER));
     GroupMember mb = members.save(new GroupMember(g, b, Enums.MemberRole.MEMBER));

@@ -1,6 +1,5 @@
 package com.trip.adaptive.service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -43,9 +42,7 @@ public class FriendshipService {
     User requester =
         users.findById(requesterId).orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
     User addressee =
-        users
-            .findById(addresseeId)
-            .orElseThrow(() -> new ResourceNotFoundException("目标用户不存在"));
+        users.findById(addresseeId).orElseThrow(() -> new ResourceNotFoundException("目标用户不存在"));
 
     // 检查是否已存在好友关系
     friendships
@@ -118,7 +115,8 @@ public class FriendshipService {
   // M04-4 查看好友列表
   public List<User> getFriends(Long userId) {
     List<Friendship> accepted =
-        friendships.findByRequesterIdOrAddresseeIdAndStatus(userId, userId, Enums.FriendshipStatus.ACCEPTED);
+        friendships.findByRequesterIdOrAddresseeIdAndStatus(
+            userId, userId, Enums.FriendshipStatus.ACCEPTED);
 
     return accepted.stream()
         .map(f -> f.getRequester().getId().equals(userId) ? f.getAddressee() : f.getRequester())
@@ -138,12 +136,8 @@ public class FriendshipService {
   // M04-5 删除好友
   @Transactional
   public void deleteFriend(Long userId, Long friendId) {
-    friendships
-        .findByRequesterIdAndAddresseeId(userId, friendId)
-        .ifPresent(friendships::delete);
+    friendships.findByRequesterIdAndAddresseeId(userId, friendId).ifPresent(friendships::delete);
 
-    friendships
-        .findByRequesterIdAndAddresseeId(friendId, userId)
-        .ifPresent(friendships::delete);
+    friendships.findByRequesterIdAndAddresseeId(friendId, userId).ifPresent(friendships::delete);
   }
 }

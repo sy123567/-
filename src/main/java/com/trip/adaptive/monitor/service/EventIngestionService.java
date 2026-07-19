@@ -6,21 +6,19 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.trip.adaptive.service.TripService;
 import jakarta.transaction.Transactional;
+
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.ExternalEvent;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.ExternalEventRepository;
-import com.trip.adaptive.monitor.service.ImpactMatchingService;
-
+import com.trip.adaptive.service.TripService;
 
 @Service
 public class EventIngestionService {
@@ -29,18 +27,25 @@ public class EventIngestionService {
   private final WeatherClient weather;
   private final ImpactMatchingService impactMatching;
   private final RiskScoringService riskScoring;
+
   @Value("${weather.forecast-window-days:3}")
   private int forecastWindowDays;
+
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
     return ingestWeatherForTrip(tripId, false);
   }
-  public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w, ImpactMatchingService i, RiskScoringService rs) {
+
+  public EventIngestionService(
+      ExternalEventRepository e,
+      TripService t,
+      WeatherClient w,
+      ImpactMatchingService i,
+      RiskScoringService rs) {
     events = e;
     trips = t;
     weather = w;
     impactMatching = i;
     riskScoring = rs;
-
   }
 
   public ExternalEvent ingest(ExternalEvent e) {
@@ -80,18 +85,17 @@ public class EventIngestionService {
     return out;
   }
 
- @Transactional
+  @Transactional
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId, boolean force) {
     Trip t = trips.get(tripId);
     List<ExternalEvent> out = new ArrayList<>();
-    if (!weather.enabled())
-      return out;
+    if (!weather.enabled()) return out;
     LocalDateTime now = LocalDateTime.now();
     LocalDateTime cutoff = now.plusDays(forecastWindowDays);
-    Map<String,List<ItineraryNode>> byCity=new LinkedHashMap<>();
+    Map<String, List<ItineraryNode>> byCity = new LinkedHashMap<>();
     for (ItineraryNode n : t.getItineraryNodes()) {
       if (n.getLatitude() == null || n.getLongitude() == null) continue;
-      if(force){
+      if (force) {
         if (n.getPlannedEnd() != null && n.getPlannedEnd().isBefore(now)) continue;
         if (n.getPlannedStart() != null && n.getPlannedStart().isAfter(cutoff)) continue;
       }
@@ -99,13 +103,13 @@ public class EventIngestionService {
       if (loc == null) continue;
       byCity.computeIfAbsent(loc, k -> new ArrayList<>()).add(n);
     }
-    for(Map.Entry<String,List<ItineraryNode>> entry : byCity.entrySet())
+    for (Map.Entry<String, List<ItineraryNode>> entry : byCity.entrySet())
       ingestForCity(entry.getKey(), entry.getValue(), out);
-   if (!out.isEmpty())
-     impactMatching.assessTrip(tripId);
-     riskScoring.scoreTrip(tripId);
+    if (!out.isEmpty()) impactMatching.assessTrip(tripId);
+    riskScoring.scoreTrip(tripId);
     return out;
   }
+
   private void ingestForCity(String loc, List<ItineraryNode> nodes, List<ExternalEvent> out) {
     boolean createdAlert = false;
     // 自然灾害预警：每城市只查一次
@@ -145,7 +149,8 @@ public class EventIngestionService {
       }
     }
   }
-  //一条 ExternalEvent 除了标题/类型/严重度不同，其余字段（地点、经纬度、影响半径、起止时间、来源）都来自那个行程节点 n，两个分支都要设一遍。与其写两遍，就抽成 fill：
+
+  // 一条 ExternalEvent 除了标题/类型/严重度不同，其余字段（地点、经纬度、影响半径、起止时间、来源）都来自那个行程节点 n，两个分支都要设一遍。与其写两遍，就抽成 fill：
   private void fill(ExternalEvent e, ItineraryNode n, String source) {
     e.setPlaceName(n.getPlaceName());
     e.setLatitude(n.getLatitude());
@@ -155,10 +160,11 @@ public class EventIngestionService {
     e.setEndTime(n.getPlannedEnd());
     e.setSource(source);
   }
-//去重后再存库,定时轮询每 100分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
+
+  // 去重后再存库,定时轮询每 100分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
   private void save(java.util.List<ExternalEvent> out, ExternalEvent e) {
     if (!events.existsBySourceAndPlaceNameAndStartTime(
-            e.getSource(), e.getPlaceName(), e.getStartTime())) {
+        e.getSource(), e.getPlaceName(), e.getStartTime())) {
       out.add(events.save(e));
     }
   }
