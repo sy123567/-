@@ -39,6 +39,7 @@ public class ImpactMatchingService {
   @Transactional
   public List<ImpactAssessment> assessTrip(Long id) {
     Trip t = trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在"));
+    assessments.deleteAll(assessments.findByTripId(id));
     List<ImpactAssessment> out = new ArrayList<>();
     for (ExternalEvent e : events.findByEndTimeAfter(LocalDateTime.now().minusDays(1))) {
       for (ItineraryNode n : t.getItineraryNodes()) {

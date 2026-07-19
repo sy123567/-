@@ -28,16 +28,18 @@ public class EventIngestionService {
   private final TripService trips;
   private final WeatherClient weather;
   private final ImpactMatchingService impactMatching;
+  private final RiskScoringService riskScoring;
   @Value("${weather.forecast-window-days:3}")
   private int forecastWindowDays;
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId) {
     return ingestWeatherForTrip(tripId, false);
   }
-  public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w, ImpactMatchingService i) {
+  public EventIngestionService(ExternalEventRepository e, TripService t, WeatherClient w, ImpactMatchingService i, RiskScoringService rs) {
     events = e;
     trips = t;
     weather = w;
     impactMatching = i;
+    riskScoring = rs;
 
   }
 
@@ -101,6 +103,7 @@ public class EventIngestionService {
       ingestForCity(entry.getKey(), entry.getValue(), out);
    if (!out.isEmpty())
      impactMatching.assessTrip(tripId);
+     riskScoring.scoreTrip(tripId);
     return out;
   }
   private void ingestForCity(String loc, List<ItineraryNode> nodes, List<ExternalEvent> out) {
