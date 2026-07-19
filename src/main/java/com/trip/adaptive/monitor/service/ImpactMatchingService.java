@@ -40,6 +40,12 @@ public class ImpactMatchingService {
   public List<ImpactAssessment> assessTrip(Long id) {
     Trip t = trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在"));
     assessments.deleteAll(assessments.findByTripId(id));
+    for (ItineraryNode n : t.getItineraryNodes()) {
+      if (n.getStatus() == Enums.NodeStatus.AFFECTED) {
+        n.setStatus(Enums.NodeStatus.PLANNED); // 事件消失后恢复,本轮命中的会再次标记
+        nodes.save(n);
+      }
+    }
     List<ImpactAssessment> out = new ArrayList<>();
     for (ExternalEvent e : events.findByEndTimeAfter(LocalDateTime.now().minusDays(1))) {
       for (ItineraryNode n : t.getItineraryNodes()) {
