@@ -110,6 +110,57 @@ const categoryLabels: Record<NodeType, string> = {
   OTHER: "行程节点",
 };
 
+export interface SuggestedPlace {
+  city: string;
+  placeName: string;
+  latitude: number;
+  longitude: number;
+  nodeType: NodeType;
+  durationMinutes: number;
+}
+
+const suggestedPlaces: SuggestedPlace[] = [
+  { city: "上海", placeName: "上海外滩", latitude: 31.2304, longitude: 121.4737, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "上海", placeName: "豫园", latitude: 31.2272, longitude: 121.492, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "上海", placeName: "老吉士", latitude: 31.2113, longitude: 121.4512, nodeType: "MEAL", durationMinutes: 90 },
+  { city: "北京", placeName: "故宫博物院", latitude: 39.9163, longitude: 116.3972, nodeType: "ATTRACTION", durationMinutes: 210 },
+  { city: "北京", placeName: "颐和园", latitude: 39.9999, longitude: 116.2755, nodeType: "ATTRACTION", durationMinutes: 180 },
+  { city: "北京", placeName: "南锣鼓巷", latitude: 39.937, longitude: 116.4039, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "成都", placeName: "成都大熊猫繁育研究基地", latitude: 30.7338, longitude: 104.144, nodeType: "ATTRACTION", durationMinutes: 210 },
+  { city: "成都", placeName: "宽窄巷子", latitude: 30.6573, longitude: 104.0665, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "成都", placeName: "武侯祠", latitude: 30.6496, longitude: 104.0482, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "杭州", placeName: "西湖", latitude: 30.244, longitude: 120.149, nodeType: "ATTRACTION", durationMinutes: 180 },
+  { city: "杭州", placeName: "河坊街", latitude: 30.2431, longitude: 120.1715, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "杭州", placeName: "灵隐寺", latitude: 30.2401, longitude: 120.1015, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "西安", placeName: "秦始皇帝陵博物院", latitude: 34.3848, longitude: 109.2731, nodeType: "ATTRACTION", durationMinutes: 210 },
+  { city: "西安", placeName: "西安城墙", latitude: 34.2583, longitude: 108.947, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "西安", placeName: "回民街", latitude: 34.2644, longitude: 108.9487, nodeType: "MEAL", durationMinutes: 120 },
+  { city: "广州", placeName: "广州塔", latitude: 23.1066, longitude: 113.3246, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "广州", placeName: "陈家祠", latitude: 23.1258, longitude: 113.2529, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "广州", placeName: "沙面岛", latitude: 23.109, longitude: 113.2385, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "重庆", placeName: "洪崖洞", latitude: 29.563, longitude: 106.5805, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "重庆", placeName: "长江索道", latitude: 29.558, longitude: 106.585, nodeType: "ATTRACTION", durationMinutes: 90 },
+  { city: "重庆", placeName: "磁器口古镇", latitude: 29.5796, longitude: 106.4477, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "南京", placeName: "中山陵", latitude: 32.0584, longitude: 118.8486, nodeType: "ATTRACTION", durationMinutes: 180 },
+  { city: "南京", placeName: "夫子庙", latitude: 32.0227, longitude: 118.787, nodeType: "ATTRACTION", durationMinutes: 120 },
+  { city: "南京", placeName: "南京博物院", latitude: 32.0405, longitude: 118.8343, nodeType: "ATTRACTION", durationMinutes: 180 },
+  { city: "大理", placeName: "大理古城", latitude: 25.696, longitude: 100.161, nodeType: "ATTRACTION", durationMinutes: 150 },
+  { city: "大理", placeName: "洱海", latitude: 25.786, longitude: 100.19, nodeType: "ATTRACTION", durationMinutes: 210 },
+  { city: "大理", placeName: "苍山", latitude: 25.679, longitude: 100.12, nodeType: "ATTRACTION", durationMinutes: 180 },
+];
+
+export function suggestPlaces(query: string): SuggestedPlace[] {
+  const keyword = query.trim().toLowerCase();
+  if (!keyword) return suggestedPlaces.slice(0, 8);
+  return suggestedPlaces.filter((place) => `${place.city}${place.placeName}`.toLowerCase().includes(keyword)).slice(0, 8);
+}
+
+export function getCitySuggestions(city: string): SuggestedPlace[] {
+  const keyword = city.trim().toLowerCase();
+  if (!keyword) return [];
+  return suggestedPlaces.filter((place) => place.city.toLowerCase().includes(keyword));
+}
+
 const placeImages: Record<string, string> = {
   上海外滩: "https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=900&q=80",
   老吉士: "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=900&q=80",

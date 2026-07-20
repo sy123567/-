@@ -7,6 +7,7 @@ import type {
   ExternalEvent,
   GroupMember,
   ImpactAssessment,
+  ItineraryNode,
   TravelGuide,
   TravelGroup,
   Trip,
@@ -50,6 +51,17 @@ export type TripRisk = {
   totalNodes: number;
   affectedNodes: number;
   assessments: ImpactAssessment[];
+};
+
+export type WeatherPreview = {
+  available: boolean;
+  placeName?: string;
+  tempMin?: number;
+  tempMax?: number;
+  phrase?: string;
+  hasAlert: boolean;
+  hasPrecipitation: boolean;
+  message?: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -154,6 +166,21 @@ export const api = {
   },
   async trip(id: number): Promise<Trip> {
     return request<Trip>(`/api/trips/${id}`);
+  },
+  async createTrip(groupId: number, trip: Pick<Trip, "title" | "status" | "startDate" | "endDate" | "totalBudget">): Promise<Trip> {
+    return request<Trip>(`/api/trips?groupId=${groupId}`, {
+      method: "POST",
+      body: JSON.stringify(trip),
+    });
+  },
+  async addNode(tripId: number, node: Omit<ItineraryNode, "id">): Promise<ItineraryNode> {
+    return request<ItineraryNode>(`/api/trips/${tripId}/nodes`, {
+      method: "POST",
+      body: JSON.stringify(node),
+    });
+  },
+  async previewWeather(lat: number, lon: number): Promise<WeatherPreview> {
+    return request<WeatherPreview>(`/api/weather/preview?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
   },
   async groups() {
     return request<TravelGroup[]>("/api/groups");

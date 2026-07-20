@@ -2,15 +2,15 @@ import { useState } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { api, type WeatherPreview } from "../api/client";
 import { groupMembers, guides } from "../mocks/data";
-import { getPlaceDetail, getPlaceImage } from "../mocks/places";
+import { getCitySuggestions, getPlaceDetail, getPlaceImage, suggestPlaces, type SuggestedPlace } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
 import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
-import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, Severity } from "../types";
+import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, NodeType, Severity, Trip } from "../types";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -334,22 +334,268 @@ export function TripsPage() {
   return <><div className="relative"><div className="gallery-orbit pointer-events-none absolute -right-8 -top-16 h-40 w-40 rounded-full border-[18px] border-coral/10 motion-reduce:animate-none" /><PageHeader eyebrow="ALL ROUTES" title="行程总览" description="每一张登机牌，都是一次共同决定过的出发。" action={<Link to="/trips/new"><Button><Plus size={16} className="mr-2 inline" />新建行程</Button></Link>} /></div><div className="mb-6 flex flex-wrap gap-2">{["全部", "进行中", "已规划", "已完成"].map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${status === item ? "bg-ink text-white" : "bg-white text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{item}</button>)}</div>{featuredTrip ? <div className="grid gap-5 md:grid-cols-2 lg:grid-rows-2"><div className="md:row-span-2"><BoardingPassCard trip={featuredTrip} featured onClick={() => window.location.assign(`/trips/${featuredTrip.id}`)} /></div>{otherTrips.map((trip) => <BoardingPassCard key={trip.id} trip={trip} onClick={() => window.location.assign(`/trips/${trip.id}`)} />)}</div> : <EmptyState title="还没有符合条件的行程" message="换一个状态筛选，或创建一段新的出发。" />}</>;
 }
 
-export function NewTripPage() {
-  const navigate = useNavigate();
-  const [generated, setGenerated] = useState(false);
-  const [mode, setMode] = useState("constraints");
-  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
-  if (isLoading) return <LoadingState label="正在读取小组约束…" />;
-  if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
-  if (!data) return <EmptyState title="暂时没有可用的小组" message="先创建或加入一个小组，再生成初始方案。" />;
-  return <><PageHeader eyebrow="NEW ROUTE" title="创建一段新行程" description="可以从零开始，也可以让成员约束先替你找到第一条可行路线。" /><div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]"><Card className="p-6"><div className="flex gap-2 rounded-xl bg-paper p-1"><button onClick={() => setMode("constraints")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "constraints" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>从小组约束生成</button><button onClick={() => setMode("manual")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "manual" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>手动创建</button></div><div className="mt-6 space-y-5"><label className="block text-sm font-semibold">选择小组<select className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option>周末慢游组 · SH24-7K</option></select></label><label className="block text-sm font-semibold">出发日期<input type="date" defaultValue="2025-04-19" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label>{mode === "manual" && <Input placeholder="行程名称，例如：杭州春茶之旅" />}<Button className="w-full" onClick={() => setGenerated(true)}>{mode === "constraints" ? "生成初始方案" : "创建空白行程"}<ArrowRight size={16} className="ml-2 inline" /></Button></div></Card>{generated ? <Card className="p-6"><div className="flex items-center gap-2"><Badge tone="mint">方案已生成</Badge><span className="font-mono text-xs text-ink-soft">PLAN PREVIEW</span></div><h2 className="mt-3 font-display text-2xl font-bold">上海春日漫游 · 2 天 1 夜</h2><p className="mt-3 text-sm leading-6 text-ink-soft">已读取 4 位成员约束，日期交集为 4 月 19 日至 20 日，预算上限按最低值 ¥1,800 计算。</p><div className="mt-6"><RouteTrail nodes={dataNodes} compact /></div><div className="mt-6 rounded-xl bg-sun/15 p-4"><p className="text-sm font-semibold text-amber-800">取舍说明</p><p className="mt-2 text-sm leading-6 text-amber-900/70">保留了外滩、豫园和本帮菜；因为成员可用时间不同，暂不加入朱家角，并将住宿控制在预算内。</p></div><Button className="mt-5 w-full" onClick={() => navigate("/trips/1")}>确认并查看行程</Button></Card> : <Card className="flex min-h-[400px] items-center justify-center p-8 text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold">先选一种开始方式</h2><p className="mt-2 text-sm text-ink-soft">我们会把成员的真实约束，翻译成一条能出发的路线。</p></div></Card>}</div></>;
+type NodeDraft = {
+  name: string;
+  placeName: string;
+  latitude: string;
+  longitude: string;
+  nodeType: NodeType;
+  plannedStart: string;
+  plannedEnd: string;
+  cost: string;
+};
+
+const cityOptions = ["上海", "北京", "成都", "杭州", "西安", "广州", "重庆", "南京"];
+
+function dateAfter(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00`);
+  value.setDate(value.getDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
-const dataNodes = [{
-  id: 1, name: "上海外滩", placeName: "上海外滩", latitude: 31.23, longitude: 121.47, nodeType: "ATTRACTION" as const, plannedStart: "2025-04-19T09:30:00", plannedEnd: "2025-04-19T11:30:00", cost: 0, sequenceOrder: 1, status: "CONFIRMED" as const,
-}, {
-  id: 2, name: "豫园", placeName: "豫园", latitude: 31.23, longitude: 121.49, nodeType: "ATTRACTION" as const, plannedStart: "2025-04-19T14:30:00", plannedEnd: "2025-04-19T17:00:00", cost: 40, sequenceOrder: 2, status: "PLANNED" as const,
-}];
+function localDateTime(date: string, hour: number, minute = 0): string {
+  return `${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function emptyNodeDraft(startDate = ""): NodeDraft {
+  return {
+    name: "",
+    placeName: "",
+    latitude: "",
+    longitude: "",
+    nodeType: "ATTRACTION",
+    plannedStart: startDate ? localDateTime(startDate, 9) : "",
+    plannedEnd: startDate ? localDateTime(startDate, 11) : "",
+    cost: "0",
+  };
+}
+
+function toNodePayload(draft: NodeDraft, sequenceOrder: number): Omit<ItineraryNode, "id"> {
+  return {
+    name: draft.name.trim() || draft.placeName.trim(),
+    placeName: draft.placeName.trim(),
+    latitude: Number(draft.latitude),
+    longitude: Number(draft.longitude),
+    nodeType: draft.nodeType,
+    plannedStart: draft.plannedStart,
+    plannedEnd: draft.plannedEnd,
+    cost: Number(draft.cost) || 0,
+    sequenceOrder,
+    status: "PLANNED",
+  };
+}
+
+function previewNodeFromSuggestion(place: SuggestedPlace, date: string, index: number): ItineraryNode {
+  const day = Math.floor(index / 2);
+  const afternoon = index % 2 === 1;
+  const startHour = afternoon ? 14 : 9;
+  const startDate = dateAfter(date, day);
+  return {
+    id: -(index + 1),
+    name: place.placeName,
+    placeName: place.placeName,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    nodeType: place.nodeType,
+    plannedStart: localDateTime(startDate, startHour),
+    plannedEnd: localDateTime(startDate, startHour + Math.max(1, Math.round(place.durationMinutes / 60))),
+    cost: 0,
+    sequenceOrder: index + 1,
+    status: "PLANNED",
+  };
+}
+
+export function NewTripPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const groupsQuery = useQuery({ queryKey: ["groups"], queryFn: api.groups });
+  const [mode, setMode] = useState<"constraints" | "manual">("constraints");
+  const [groupId, setGroupId] = useState<number | "">("");
+  const [title, setTitle] = useState("");
+  const [city, setCity] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [days, setDays] = useState("2");
+  const [generatedNodes, setGeneratedNodes] = useState<ItineraryNode[]>([]);
+  const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
+  const [nodes, setNodes] = useState<ItineraryNode[]>([]);
+  const [nodeDraft, setNodeDraft] = useState<NodeDraft>(emptyNodeDraft());
+  const [weatherPreview, setWeatherPreview] = useState<WeatherPreview | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  if (groupsQuery.isLoading) return <LoadingState label="正在读取你的旅行小组…" />;
+  if (groupsQuery.isError) return <ErrorState onRetry={() => void groupsQuery.refetch()} message={groupsQuery.error instanceof Error ? groupsQuery.error.message : undefined} />;
+  const groups = groupsQuery.data ?? [];
+  if (groups.length === 0) return <EmptyState title="暂时没有可用的小组" message="先创建或加入一个小组，再生成初始方案。" />;
+
+  const selectedGroupId = groupId === "" ? groups[0].id : groupId;
+  const suggestions = suggestPlaces(nodeDraft.placeName);
+  const cityPlaces = getCitySuggestions(city);
+
+  const updateDraft = <K extends keyof NodeDraft>(key: K, value: NodeDraft[K]) => {
+    setNodeDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const previewLocationWeather = (latitudeText: string, longitudeText: string) => {
+    const latitude = Number(latitudeText);
+    const longitude = Number(longitudeText);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !latitudeText || !longitudeText) return;
+    setWeatherLoading(true);
+    void api.previewWeather(latitude, longitude)
+      .then(setWeatherPreview)
+      .catch(() => setWeatherPreview({ available: false, hasAlert: false, hasPrecipitation: false, message: "天气服务暂不可用，可稍后再查" }))
+      .finally(() => setWeatherLoading(false));
+  };
+
+  const generatePlan = () => {
+    setErrorMessage("");
+    const count = Number(days);
+    if (!city.trim() || !startDate || !Number.isFinite(count) || count < 1) {
+      setErrorMessage("请先选择目的地、出发日期和有效天数。");
+      return;
+    }
+    if (cityPlaces.length === 0) {
+      setErrorMessage("本地地点库暂时没有这个城市的建议，请换一个热门城市试试。");
+      return;
+    }
+    setGeneratedNodes(cityPlaces.slice(0, Math.min(cityPlaces.length, count * 2)).map((place, index) => previewNodeFromSuggestion(place, startDate, index)));
+  };
+
+  const createTrip = async (withNodes: ItineraryNode[] = [], overrides?: { title?: string; endDate?: string }) => {
+    const tripTitle = overrides?.title ?? title;
+    const tripEndDate = overrides?.endDate ?? endDate;
+    if (!tripTitle.trim() || !startDate || !tripEndDate) {
+      setErrorMessage("请补齐小组、行程名称和起止日期。");
+      return null;
+    }
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      const trip = await api.createTrip(selectedGroupId, {
+        title: tripTitle.trim(),
+        status: "DRAFT",
+        startDate,
+        endDate: tripEndDate,
+        totalBudget: withNodes.reduce((sum, node) => sum + node.cost, 0),
+      });
+      const savedNodes: ItineraryNode[] = [];
+      for (const node of withNodes) {
+        const payload = {
+          name: node.name,
+          placeName: node.placeName,
+          latitude: node.latitude,
+          longitude: node.longitude,
+          nodeType: node.nodeType,
+          plannedStart: node.plannedStart,
+          plannedEnd: node.plannedEnd,
+          cost: node.cost,
+          sequenceOrder: node.sequenceOrder,
+          status: node.status,
+        };
+        savedNodes.push(await api.addNode(trip.id, payload));
+      }
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["groups"] });
+      return { trip, savedNodes };
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "创建行程失败，请稍后再试。");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleManualCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const result = await createTrip();
+    if (result) {
+      setActiveTrip(result.trip);
+      setNodes([]);
+      setNodeDraft(emptyNodeDraft(startDate));
+    }
+  };
+
+  const handleGeneratedCreate = async () => {
+    const generatedTitle = `${city} ${days}日漫游`;
+    const generatedEndDate = dateAfter(startDate, Number(days) - 1);
+    const result = await createTrip(generatedNodes, { title: generatedTitle, endDate: generatedEndDate });
+    if (result) navigate(`/trips/${result.trip.id}`);
+  };
+
+  const handleAddNode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!activeTrip || !nodeDraft.placeName.trim() || !nodeDraft.plannedStart || !nodeDraft.plannedEnd || !Number.isFinite(Number(nodeDraft.latitude)) || !Number.isFinite(Number(nodeDraft.longitude))) {
+      setErrorMessage("请选择一个地点，并补齐坐标与时间。");
+      return;
+    }
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      const saved = await api.addNode(activeTrip.id, toNodePayload(nodeDraft, nodes.length + 1));
+      setNodes((current) => [...current, saved]);
+      setNodeDraft(emptyNodeDraft(activeTrip.startDate));
+      await queryClient.invalidateQueries({ queryKey: ["trip", activeTrip.id] });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "节点保存失败，请稍后再试。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const hasCoordinates = Number.isFinite(Number(nodeDraft.latitude)) && Number.isFinite(Number(nodeDraft.longitude)) && Boolean(nodeDraft.latitude) && Boolean(nodeDraft.longitude);
+  const shownWeather = hasCoordinates ? weatherPreview : null;
+  const weatherNotice = weatherLoading
+    ? "正在查询该地点的天气…"
+    : shownWeather?.available && shownWeather.tempMin !== undefined && shownWeather.tempMax !== undefined
+      ? `白天 ${Math.round(shownWeather.tempMin)}~${Math.round(shownWeather.tempMax)}°C${shownWeather.phrase ? `，${shownWeather.phrase}` : ""}`
+      : shownWeather?.message ?? "";
+  const weatherAlert = shownWeather?.hasAlert || shownWeather?.hasPrecipitation;
+
+  return <>
+    <PageHeader eyebrow="NEW ROUTE" title="创建一段新行程" description="先把目的地和成员放在同一张桌上，再让每个节点都带着天气上下文出发。" />
+    {errorMessage && <div className="mb-5 rounded-card border border-coral/20 bg-coral/5 px-4 py-3 text-sm text-coral-deep">{errorMessage}</div>}
+    {!activeTrip && <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
+      <Card className="p-6">
+        <div className="flex gap-2 rounded-xl bg-paper p-1">
+          <button type="button" onClick={() => setMode("constraints")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "constraints" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>初始方案生成</button>
+          <button type="button" onClick={() => setMode("manual")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "manual" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>手动创建</button>
+        </div>
+        <div className="mt-6 space-y-4">
+          <label className="block text-sm font-semibold text-ink">选择小组<select value={selectedGroupId} onChange={(event) => setGroupId(event.target.value ? Number(event.target.value) : "")} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option value="">请选择小组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.roomCode}</option>)}</select></label>
+          {mode === "manual" ? <form onSubmit={handleManualCreate} className="space-y-4">
+            <label className="block text-sm font-semibold text-ink">行程名称<Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：杭州春茶之旅" /></label>
+            <label className="block text-sm font-semibold text-ink">目的地城市<Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="例如：杭州" /></label>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold text-ink">开始日期<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">结束日期<input required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+            <Button type="submit" disabled={busy} className="w-full">{busy ? "正在创建…" : "创建行程并添加节点"}<ArrowRight size={16} className="ml-2 inline" /></Button>
+          </form> : <>
+            <label className="block text-sm font-semibold text-ink">目的地城市<input list="trip-cities" value={city} onChange={(event) => setCity(event.target.value)} placeholder="输入上海、北京、成都…" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /><datalist id="trip-cities">{cityOptions.map((option) => <option key={option} value={option} />)}</datalist></label>
+            <div className="grid gap-3 sm:grid-cols-[1fr_0.6fr]"><label className="block text-sm font-semibold text-ink">出发日期<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">旅行天数<input type="number" min="1" max="7" value={days} onChange={(event) => setDays(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+            <Button type="button" disabled={busy} className="w-full" onClick={generatePlan}>生成本地初始方案<Sparkles size={16} className="ml-2 inline" /></Button>
+          </>}
+        </div>
+      </Card>
+      <Card className="min-h-[420px] p-6">
+        {generatedNodes.length > 0 ? <><div className="flex items-center gap-2"><Badge tone="mint">本地规则建议</Badge><span className="font-mono text-xs text-ink-soft">{city} · {days} 天</span></div><h2 className="mt-3 font-display text-2xl font-bold text-ink">一条可以立刻调整的路线</h2><p className="mt-2 text-sm leading-6 text-ink-soft">地点来自离线规则库，先确认顺序，再一次性创建真实行程和节点。</p><div className="mt-6"><RouteTrail nodes={generatedNodes} compact /></div><Button type="button" disabled={busy} className="mt-6 w-full" onClick={() => { setTitle(`${city} ${days}日漫游`); setEndDate(dateAfter(startDate, Number(days) - 1)); void handleGeneratedCreate(); }}>{busy ? "正在保存…" : "确认创建并查看行程"}</Button></> : <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">先生成一条可讨论的路线</h2><p className="mt-2 max-w-sm text-sm leading-6 text-ink-soft">选择城市和天数，我们会用本地地点规则生成建议节点，不会把任何假数据写入数据库。</p></div></div>}
+      </Card>
+    </div>}
+    {activeTrip && <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <Card className="p-6">
+        <div className="flex items-start justify-between gap-4"><div><p className="eyebrow">NODE EDITOR</p><h2 className="mt-2 font-display text-2xl font-bold text-ink">{activeTrip.title}</h2><p className="mt-1 text-sm text-ink-soft">{activeTrip.startDate} → {activeTrip.endDate} · {nodes.length} 个节点</p></div><Badge tone="mint">已创建</Badge></div>
+        <form onSubmit={handleAddNode} className="mt-6 space-y-4">
+          <label className="relative block text-sm font-semibold text-ink">地点名称<input value={nodeDraft.placeName} onChange={(event) => { updateDraft("placeName", event.target.value); updateDraft("name", event.target.value); }} placeholder="搜索外滩、故宫、宽窄巷子…" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" />{nodeDraft.placeName && suggestions.length > 0 && <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-xl">{suggestions.map((suggestion) => <button type="button" key={suggestion.placeName} onClick={() => { setNodeDraft((current) => ({ ...current, name: suggestion.placeName, placeName: suggestion.placeName, latitude: String(suggestion.latitude), longitude: String(suggestion.longitude), nodeType: suggestion.nodeType })); previewLocationWeather(String(suggestion.latitude), String(suggestion.longitude)); }} className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-paper"><span className="font-semibold text-ink">{suggestion.placeName}</span><span className="text-xs text-ink-soft">{suggestion.city} · {suggestion.durationMinutes} 分钟</span></button>)}</div>}</label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold text-ink">节点类型<select value={nodeDraft.nodeType} onChange={(event) => updateDraft("nodeType", event.target.value as NodeType)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"><option value="ATTRACTION">景点</option><option value="MEAL">餐饮</option><option value="LODGING">住宿</option><option value="TRANSPORT">交通</option><option value="OTHER">其他</option></select></label><label className="block text-sm font-semibold text-ink">费用（元）<input type="number" min="0" value={nodeDraft.cost} onChange={(event) => updateDraft("cost", event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold text-ink">开始时间<input required type="datetime-local" value={nodeDraft.plannedStart} onChange={(event) => updateDraft("plannedStart", event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">结束时间<input required type="datetime-local" value={nodeDraft.plannedEnd} onChange={(event) => updateDraft("plannedEnd", event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold text-ink">纬度<input value={nodeDraft.latitude} onChange={(event) => { updateDraft("latitude", event.target.value); previewLocationWeather(event.target.value, nodeDraft.longitude); }} placeholder="自动填充" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">经度<input value={nodeDraft.longitude} onChange={(event) => { updateDraft("longitude", event.target.value); previewLocationWeather(nodeDraft.latitude, event.target.value); }} placeholder="自动填充" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+          {weatherNotice && <div className={`rounded-xl px-4 py-3 text-sm ${weatherAlert ? "bg-sun/15 text-amber-800" : shownWeather?.available ? "bg-mint/10 text-emerald-800" : "bg-slate-100 text-ink-soft"}`}><span className="font-semibold">{weatherAlert ? "天气提醒 · " : "天气预览 · "}</span>{weatherNotice}{weatherAlert && "，注意安排"}</div>}
+          <Button type="submit" disabled={busy} className="w-full">{busy ? "正在保存节点…" : "保存节点"}<Plus size={16} className="ml-2 inline" /></Button>
+        </form>
+      </Card>
+      <Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">LIVE ITINERARY</p><h2 className="mt-2 font-display text-xl font-bold text-ink">已经加入的节点</h2></div><Badge tone="coral">{nodes.length} 个节点</Badge></div>{nodes.length > 0 ? <div className="mt-6"><RouteTrail nodes={nodes} compact /></div> : <div className="mt-8 rounded-card bg-paper p-6 text-center text-sm leading-6 text-ink-soft">还没有节点。选一个地点，天气提示会先帮你看一眼再保存。</div>}<Button type="button" variant="secondary" className="mt-6 w-full" onClick={() => navigate(`/trips/${activeTrip.id}`)}>完成并查看行程<ArrowRight size={16} className="ml-2 inline" /></Button></Card>
+    </div>}
+  </>;
+}
 
 const severityRank: Record<Severity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
 const severityLabel: Record<Severity, string> = { LOW: "低", MEDIUM: "中", HIGH: "高", CRITICAL: "紧急" };
@@ -641,7 +887,7 @@ export function GuideDetailPage() {
   const guide = guides.find((item) => item.id === Number(id)) ?? guides[0];
   const [open, setOpen] = useState(false);
   const { toast, show } = useToast();
-  const templateNodes = dataNodes.map((node, index) => ({ ...node, id: index + 1, name: index === 0 ? guide.city + "老城漫步" : guide.tags[0], placeName: guide.city, status: "PLANNED" as const }));
+  const templateNodes = getCitySuggestions(guide.city).slice(0, 2).map((place, index) => previewNodeFromSuggestion(place, "2025-05-03", index));
   return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><img src={guide.author.avatar} alt="" className="h-10 w-10 rounded-full" /><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">4.9 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal open={open} onClose={() => setOpen(false)} onDone={() => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate("/trips/1"); }} />{toast}</>;
 }
 
