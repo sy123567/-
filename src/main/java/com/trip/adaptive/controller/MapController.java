@@ -25,7 +25,7 @@ public class MapController {
 
   @GetMapping("/config")
   public MapConfig config() {
-    return new MapConfig(maps.enabled(), maps.enabled() ? maps.accessKey() : "");
+    return new MapConfig(maps.browserEnabled(), maps.browserEnabled() ? maps.browserKey() : "");
   }
 
   @GetMapping("/search")

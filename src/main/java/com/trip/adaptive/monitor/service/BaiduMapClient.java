@@ -28,6 +28,9 @@ public class BaiduMapClient {
   @Value("${app.baidu.ak:}")
   private String ak;
 
+  @Value("${app.baidu.js-ak:}")
+  private String jsAk;
+
   @Value("${app.baidu.host:https://api.map.baidu.com}")
   private String host;
 
@@ -41,6 +44,14 @@ public class BaiduMapClient {
 
   public String accessKey() {
     return ak == null ? "" : ak;
+  }
+
+  public boolean browserEnabled() {
+    return browserKey() != null && !browserKey().isBlank();
+  }
+
+  public String browserKey() {
+    return jsAk != null && !jsAk.isBlank() ? jsAk : accessKey();
   }
 
   public List<Place> search(String query, String region) {
