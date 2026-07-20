@@ -146,6 +146,14 @@ export type MapGeocode = {
   message?: string;
 };
 
+export type MapResolve = {
+  available: boolean;
+  lat?: number;
+  lng?: number;
+  uid?: string;
+  name?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const endpoint = `${apiBase}${path}`;
   const token = getToken();
@@ -299,6 +307,14 @@ export const api = {
       radius: String(radius),
     });
     return request<MapSearchResult>(`/api/map/nearby?${params.toString()}`);
+  },
+  async mapResolve(name: string, lat: number, lng: number): Promise<MapResolve> {
+    const params = new URLSearchParams({
+      name,
+      lat: String(lat),
+      lng: String(lng),
+    });
+    return request<MapResolve>(`/api/map/resolve?${params.toString()}`);
   },
   async mapPlace(uid: string): Promise<MapPlaceResult> {
     return request<MapPlaceResult>(`/api/map/place?uid=${encodeURIComponent(uid)}`);
