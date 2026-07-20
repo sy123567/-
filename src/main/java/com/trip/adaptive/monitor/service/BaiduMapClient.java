@@ -87,7 +87,64 @@ public class BaiduMapClient {
               text(item, "city"),
               text(item, "area"),
               text(item, "uid"),
-              text(item, "telephone")));
+              text(item, "telephone"),
+              null,
+              null,
+              null,
+              null,
+              null,
+              null));
+    }
+    return places;
+  }
+
+  public List<Place> searchNearby(String query, double lat, double lng, int radius) {
+    if (!enabled() || query == null || query.isBlank()) return List.of();
+    String normalizedQuery = normalize(query);
+    String roundedLat = String.format(Locale.ROOT, "%.4f", lat);
+    String roundedLng = String.format(Locale.ROOT, "%.4f", lng);
+    String cacheKey =
+        "baidu:nearby:" + normalizedQuery + ":" + roundedLat + ":" + roundedLng + ":" + radius;
+    JsonNode root =
+        getCached(
+            cacheKey,
+            url(
+                "/place/v2/search",
+                "query",
+                query,
+                "location",
+                coordinate(lat, lng),
+                "radius",
+                String.valueOf(radius),
+                "radius_limit",
+                "true",
+                "scope",
+                "2",
+                "output",
+                "json"),
+            SEARCH_TTL);
+    if (!ok(root)) return null;
+    List<Place> places = new ArrayList<>();
+    for (JsonNode item : root.path("results")) {
+      JsonNode location = item.path("location");
+      JsonNode detail = item.path("detail_info");
+      places.add(
+          new Place(
+              text(item, "name"),
+              number(location, "lat"),
+              number(location, "lng"),
+              text(item, "address"),
+              text(item, "province"),
+              text(item, "city"),
+              text(item, "area"),
+              text(item, "uid"),
+              text(item, "telephone"),
+              number(detail, "overall_rating"),
+              integer(detail, "comment_num"),
+              number(detail, "price"),
+              text(detail, "tag"),
+              text(detail, "image"),
+              longValue(detail, "distance")));
     }
     return places;
   }
@@ -262,7 +319,13 @@ public class BaiduMapClient {
       String city,
       String area,
       String uid,
-      String telephone) {}
+      String telephone,
+      Double overallRating,
+      Integer commentNum,
+      Double price,
+      String tag,
+      String image,
+      Long distanceMeters) {}
 
   public record PlaceDetail(
       String uid,

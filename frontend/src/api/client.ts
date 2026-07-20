@@ -92,6 +92,12 @@ export type MapPlace = {
   area?: string;
   uid?: string;
   telephone?: string;
+  overallRating?: number;
+  commentNum?: number;
+  price?: number;
+  tag?: string;
+  image?: string;
+  distanceMeters?: number;
 };
 
 export type MapPlaceDetail = {
@@ -279,6 +285,20 @@ export const api = {
   async mapSearch(query: string, region: string): Promise<MapSearchResult> {
     const params = new URLSearchParams({ query, region });
     return request<MapSearchResult>(`/api/map/search?${params.toString()}`);
+  },
+  async mapNearby(
+    query: string,
+    lat: number,
+    lng: number,
+    radius = 3000,
+  ): Promise<MapSearchResult> {
+    const params = new URLSearchParams({
+      query,
+      lat: String(lat),
+      lng: String(lng),
+      radius: String(radius),
+    });
+    return request<MapSearchResult>(`/api/map/nearby?${params.toString()}`);
   },
   async mapPlace(uid: string): Promise<MapPlaceResult> {
     return request<MapPlaceResult>(`/api/map/place?uid=${encodeURIComponent(uid)}`);

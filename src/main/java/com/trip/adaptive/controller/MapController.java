@@ -40,6 +40,25 @@ public class MapController {
         : new SearchResult(true, places, null);
   }
 
+  @GetMapping("/nearby")
+  public SearchResult nearby(
+      @RequestParam(defaultValue = "") String query,
+      @RequestParam(defaultValue = "") String lat,
+      @RequestParam(defaultValue = "") String lng,
+      @RequestParam(defaultValue = "3000") int radius) {
+    if (!maps.enabled()) return new SearchResult(false, List.of(), UNAVAILABLE);
+    Double parsedLat = number(lat);
+    Double parsedLng = number(lng);
+    if (parsedLat == null || parsedLng == null) {
+      return new SearchResult(false, List.of(), "坐标无效");
+    }
+    int safeRadius = Math.max(200, Math.min(radius, 10000));
+    List<Place> places = maps.searchNearby(query, parsedLat, parsedLng, safeRadius);
+    return places == null
+        ? new SearchResult(false, List.of(), UNAVAILABLE)
+        : new SearchResult(true, places, null);
+  }
+
   @GetMapping("/place")
   public PlaceResult place(@RequestParam(defaultValue = "") String uid) {
     if (!maps.enabled()) return new PlaceResult(false, null, UNAVAILABLE);
