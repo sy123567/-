@@ -26,6 +26,10 @@ public class ExternalEvent {
 
   private LocalDateTime startTime, endTime, createdAt;
   private String source;
+  private Long tripId;
+  private String tripTitle;
+  private Double tempMin;
+  private Double tempMax;
 
   public ExternalEvent() {
     createdAt = LocalDateTime.now();
@@ -125,5 +129,37 @@ public class ExternalEvent {
 
   public void setSource(String v) {
     source = v;
+  }
+
+  public Long getTripId() {
+    return tripId;
+  }
+
+  public void setTripId(Long v) {
+    tripId = v;
+  }
+
+  public String getTripTitle() {
+    return tripTitle;
+  }
+
+  public void setTripTitle(String v) {
+    tripTitle = v;
+  }
+
+  public Double getTempMin() {
+    return tempMin;
+  }
+
+  public void setTempMin(Double v) {
+    tempMin = v;
+  }
+
+  public Double getTempMax() {
+    return tempMax;
+  }
+
+  public void setTempMax(Double v) {
+    tempMax = v;
   }
 }
