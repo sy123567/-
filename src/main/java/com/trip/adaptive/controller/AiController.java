@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.ai.AiClient;
+import com.trip.adaptive.service.AiConstraintService;
+import com.trip.adaptive.service.AiConstraintService.ConstraintContext;
 
 @RestController
 @RequestMapping("/api/ai")
@@ -22,16 +24,20 @@ public class AiController {
       Set.of("ATTRACTION", "MEAL", "LODGING", "TRANSPORT", "OTHER");
 
   private final AiClient ai;
+  private final AiConstraintService constraints;
 
-  public AiController(AiClient ai) {
+  public AiController(AiClient ai, AiConstraintService constraints) {
     this.ai = ai;
+    this.constraints = constraints;
   }
 
   @GetMapping("/plan")
   public AiPlanResult plan(
       @RequestParam(defaultValue = "") String city,
       @RequestParam(defaultValue = "2") int days,
-      @RequestParam(defaultValue = "") String interests) {
+      @RequestParam(defaultValue = "") String interests,
+      @RequestParam(required = false) Long groupId) {
+    ConstraintContext context = constraints.forGroup(groupId);
     if (!ai.enabled() || city.isBlank() || days < 1) return fallback(city);
     String systemPrompt = "你是中文旅行规划助手。只输出严格 JSON 对象，不要 Markdown、解释文字或代码围栏。";
     String userPrompt =
@@ -43,13 +49,29 @@ public class AiController {
         category 只能是吃、喝、玩、乐、住之一；nodeType 只能是
         ATTRACTION、MEAL、LODGING、TRANSPORT、OTHER 之一，并与 category 合理对应；
         latitude、longitude 必须是大致准确的数字；suggestedDurationMinutes 必须是正整数。
+        %s
         """
-            .formatted(city.trim(), days, interests.isBlank() ? "" : "，偏好：" + interests.trim());
+            .formatted(
+                city.trim(),
+                days,
+                interests.isBlank() ? "" : "，偏好：" + interests.trim(),
+                constraints.promptText(context));
     JsonNode root = ai.chatJson(systemPrompt, userPrompt);
     List<AiPlace> places = parsePlaces(root);
-    return places.isEmpty()
+    return places.isEmpty() || !containsRequiredPlaces(places, context.mustVisitPlaces())
         ? fallback(city)
         : new AiPlanResult(true, "ai", city.trim(), places, null);
+  }
+
+  private boolean containsRequiredPlaces(List<AiPlace> places, List<String> required) {
+    return required.stream()
+        .allMatch(
+            wanted ->
+                places.stream()
+                    .anyMatch(
+                        place ->
+                            place.placeName().contains(wanted)
+                                || wanted.contains(place.placeName())));
   }
 
   private List<AiPlace> parsePlaces(JsonNode root) {
