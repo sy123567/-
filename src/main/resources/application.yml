@@ -44,6 +44,10 @@ app:
   qweather:
       key: ${QWEATHER_KEY:}
       host: ${QWEATHER_HOST:https://openapi.weathercn.com}
+  deepseek:
+    key: ${DEEPSEEK_API_KEY:}
+    host: ${DEEPSEEK_HOST:https://api.deepseek.com}
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-to-a-long-random-value}
     expiration: ${JWT_EXPIRATION:86400000}

@@ -64,6 +64,24 @@ export type WeatherPreview = {
   message?: string;
 };
 
+export type AiPlace = {
+  placeName: string;
+  category: "吃" | "喝" | "玩" | "乐" | "住";
+  nodeType: ItineraryNode["nodeType"];
+  description: string;
+  latitude: number;
+  longitude: number;
+  suggestedDurationMinutes: number;
+};
+
+export type AiPlanResult = {
+  available: boolean;
+  source: "ai" | "offline";
+  city: string;
+  places: AiPlace[];
+  message?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const endpoint = `${apiBase}${path}`;
   const token = getToken();
@@ -181,6 +199,11 @@ export const api = {
   },
   async previewWeather(lat: number, lon: number): Promise<WeatherPreview> {
     return request<WeatherPreview>(`/api/weather/preview?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+  },
+  async aiPlan(city: string, days: number, interests?: string): Promise<AiPlanResult> {
+    const params = new URLSearchParams({ city, days: String(days) });
+    if (interests?.trim()) params.set("interests", interests.trim());
+    return request<AiPlanResult>(`/api/ai/plan?${params.toString()}`);
   },
   async groups() {
     return request<TravelGroup[]>("/api/groups");

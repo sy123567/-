@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type WeatherPreview } from "../api/client";
+import { api, type AiPlace, type WeatherPreview } from "../api/client";
 import { groupMembers, guides } from "../mocks/data";
 import { getCitySuggestions, getPlaceDetail, getPlaceImage, suggestPlaces, type SuggestedPlace } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
@@ -345,6 +345,16 @@ type NodeDraft = {
   cost: string;
 };
 
+type PlannerPlace = {
+  placeName: string;
+  category: "吃" | "喝" | "玩" | "乐" | "住";
+  nodeType: NodeType;
+  description: string;
+  latitude: number;
+  longitude: number;
+  durationMinutes: number;
+};
+
 const cityOptions = ["上海", "北京", "成都", "杭州", "西安", "广州", "重庆", "南京"];
 
 function dateAfter(date: string, days: number): string {
@@ -385,7 +395,7 @@ function toNodePayload(draft: NodeDraft, sequenceOrder: number): Omit<ItineraryN
   };
 }
 
-function previewNodeFromSuggestion(place: SuggestedPlace, date: string, index: number): ItineraryNode {
+function previewNodeFromSuggestion(place: PlannerPlace, date: string, index: number): ItineraryNode {
   const day = Math.floor(index / 2);
   const afternoon = index % 2 === 1;
   const startHour = afternoon ? 14 : 9;
@@ -405,6 +415,37 @@ function previewNodeFromSuggestion(place: SuggestedPlace, date: string, index: n
   };
 }
 
+function categoryForNodeType(nodeType: NodeType): PlannerPlace["category"] {
+  if (nodeType === "MEAL") return "吃";
+  if (nodeType === "LODGING") return "住";
+  if (nodeType === "TRANSPORT") return "喝";
+  return "玩";
+}
+
+function offlinePlannerPlace(place: SuggestedPlace): PlannerPlace {
+  return {
+    placeName: place.placeName,
+    category: categoryForNodeType(place.nodeType),
+    nodeType: place.nodeType,
+    description: `${place.city}本地规则推荐地点，适合纳入行程。`,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    durationMinutes: place.durationMinutes,
+  };
+}
+
+function aiPlannerPlace(place: AiPlace): PlannerPlace {
+  return {
+    placeName: place.placeName,
+    category: place.category,
+    nodeType: place.nodeType,
+    description: place.description,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    durationMinutes: place.suggestedDurationMinutes,
+  };
+}
+
 export function NewTripPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -416,7 +457,11 @@ export function NewTripPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [days, setDays] = useState("2");
-  const [generatedNodes, setGeneratedNodes] = useState<ItineraryNode[]>([]);
+  const [interests, setInterests] = useState("");
+  const [plannerPlaces, setPlannerPlaces] = useState<PlannerPlace[]>([]);
+  const [selectedPlaces, setSelectedPlaces] = useState<Set<string>>(new Set());
+  const [plannerSource, setPlannerSource] = useState<"ai" | "offline" | null>(null);
+  const [planning, setPlanning] = useState(false);
   const [activeTrip, setActiveTrip] = useState<Trip | null>(null);
   const [nodes, setNodes] = useState<ItineraryNode[]>([]);
   const [nodeDraft, setNodeDraft] = useState<NodeDraft>(emptyNodeDraft());
@@ -449,18 +494,35 @@ export function NewTripPage() {
       .finally(() => setWeatherLoading(false));
   };
 
-  const generatePlan = () => {
+  const planItinerary = async () => {
     setErrorMessage("");
     const count = Number(days);
     if (!city.trim() || !startDate || !Number.isFinite(count) || count < 1) {
       setErrorMessage("请先选择目的地、出发日期和有效天数。");
       return;
     }
-    if (cityPlaces.length === 0) {
-      setErrorMessage("本地地点库暂时没有这个城市的建议，请换一个热门城市试试。");
-      return;
+    setPlanning(true);
+    setPlannerPlaces([]);
+    setSelectedPlaces(new Set());
+    try {
+      const result = await api.aiPlan(city, count, interests);
+      if (result.available && result.places.length > 0) {
+        setPlannerSource("ai");
+        setPlannerPlaces(result.places.map(aiPlannerPlace));
+      } else {
+        const fallback = cityPlaces.slice(0, Math.min(cityPlaces.length, count * 4)).map(offlinePlannerPlace);
+        setPlannerSource("offline");
+        setPlannerPlaces(fallback);
+        if (fallback.length === 0) setErrorMessage("本地地点库暂时没有这个城市的建议，请换一个热门城市试试。");
+      }
+    } catch {
+      const fallback = cityPlaces.slice(0, Math.min(cityPlaces.length, count * 4)).map(offlinePlannerPlace);
+      setPlannerSource("offline");
+      setPlannerPlaces(fallback);
+      if (fallback.length === 0) setErrorMessage("AI 和本地地点库暂时都没有这个城市的建议。");
+    } finally {
+      setPlanning(false);
     }
-    setGeneratedNodes(cityPlaces.slice(0, Math.min(cityPlaces.length, count * 2)).map((place, index) => previewNodeFromSuggestion(place, startDate, index)));
   };
 
   const createTrip = async (withNodes: ItineraryNode[] = [], overrides?: { title?: string; endDate?: string }) => {
@@ -518,8 +580,14 @@ export function NewTripPage() {
   };
 
   const handleGeneratedCreate = async () => {
-    const generatedTitle = `${city} ${days}日漫游`;
+    const generatedTitle = `${city} ${days}日 行程`;
     const generatedEndDate = dateAfter(startDate, Number(days) - 1);
+    const selected = plannerPlaces.filter((place) => selectedPlaces.has(place.placeName));
+    const generatedNodes = selected.map((place, index) => previewNodeFromSuggestion(place, startDate, index));
+    if (generatedNodes.length === 0) {
+      setErrorMessage("请至少勾选一个想去的地点。");
+      return;
+    }
     const result = await createTrip(generatedNodes, { title: generatedTitle, endDate: generatedEndDate });
     if (result) navigate(`/trips/${result.trip.id}`);
   };
@@ -559,7 +627,7 @@ export function NewTripPage() {
     {!activeTrip && <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
       <Card className="p-6">
         <div className="flex gap-2 rounded-xl bg-paper p-1">
-          <button type="button" onClick={() => setMode("constraints")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "constraints" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>初始方案生成</button>
+          <button type="button" onClick={() => setMode("constraints")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "constraints" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>AI 自动规划</button>
           <button type="button" onClick={() => setMode("manual")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${mode === "manual" ? "bg-white text-ink shadow-sm" : "text-ink-soft"}`}>手动创建</button>
         </div>
         <div className="mt-6 space-y-4">
@@ -572,12 +640,13 @@ export function NewTripPage() {
           </form> : <>
             <label className="block text-sm font-semibold text-ink">目的地城市<input list="trip-cities" value={city} onChange={(event) => setCity(event.target.value)} placeholder="输入上海、北京、成都…" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /><datalist id="trip-cities">{cityOptions.map((option) => <option key={option} value={option} />)}</datalist></label>
             <div className="grid gap-3 sm:grid-cols-[1fr_0.6fr]"><label className="block text-sm font-semibold text-ink">出发日期<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">旅行天数<input type="number" min="1" max="7" value={days} onChange={(event) => setDays(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
-            <Button type="button" disabled={busy} className="w-full" onClick={generatePlan}>生成本地初始方案<Sparkles size={16} className="ml-2 inline" /></Button>
+            <label className="block text-sm font-semibold text-ink">偏好 / 兴趣<span className="ml-2 text-xs font-normal text-ink-soft">可选</span><Input value={interests} onChange={(event) => setInterests(event.target.value)} placeholder="例如：川菜、博物馆、适合拍照" /></label>
+            <Button type="button" disabled={planning || busy} className="w-full" onClick={() => void planItinerary()}>{planning ? "AI 正在规划路线…" : "AI 规划吃喝玩乐"}<Sparkles size={16} className="ml-2 inline" /></Button>
           </>}
         </div>
       </Card>
       <Card className="min-h-[420px] p-6">
-        {generatedNodes.length > 0 ? <><div className="flex items-center gap-2"><Badge tone="mint">本地规则建议</Badge><span className="font-mono text-xs text-ink-soft">{city} · {days} 天</span></div><h2 className="mt-3 font-display text-2xl font-bold text-ink">一条可以立刻调整的路线</h2><p className="mt-2 text-sm leading-6 text-ink-soft">地点来自离线规则库，先确认顺序，再一次性创建真实行程和节点。</p><div className="mt-6"><RouteTrail nodes={generatedNodes} compact /></div><Button type="button" disabled={busy} className="mt-6 w-full" onClick={() => { setTitle(`${city} ${days}日漫游`); setEndDate(dateAfter(startDate, Number(days) - 1)); void handleGeneratedCreate(); }}>{busy ? "正在保存…" : "确认创建并查看行程"}</Button></> : <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">先生成一条可讨论的路线</h2><p className="mt-2 max-w-sm text-sm leading-6 text-ink-soft">选择城市和天数，我们会用本地地点规则生成建议节点，不会把任何假数据写入数据库。</p></div></div>}
+        {planning ? <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 animate-pulse place-items-center rounded-2xl bg-coral/10 text-coral"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">AI 正在规划路线…</h2><p className="mt-2 text-sm text-ink-soft">正在整理 {city || "目的地"} 的吃喝玩乐清单。</p></div></div> : plannerPlaces.length > 0 ? <><div className="flex flex-wrap items-center gap-2"><Badge tone={plannerSource === "ai" ? "coral" : "mint"}>{plannerSource === "ai" ? "AI 推荐" : "本地推荐"}</Badge><span className="font-mono text-xs text-ink-soft">{city} · {days} 天</span><span className="ml-auto text-sm font-semibold text-ink">{selectedPlaces.size} / {plannerPlaces.length} 已选</span></div><h2 className="mt-3 font-display text-2xl font-bold text-ink">勾选想去的地点</h2><p className="mt-2 text-sm leading-6 text-ink-soft">先挑选你真正想去的地方，确认后才会创建行程和节点。</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{plannerPlaces.map((place) => { const selected = selectedPlaces.has(place.placeName); return <button type="button" key={place.placeName} onClick={() => setSelectedPlaces((current) => { const next = new Set(current); if (next.has(place.placeName)) next.delete(place.placeName); else next.add(place.placeName); return next; })} className={`rounded-card border p-4 text-left transition hover:-translate-y-0.5 ${selected ? "border-coral bg-coral/5 shadow-soft" : "border-slate-100 bg-white hover:border-coral/30"}`}><div className="flex items-start gap-3"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border text-xs ${selected ? "border-coral bg-coral text-white" : "border-slate-300 text-transparent"}`}>✓</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="font-semibold text-ink">{place.placeName}</span><Badge tone={place.category === "吃" ? "sun" : place.category === "住" ? "sky" : "mint"}>{place.category}</Badge></span><span className="mt-2 block text-xs text-ink-soft">{place.nodeType} · {place.durationMinutes} 分钟</span><span className="mt-2 block text-sm leading-5 text-ink-soft">{place.description}</span></span></div></button>; })}</div><Button type="button" disabled={busy || selectedPlaces.size === 0} className="mt-6 w-full" onClick={() => void handleGeneratedCreate()}>{busy ? "正在创建行程…" : `确认创建行程（${selectedPlaces.size} 个地点）`}<ArrowRight size={16} className="ml-2 inline" /></Button></> : <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">输入城市，开始一份智能清单</h2><p className="mt-2 max-w-sm text-sm leading-6 text-ink-soft">AI 不可用时会自动切换到已有的本地地点推荐。</p></div></div>}
       </Card>
     </div>}
     {activeTrip && <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -887,7 +956,7 @@ export function GuideDetailPage() {
   const guide = guides.find((item) => item.id === Number(id)) ?? guides[0];
   const [open, setOpen] = useState(false);
   const { toast, show } = useToast();
-  const templateNodes = getCitySuggestions(guide.city).slice(0, 2).map((place, index) => previewNodeFromSuggestion(place, "2025-05-03", index));
+  const templateNodes = getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace).map((place, index) => previewNodeFromSuggestion(place, "2025-05-03", index));
   return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><img src={guide.author.avatar} alt="" className="h-10 w-10 rounded-full" /><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">4.9 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal open={open} onClose={() => setOpen(false)} onDone={() => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate("/trips/1"); }} />{toast}</>;
 }
 
