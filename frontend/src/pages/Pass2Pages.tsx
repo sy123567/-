@@ -397,26 +397,71 @@ function toNodePayload(draft: NodeDraft, sequenceOrder: number): Omit<ItineraryN
   };
 }
 
-function previewNodeFromSuggestion(place: PlannerPlace, date: string, index: number): ItineraryNode {
-  const day = Math.floor(index / 2);
-  const afternoon = index % 2 === 1;
-  const startHour = afternoon ? 14 : 9;
-  const startDate = dateAfter(date, day);
-  const durationHours = Math.max(1, Math.round(place.durationMinutes / 60));
-  const endHour = Math.min(startHour + durationHours, 23);
-  return {
-    id: -(index + 1),
-    name: place.placeName,
-    placeName: place.placeName,
-    latitude: place.latitude,
-    longitude: place.longitude,
-    nodeType: place.nodeType,
-    plannedStart: localDateTime(startDate, startHour),
-    plannedEnd: localDateTime(startDate, endHour),
-    cost: 0,
-    sequenceOrder: index + 1,
-    status: "PLANNED",
+type PlannerTimeBucket = "MORNING" | "MEAL" | "AFTERNOON" | "EVENING" | "LODGING";
+
+function plannerTimeBucket(place: PlannerPlace): PlannerTimeBucket {
+  const name = place.placeName.toLowerCase();
+  if (place.nodeType === "LODGING" || place.category === "住") return "LODGING";
+  if (/夜市|夜景|酒吧|bar|演出|livehouse|夜/.test(name) || place.category === "乐") return "EVENING";
+  if (place.category === "吃" || place.category === "喝") return "MEAL";
+  if (place.nodeType === "ATTRACTION" || place.category === "玩" || /景点|公园/.test(name)) return "MORNING";
+  return "AFTERNOON";
+}
+
+function plannerTargetMinutes(place: PlannerPlace): number {
+  const name = place.placeName.toLowerCase();
+  const bucket = plannerTimeBucket(place);
+  if (bucket === "LODGING") return 21 * 60;
+  if (bucket === "EVENING") return 18 * 60 + 30;
+  if (bucket === "MORNING") return 9 * 60;
+  if (bucket === "AFTERNOON") return 14 * 60;
+  if (/早餐|早茶/.test(name)) return 8 * 60;
+  if (/晚餐|晚饭|宵夜/.test(name)) return 18 * 60;
+  return 12 * 60;
+}
+
+function schedulePlannerPlaces(places: PlannerPlace[], date: string, days: number): ItineraryNode[] {
+  const dayCount = Math.max(1, Math.floor(days));
+  const dailyPlaces = Array.from({ length: dayCount }, () => [] as PlannerPlace[]);
+  places.forEach((place, index) => dailyPlaces[index % dayCount].push(place));
+  const bucketOrder: Record<PlannerTimeBucket, number> = {
+    MORNING: 0,
+    MEAL: 1,
+    AFTERNOON: 2,
+    EVENING: 3,
+    LODGING: 4,
   };
+  let sequenceOrder = 1;
+  return dailyPlaces.flatMap((dayPlaces, dayIndex) => {
+    const orderedPlaces = [...dayPlaces].sort((left, right) => {
+      const targetDifference = plannerTargetMinutes(left) - plannerTargetMinutes(right);
+      return targetDifference || bucketOrder[plannerTimeBucket(left)] - bucketOrder[plannerTimeBucket(right)];
+    });
+    let cursorMinutes = 8 * 60;
+    const startDate = dateAfter(date, dayIndex);
+    return orderedPlaces.map((place) => {
+      const startMinutes = Math.max(cursorMinutes, plannerTargetMinutes(place));
+      const boundedStart = Math.min(startMinutes, 22 * 60 + 30);
+      const durationMinutes = Math.min(180, Math.max(30, Math.round(place.durationMinutes)));
+      const endMinutes = Math.min(23 * 60 + 30, boundedStart + durationMinutes);
+      const node = {
+        id: -sequenceOrder,
+        name: place.placeName,
+        placeName: place.placeName,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        nodeType: place.nodeType,
+        plannedStart: localDateTime(startDate, Math.floor(boundedStart / 60), boundedStart % 60),
+        plannedEnd: localDateTime(startDate, Math.floor(endMinutes / 60), endMinutes % 60),
+        cost: 0,
+        sequenceOrder,
+        status: "PLANNED" as const,
+      };
+      sequenceOrder += 1;
+      cursorMinutes = endMinutes + 30;
+      return node;
+    });
+  });
 }
 
 function categoryForNodeType(nodeType: NodeType): PlannerPlace["category"] {
@@ -642,7 +687,7 @@ export function NewTripPage() {
     const generatedTitle = `${city} ${days}日 行程`;
     const generatedEndDate = dateAfter(startDate, Number(days) - 1);
     const selected = plannerPlaces.filter((place) => selectedPlaces.has(place.placeName));
-    const generatedNodes = selected.map((place, index) => previewNodeFromSuggestion(place, startDate, index));
+    const generatedNodes = schedulePlannerPlaces(selected, startDate, Number(days));
     if (generatedNodes.length === 0) {
       setErrorMessage("请至少勾选一个想去的地点。");
       return;
@@ -1071,7 +1116,7 @@ export function GuideDetailPage() {
   const guide = guides.find((item) => item.id === Number(id)) ?? guides[0];
   const [open, setOpen] = useState(false);
   const { toast, show } = useToast();
-  const templateNodes = getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace).map((place, index) => previewNodeFromSuggestion(place, "2025-05-03", index));
+  const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), "2025-05-03", guide.days);
   return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><img src={guide.author.avatar} alt="" className="h-10 w-10 rounded-full" /><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">4.9 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal open={open} onClose={() => setOpen(false)} onDone={() => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate("/trips/1"); }} />{toast}</>;
 }
 
