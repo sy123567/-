@@ -1,7 +1,10 @@
 package com.trip.adaptive.monitor.controller;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,15 +13,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trip.adaptive.domain.ExternalEvent;
+import com.trip.adaptive.domain.User;
 import com.trip.adaptive.monitor.service.EventIngestionService;
+import com.trip.adaptive.service.TripService;
 
 @RestController
 @RequestMapping("/api")
 public class EventController {
   private final EventIngestionService s;
+  private final TripService trips;
 
-  public EventController(EventIngestionService s) {
+  public EventController(EventIngestionService s, TripService trips) {
     this.s = s;
+    this.trips = trips;
   }
 
   @PostMapping("/events")
@@ -36,6 +43,16 @@ public class EventController {
     return s.active();
   }
 
+  @GetMapping("/events/mine")
+  public List<ExternalEvent> mine(Authentication authentication) {
+    Set<Long> tripIds =
+        trips.all(currentUser(authentication)).stream()
+            .map(trip -> trip.getId())
+            .filter(id -> id != null)
+            .collect(Collectors.toSet());
+    return s.activeForTrips(tripIds);
+  }
+
   @PostMapping("/trips/{id}/events/mock")
   public List<ExternalEvent> mock(@PathVariable Long id) {
     return s.fetchAndIngestForTrip(id);
@@ -44,5 +61,9 @@ public class EventController {
   @PostMapping("/trips/{id}/events/weather")
   public List<ExternalEvent> weather(@PathVariable Long id) {
     return s.ingestWeatherForTrip(id);
+  }
+
+  private User currentUser(Authentication authentication) {
+    return (User) authentication.getPrincipal();
   }
 }

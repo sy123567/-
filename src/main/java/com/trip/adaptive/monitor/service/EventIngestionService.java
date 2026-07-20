@@ -2,6 +2,7 @@ package com.trip.adaptive.monitor.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,12 @@ public class EventIngestionService {
 
   public List<ExternalEvent> active() {
     return events.findByEndTimeAfter(LocalDateTime.now());
+  }
+
+  public List<ExternalEvent> activeForTrips(Collection<Long> tripIds) {
+    return active().stream()
+        .filter(event -> event.getTripId() != null && tripIds.contains(event.getTripId()))
+        .toList();
   }
 
   public List<ExternalEvent> fetchAndIngestForTrip(Long id) {

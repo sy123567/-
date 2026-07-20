@@ -197,6 +197,15 @@ export const api = {
       body: JSON.stringify(node),
     });
   },
+  async updateNode(tripId: number, nodeId: number, node: Partial<Omit<ItineraryNode, "id" | "status">>): Promise<ItineraryNode> {
+    return request<ItineraryNode>(`/api/trips/${tripId}/nodes/${nodeId}`, {
+      method: "PUT",
+      body: JSON.stringify(node),
+    });
+  },
+  async deleteNode(tripId: number, nodeId: number): Promise<void> {
+    await request<void>(`/api/trips/${tripId}/nodes/${nodeId}`, { method: "DELETE" });
+  },
   async previewWeather(lat: number, lon: number): Promise<WeatherPreview> {
     return request<WeatherPreview>(`/api/weather/preview?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
   },
@@ -228,6 +237,9 @@ export const api = {
   },
   async events(): Promise<ExternalEvent[]> {
     return request<ExternalEvent[]>("/api/events/active");
+  },
+  async myEvents(): Promise<ExternalEvent[]> {
+    return request<ExternalEvent[]>("/api/events/mine");
   },
   async impacts(tripId: number): Promise<ImpactAssessment[]> {
     return request<ImpactAssessment[]>(`/api/trips/${tripId}/impacts`);

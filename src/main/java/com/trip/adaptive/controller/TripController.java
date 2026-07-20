@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -56,6 +57,18 @@ public class TripController {
   @PostMapping("/{id}/nodes")
   public ItineraryNode node(@PathVariable Long id, @RequestBody ItineraryNode n) {
     return s.addNode(id, n);
+  }
+
+  @PutMapping("/{id}/nodes/{nodeId}")
+  public ItineraryNode updateNode(
+      @PathVariable Long id, @PathVariable Long nodeId, @RequestBody ItineraryNode n) {
+    return s.updateNode(id, nodeId, n);
+  }
+
+  @DeleteMapping("/{id}/nodes/{nodeId}")
+  public ResponseEntity<Void> deleteNode(@PathVariable Long id, @PathVariable Long nodeId) {
+    s.deleteNode(id, nodeId);
+    return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/{id}/routes")

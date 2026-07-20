@@ -69,6 +69,35 @@ public class TripService {
     return nodes.save(n);
   }
 
+  public ItineraryNode updateNode(Long tripId, Long nodeId, ItineraryNode payload) {
+    ItineraryNode node = nodeForTrip(tripId, nodeId);
+    if (payload.getName() != null) node.setName(payload.getName());
+    if (payload.getPlaceName() != null) node.setPlaceName(payload.getPlaceName());
+    if (payload.getLatitude() != null) node.setLatitude(payload.getLatitude());
+    if (payload.getLongitude() != null) node.setLongitude(payload.getLongitude());
+    if (payload.getNodeType() != null) node.setNodeType(payload.getNodeType());
+    if (payload.getPlannedStart() != null) node.setPlannedStart(payload.getPlannedStart());
+    if (payload.getPlannedEnd() != null) node.setPlannedEnd(payload.getPlannedEnd());
+    if (payload.getCost() != null) node.setCost(payload.getCost());
+    if (payload.getSequenceOrder() > 0) node.setSequenceOrder(payload.getSequenceOrder());
+    return nodes.save(node);
+  }
+
+  public void deleteNode(Long tripId, Long nodeId) {
+    nodes.delete(nodeForTrip(tripId, nodeId));
+  }
+
+  private ItineraryNode nodeForTrip(Long tripId, Long nodeId) {
+    ItineraryNode node =
+        nodes.findById(nodeId).orElseThrow(() -> new ResourceNotFoundException("节点不存在: " + nodeId));
+    if (node.getTrip() == null
+        || node.getTrip().getId() == null
+        || !node.getTrip().getId().equals(tripId)) {
+      throw new ResourceNotFoundException("节点不属于该行程");
+    }
+    return node;
+  }
+
   public List<Route> routes(Long id) {
     return routes.findByTripId(id);
   }
