@@ -364,7 +364,9 @@ function dateAfter(date: string, days: number): string {
 }
 
 function localDateTime(date: string, hour: number, minute = 0): string {
-  return `${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const safeHour = Math.max(0, Math.min(23, Math.round(hour)));
+  const safeMinute = Math.max(0, Math.min(59, Math.round(minute)));
+  return `${date}T${String(safeHour).padStart(2, "0")}:${String(safeMinute).padStart(2, "0")}`;
 }
 
 function emptyNodeDraft(startDate = ""): NodeDraft {
@@ -400,6 +402,8 @@ function previewNodeFromSuggestion(place: PlannerPlace, date: string, index: num
   const afternoon = index % 2 === 1;
   const startHour = afternoon ? 14 : 9;
   const startDate = dateAfter(date, day);
+  const durationHours = Math.max(1, Math.round(place.durationMinutes / 60));
+  const endHour = Math.min(startHour + durationHours, 23);
   return {
     id: -(index + 1),
     name: place.placeName,
@@ -408,7 +412,7 @@ function previewNodeFromSuggestion(place: PlannerPlace, date: string, index: num
     longitude: place.longitude,
     nodeType: place.nodeType,
     plannedStart: localDateTime(startDate, startHour),
-    plannedEnd: localDateTime(startDate, startHour + Math.max(1, Math.round(place.durationMinutes / 60))),
+    plannedEnd: localDateTime(startDate, endHour),
     cost: 0,
     sequenceOrder: index + 1,
     status: "PLANNED",
@@ -432,6 +436,26 @@ function offlinePlannerPlace(place: SuggestedPlace): PlannerPlace {
     longitude: place.longitude,
     durationMinutes: place.durationMinutes,
   };
+}
+
+function fallbackPlannerPlaces(
+  places: SuggestedPlace[],
+  limit: number,
+  group?: Trip["group"],
+): PlannerPlace[] {
+  const mustVisitNames = new Set(
+    (group?.members ?? []).flatMap((member) => member.constraint?.mustVisitPlaces ?? []).map((name) => name.trim()).filter(Boolean),
+  );
+  const selected: SuggestedPlace[] = [];
+  for (const mustVisit of mustVisitNames) {
+    const match = places.find((place) => place.placeName === mustVisit || place.placeName.includes(mustVisit) || mustVisit.includes(place.placeName));
+    if (match && !selected.some((place) => place.placeName === match.placeName)) selected.push(match);
+  }
+  for (const place of places) {
+    if (selected.length >= limit) break;
+    if (!selected.some((item) => item.placeName === place.placeName)) selected.push(place);
+  }
+  return selected.map(offlinePlannerPlace);
 }
 
 function aiPlannerPlace(place: AiPlace): PlannerPlace {
@@ -480,6 +504,7 @@ export function NewTripPage() {
   if (groups.length === 0) return <EmptyState title="暂时没有可用的小组" message="先创建或加入一个小组，再生成初始方案。" />;
 
   const selectedGroupId = groupId === "" ? groups[0].id : groupId;
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId);
   const suggestions = suggestPlaces(nodeDraft.placeName);
   const cityPlaces = getCitySuggestions(city);
 
@@ -539,18 +564,18 @@ export function NewTripPage() {
     setPlannerPlaces([]);
     setSelectedPlaces(new Set());
     try {
-      const result = await api.aiPlan(city, count, interests);
+      const result = await api.aiPlan(city, count, interests, groupId === "" ? undefined : selectedGroupId);
       if (result.available && result.places.length > 0) {
         setPlannerSource("ai");
         setPlannerPlaces(result.places.map(aiPlannerPlace));
       } else {
-        const fallback = cityPlaces.slice(0, Math.min(cityPlaces.length, count * 4)).map(offlinePlannerPlace);
+        const fallback = fallbackPlannerPlaces(cityPlaces, count * 4, selectedGroup);
         setPlannerSource("offline");
         setPlannerPlaces(fallback);
         if (fallback.length === 0) setErrorMessage("本地地点库暂时没有这个城市的建议，请换一个热门城市试试。");
       }
     } catch {
-      const fallback = cityPlaces.slice(0, Math.min(cityPlaces.length, count * 4)).map(offlinePlannerPlace);
+      const fallback = fallbackPlannerPlaces(cityPlaces, count * 4, selectedGroup);
       setPlannerSource("offline");
       setPlannerPlaces(fallback);
       if (fallback.length === 0) setErrorMessage("AI 和本地地点库暂时都没有这个城市的建议。");

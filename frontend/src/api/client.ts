@@ -267,9 +267,10 @@ export const api = {
   async previewWeather(lat: number, lon: number): Promise<WeatherPreview> {
     return request<WeatherPreview>(`/api/weather/preview?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
   },
-  async aiPlan(city: string, days: number, interests?: string): Promise<AiPlanResult> {
+  async aiPlan(city: string, days: number, interests?: string, groupId?: number): Promise<AiPlanResult> {
     const params = new URLSearchParams({ city, days: String(days) });
     if (interests?.trim()) params.set("interests", interests.trim());
+    if (groupId !== undefined) params.set("groupId", String(groupId));
     return request<AiPlanResult>(`/api/ai/plan?${params.toString()}`);
   },
   async mapConfig(): Promise<MapConfig> {
