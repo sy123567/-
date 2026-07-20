@@ -36,6 +36,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   50% { transform: translateY(35%) rotate(90deg); opacity: 1; }
 }
 
+@keyframes boarding-float {
+  0%, 100% { transform: translateY(var(--boarding-offset, 0px)); }
+  50% { transform: translateY(calc(var(--boarding-offset, 0px) - 4px)); }
+}
+
+@keyframes gallery-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @keyframes slide-in-right {
   from { opacity: 0; transform: translateX(2rem); }
   to { opacity: 1; transform: translateX(0); }
@@ -43,6 +53,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .animate-route { animation: route-draw 1.8s ease-out both; }
 .route-plane { animation: route-plane 2.4s ease-in-out infinite; }
+.boarding-float { animation: boarding-float 6s ease-in-out infinite; }
+.boarding-float:hover { --boarding-offset: -4px; }
+.gallery-orbit { animation: gallery-orbit 24s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

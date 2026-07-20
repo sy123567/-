@@ -69,6 +69,7 @@ export function RouteTrail({
       <div className={`relative ${compact ? "space-y-3" : "space-y-5"}`}>
         {nodes.map((node, index) => {
           const events = eventsByNode?.[node.id] ?? [];
+          const uniqueEvents = Array.from(new Map(events.map((event) => [event.title ?? `event-${event.id}`, event])).values());
           const Icon = nodeIcon[node.nodeType];
           return (
             <div key={node.id} className="group/route relative flex gap-3">
@@ -93,10 +94,10 @@ export function RouteTrail({
                   <p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>
                   {node.status === "AFFECTED" && (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {(events.length > 0 ? events : [undefined]).map((event, eventIndex) => (
+                      {(uniqueEvents.length > 0 ? uniqueEvents : [undefined]).map((event, eventIndex) => (
                         <span key={event?.id ?? `affected-${eventIndex}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${event?.severity ? severityStyle[event.severity] : "bg-slate-100 text-ink-soft"}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${event?.severity === "CRITICAL" || event?.severity === "HIGH" ? "bg-coral" : event?.severity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} />
-                          {event?.title ?? "受事件影响"}
+                          {event?.title ?? "受事件影响"}{event?.tempMin !== undefined && event.tempMax !== undefined ? ` · ${Math.round(event.tempMin)}~${Math.round(event.tempMax)}°C` : ""}
                         </span>
                       ))}
                     </div>
@@ -114,10 +115,11 @@ export function RouteTrail({
 
 function formatTime(value: string) { return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }); }
 
-export function BoardingPassCard({ trip, onClick }: { trip: import("../types").Trip; onClick?: () => void }) {
+export function BoardingPassCard({ trip, onClick, featured = false }: { trip: import("../types").Trip; onClick?: () => void; featured?: boolean }) {
   const startDate = trip.startDate?.slice(5) ?? "待定";
   const endDate = trip.endDate?.slice(5) ?? "待定";
-  return <button onClick={onClick} className="group relative w-full overflow-hidden rounded-card bg-ink text-left text-white shadow-soft transition hover:-translate-y-1 hover:shadow-xl focus-visible:outline-offset-4"><div className="absolute -right-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className="absolute -left-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className="border-b border-dashed border-white/20 p-5 pr-10"><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-[10px] tracking-[0.2em] text-white/50">TRIP BOARDING PASS</p><p className="mt-2 font-display text-xl font-bold">{trip.title ?? "未命名行程"}</p>{trip.destination && <p className="mt-1 text-sm text-white/60">{trip.destination}</p>}</div>{trip.roomCode && <div className="text-right"><p className="font-mono text-xs text-coral">{trip.roomCode}</p><p className="mt-1 text-[10px] text-white/40">ROOM CODE</p></div>}</div></div><div className="flex items-center justify-between p-5 pr-10"><div><p className="font-mono text-lg font-bold">{startDate} <span className="text-white/30">→</span> {endDate}</p>{trip.group && <p className="mt-1 text-xs text-white/50">{trip.group.name} · {trip.group.memberCount ?? trip.group.members?.length ?? 0} 位成员</p>}</div><ChevronRight className="text-coral transition group-hover:translate-x-1" /></div></button>;
+  const imageKey = trip.destination ?? trip.title ?? "行程";
+  return <button onClick={onClick} style={{ animationDelay: `${(trip.id % 5) * -0.7}s` }} className={`group relative w-full overflow-hidden rounded-card bg-ink text-left text-white shadow-soft transition duration-300 hover:shadow-xl motion-reduce:transition-none ${featured ? "min-h-[390px] md:min-h-[460px]" : "min-h-[250px] md:min-h-[285px]"} boarding-float focus-visible:outline-offset-4`}><div className="absolute inset-0 transition duration-700 group-hover:scale-105 motion-reduce:transition-none"><ImageFallback src={getPlaceImage(imageKey, "ATTRACTION")} alt={imageKey} city={imageKey} /></div><div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/65 to-ink/10" /><div className="absolute -right-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className="absolute -left-4 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-paper" /><div className={`relative flex h-full flex-col justify-between ${featured ? "p-7 pr-10" : "p-5 pr-10"}`}><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-[10px] tracking-[0.2em] text-white/60">TRIP BOARDING PASS</p><p className={`mt-2 font-display font-bold ${featured ? "text-3xl md:text-4xl" : "text-xl"}`}>{trip.title ?? "未命名行程"}</p>{trip.destination && <p className="mt-2 text-sm text-white/70">{trip.destination}</p>}</div>{trip.roomCode && <div className="text-right"><p className="font-mono text-xs text-coral">{trip.roomCode}</p><p className="mt-1 text-[10px] text-white/50">ROOM CODE</p></div>}</div><div className="border-t border-dashed border-white/25 pt-5"><div className="flex items-end justify-between gap-4"><div><p className="font-mono text-lg font-bold">{startDate} <span className="text-white/40">→</span> {endDate}</p>{trip.group && <p className="mt-1 text-xs text-white/60">{trip.group.name} · {trip.group.memberCount ?? trip.group.members?.length ?? 0} 位成员</p>}</div><ChevronRight className="text-coral transition group-hover:translate-x-1 motion-reduce:transition-none" /></div></div></div></button>;
 }
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
