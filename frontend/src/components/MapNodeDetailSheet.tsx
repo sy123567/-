@@ -18,7 +18,18 @@ export function MapNodeDetailSheet({
   onClose: () => void;
 }) {
   const [selectedUid, setSelectedUid] = useState("");
-  const mapNodes = useMemo(() => [node], [node]);
+  const resolveQuery = useQuery({
+    queryKey: ["map-resolve", node.id, node.placeName || node.name, node.latitude, node.longitude],
+    queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude),
+    enabled: hasCoordinates(node) && Boolean(node.placeName || node.name),
+  });
+  const resolvedNode = useMemo(() => {
+    const resolved = resolveQuery.data;
+    if (!resolved?.available || resolved.lat === undefined || resolved.lng === undefined) return node;
+    return { ...node, latitude: resolved.lat, longitude: resolved.lng };
+  }, [node, resolveQuery.data]);
+  const resolvedCoordinatesReady = !resolveQuery.isLoading && hasCoordinates(resolvedNode);
+  const mapNodes = useMemo(() => [resolvedNode], [resolvedNode]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -35,29 +46,29 @@ export function MapNodeDetailSheet({
     (item): item is ItineraryNode => Boolean(item),
   );
   const weatherQuery = useQuery({
-    queryKey: ["weather-preview", node.id, node.latitude, node.longitude],
-    queryFn: () => api.previewWeather(node.latitude, node.longitude),
-    enabled: hasCoordinates(node),
+    queryKey: ["weather-preview", resolvedNode.id, resolvedNode.latitude, resolvedNode.longitude],
+    queryFn: () => api.previewWeather(resolvedNode.latitude, resolvedNode.longitude),
+    enabled: resolvedCoordinatesReady,
   });
   const routeQueries = useQueries({
     queries: adjacentNodes.map((adjacent) => ({
       queryKey: ["map-route", node.id, adjacent.id],
       queryFn: () =>
         api.mapRoute(
-          node.latitude,
-          node.longitude,
+          resolvedNode.latitude,
+          resolvedNode.longitude,
           adjacent.latitude,
           adjacent.longitude,
           "driving",
         ),
-      enabled: hasCoordinates(node) && hasCoordinates(adjacent),
+      enabled: resolvedCoordinatesReady && hasCoordinates(adjacent),
     })),
   });
   const recommendationQueries = useQueries({
     queries: ["美食", "景点", "休闲娱乐"].map((query) => ({
       queryKey: ["map-nearby", query, node.id],
-      queryFn: () => api.mapNearby(query, node.latitude, node.longitude, 3000),
-      enabled: hasCoordinates(node),
+      queryFn: () => api.mapNearby(query, resolvedNode.latitude, resolvedNode.longitude, 3000),
+      enabled: resolvedCoordinatesReady,
     })),
   });
   const detailQuery = useQuery({
@@ -95,15 +106,15 @@ export function MapNodeDetailSheet({
     ],
     queryFn: () =>
       api.mapRoute(
-        node.latitude,
-        node.longitude,
+        resolvedNode.latitude,
+        resolvedNode.longitude,
         selectedPlace?.lat ?? 0,
         selectedPlace?.lng ?? 0,
         "walking",
       ),
     enabled:
       Boolean(selectedUid) &&
-      hasCoordinates(node) &&
+      resolvedCoordinatesReady &&
       selectedPlace !== undefined &&
       selectedPlace.lat !== undefined &&
       selectedPlace.lng !== undefined &&
@@ -147,7 +158,14 @@ export function MapNodeDetailSheet({
         </div>
 
         <div className="space-y-5 py-6">
-          <BaiduMap nodes={mapNodes} className="h-56" />
+          <BaiduMap
+            nodes={mapNodes}
+            places={recommendations}
+            selectedPlace={selectedPlace}
+            routeMode="walking"
+            onPlaceClick={(place) => place.uid && setSelectedUid(place.uid)}
+            className="h-56"
+          />
 
           <section>
             <SectionHeading icon={<MapPin size={17} />} title="天气上下文" tone="coral" />

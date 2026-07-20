@@ -149,6 +149,56 @@ public class BaiduMapClient {
     return places;
   }
 
+  public ResolvedPlace resolve(String name, double lat, double lng) {
+    if (!enabled() || name == null || name.isBlank()) return null;
+    String roundedLat = String.format(Locale.ROOT, "%.4f", lat);
+    String roundedLng = String.format(Locale.ROOT, "%.4f", lng);
+    String cacheKey = "baidu:resolve:" + normalize(name) + ":" + roundedLat + ":" + roundedLng;
+    JsonNode root =
+        getCached(
+            cacheKey,
+            url(
+                "/place/v2/search",
+                "query",
+                name,
+                "location",
+                coordinate(lat, lng),
+                "radius",
+                "10000",
+                "radius_limit",
+                "true",
+                "scope",
+                "2",
+                "output",
+                "json"),
+            SEARCH_TTL);
+    if (!ok(root)) return null;
+    String normalizedName = normalize(name);
+    JsonNode best = null;
+    double bestDistance = Double.POSITIVE_INFINITY;
+    boolean bestMatches = false;
+    for (JsonNode item : root.path("results")) {
+      JsonNode location = item.path("location");
+      Double candidateLat = number(location, "lat");
+      Double candidateLng = number(location, "lng");
+      String candidateName = text(item, "name");
+      if (candidateLat == null || candidateLng == null || candidateName == null) continue;
+      boolean matches =
+          normalize(candidateName).contains(normalizedName)
+              || normalizedName.contains(normalize(candidateName));
+      double distance = Math.pow(candidateLat - lat, 2) + Math.pow(candidateLng - lng, 2);
+      if ((matches && !bestMatches) || (matches == bestMatches && distance < bestDistance)) {
+        best = item;
+        bestDistance = distance;
+        bestMatches = matches;
+      }
+    }
+    if (best == null) return null;
+    JsonNode location = best.path("location");
+    return new ResolvedPlace(
+        number(location, "lat"), number(location, "lng"), text(best, "uid"), text(best, "name"));
+  }
+
   public PlaceDetail placeDetail(String uid) {
     if (!enabled() || uid == null || uid.isBlank()) return null;
     JsonNode root =
@@ -343,4 +393,6 @@ public class BaiduMapClient {
   public record RouteSummary(Long distanceMeters, Long durationSeconds) {}
 
   public record Geocode(Double lat, Double lng) {}
+
+  public record ResolvedPlace(Double lat, Double lng, String uid, String name) {}
 }
