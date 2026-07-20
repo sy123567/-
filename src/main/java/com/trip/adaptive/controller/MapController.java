@@ -11,6 +11,7 @@ import com.trip.adaptive.monitor.service.BaiduMapClient;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Geocode;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Place;
 import com.trip.adaptive.monitor.service.BaiduMapClient.PlaceDetail;
+import com.trip.adaptive.monitor.service.BaiduMapClient.ResolvedPlace;
 import com.trip.adaptive.monitor.service.BaiduMapClient.RouteSummary;
 
 @RestController
@@ -57,6 +58,23 @@ public class MapController {
     return places == null
         ? new SearchResult(false, List.of(), UNAVAILABLE)
         : new SearchResult(true, places, null);
+  }
+
+  @GetMapping("/resolve")
+  public ResolveResult resolve(
+      @RequestParam(defaultValue = "") String name,
+      @RequestParam(defaultValue = "") String lat,
+      @RequestParam(defaultValue = "") String lng) {
+    if (!maps.enabled()) return new ResolveResult(false, null, null, null, null);
+    Double parsedLat = number(lat);
+    Double parsedLng = number(lng);
+    if (parsedLat == null || parsedLng == null || name.isBlank()) {
+      return new ResolveResult(false, null, null, null, null);
+    }
+    ResolvedPlace place = maps.resolve(name, parsedLat, parsedLng);
+    return place == null
+        ? new ResolveResult(false, null, null, null, null)
+        : new ResolveResult(true, place.lat(), place.lng(), place.uid(), place.name());
   }
 
   @GetMapping("/place")
@@ -124,6 +142,8 @@ public class MapController {
   public record MapConfig(boolean available, String ak) {}
 
   public record SearchResult(boolean available, List<Place> places, String message) {}
+
+  public record ResolveResult(boolean available, Double lat, Double lng, String uid, String name) {}
 
   public record PlaceResult(boolean available, PlaceDetail place, String message) {}
 
