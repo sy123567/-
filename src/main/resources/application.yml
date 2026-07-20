@@ -48,6 +48,9 @@ app:
     key: ${DEEPSEEK_API_KEY:}
     host: ${DEEPSEEK_HOST:https://api.deepseek.com}
     model: ${DEEPSEEK_MODEL:deepseek-chat}
+  baidu:
+    ak: ${BAIDU_MAP_AK:}
+    host: ${BAIDU_MAP_HOST:https://api.map.baidu.com}
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-jwt-secret-to-a-long-random-value}
     expiration: ${JWT_EXPIRATION:86400000}
