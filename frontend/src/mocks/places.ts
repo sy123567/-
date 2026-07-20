@@ -110,6 +110,30 @@ const categoryLabels: Record<NodeType, string> = {
   OTHER: "行程节点",
 };
 
+const placeImages: Record<string, string> = {
+  上海外滩: "https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=900&q=80",
+  老吉士: "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=900&q=80",
+  豫园: "https://images.unsplash.com/photo-1523731407965-2430cd12f5e4?auto=format&fit=crop&w=900&q=80",
+  上海外滩茂悦大酒店: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80",
+  上海博物馆: "https://images.unsplash.com/photo-1564399579883-451a5d44ec08?auto=format&fit=crop&w=900&q=80",
+  宽窄巷子: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=900&q=80",
+  成都大熊猫繁育研究基地: "https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?auto=format&fit=crop&w=900&q=80",
+  西湖: "https://images.unsplash.com/photo-1538485399081-7c897a9a3d20?auto=format&fit=crop&w=900&q=80",
+  河坊街: "https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?auto=format&fit=crop&w=900&q=80",
+};
+
+const nodeTypeImages: Record<NodeType, string> = {
+  ATTRACTION: "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80",
+  MEAL: "https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=900&q=80",
+  LODGING: "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=900&q=80",
+  TRANSPORT: "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=900&q=80",
+  OTHER: "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=900&q=80",
+};
+
+export function getPlaceImage(placeName: string, nodeType: NodeType = "OTHER"): string {
+  return placeImages[placeName] ?? nodeTypeImages[nodeType];
+}
+
 export function getPlaceDetail(placeName: string, nodeType: NodeType = "OTHER"): PlaceDetail {
   return placeDetails[placeName] ?? {
     placeName,

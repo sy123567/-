@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { Check, ChevronRight, CircleAlert, CloudRain, Info, MapPin, Sparkles } from "lucide-react";
-import type { ItineraryNode, NodeStatus } from "../types";
-import { getPlaceDetail } from "../mocks/places";
+import { Check, ChevronRight, CircleAlert, CloudRain, Info, MapPin, Send, Sparkles } from "lucide-react";
+import type { ExternalEvent, ItineraryNode, NodeStatus, Severity } from "../types";
+import { getPlaceDetail, getPlaceImage } from "../mocks/places";
+import { ImageFallback } from "./pass2";
 import { PlaceDetailSheet } from "./PlaceDetailSheet";
 
 export function Button({ children, variant = "primary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" }) {
@@ -46,9 +47,69 @@ export function StatusBadge({ status }: { status: NodeStatus }) {
   return <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusStyle[status]}`}>{labels[status]}</span>;
 }
 
-export function RouteTrail({ nodes, compact = false }: { nodes: ItineraryNode[]; compact?: boolean }) {
+const severityStyle: Record<Severity, string> = {
+  LOW: "bg-mint/10 text-emerald-700",
+  MEDIUM: "bg-sun/20 text-amber-700",
+  HIGH: "bg-coral/10 text-coral-deep",
+  CRITICAL: "bg-risk-critical/10 text-red-700",
+};
+
+export function RouteTrail({
+  nodes,
+  compact = false,
+  eventsByNode,
+}: {
+  nodes: ItineraryNode[];
+  compact?: boolean;
+  eventsByNode?: Record<number, ExternalEvent[]>;
+}) {
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
-  return <>{<div className={`relative ${compact ? "space-y-4" : "space-y-7"}`}><div className="absolute bottom-6 left-[17px] top-6 border-l-2 border-dashed border-coral/30" />{nodes.map((node) => { const Icon = nodeIcon[node.nodeType]; return <div key={node.id} className="relative flex gap-4"><div className={`z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border-4 border-paper ${node.status === "AFFECTED" ? "bg-coral text-white" : "bg-mint text-white"}`}><Icon size={14} /></div><div className={`min-w-0 flex-1 ${compact ? "pb-1" : "pb-1"}`}><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p><StatusBadge status={node.status} /></div><button type="button" onClick={() => setSelectedNode(node)} className="group mt-1 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:-translate-y-0.5 hover:text-coral focus-visible:outline-offset-2"><span className="truncate">{node.name}</span><Info size={14} className="shrink-0 text-sky opacity-60 transition group-hover:opacity-100" /></button><p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>{node.status === "AFFECTED" && <div className="mt-3 flex items-start gap-2 rounded-xl bg-coral/5 px-3 py-2 text-xs leading-5 text-coral-deep"><CircleAlert size={14} className="mt-0.5 shrink-0" />阵雨可能影响此节点，已有 3 位成员关注</div>}</div></div>; })}</div>}{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}</>;
+  return (
+    <>
+      <div className={`relative ${compact ? "space-y-3" : "space-y-5"}`}>
+        {nodes.map((node, index) => {
+          const events = eventsByNode?.[node.id] ?? [];
+          const Icon = nodeIcon[node.nodeType];
+          return (
+            <div key={node.id} className="group/route relative flex gap-3">
+              {index < nodes.length - 1 && (
+                <div className="absolute bottom-[-1.5rem] left-6 top-[4.5rem] w-0.5 border-l-2 border-dashed border-coral/30 bg-gradient-to-b from-coral/30 via-mint/60 to-coral/30 transition-colors group-hover/route:border-coral/70">
+                  <Send size={13} className="route-plane absolute -left-[7px] top-1/2 rotate-90 bg-paper text-mint" />
+                </div>
+              )}
+              <div className="relative z-10 h-12 w-12 shrink-0 overflow-hidden rounded-2xl border-2 border-paper bg-mint/10 shadow-sm">
+                <ImageFallback src={getPlaceImage(node.placeName, node.nodeType)} alt={node.placeName} city={node.placeName} />
+                <div className="absolute inset-0 grid place-items-center bg-ink/15 text-white"><Icon size={14} /></div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className={`rounded-card border border-slate-100 bg-white/80 p-4 shadow-sm transition duration-200 group-hover/route:-translate-y-0.5 group-hover/route:shadow-soft ${compact ? "p-3" : ""}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p>
+                    <StatusBadge status={node.status} />
+                  </div>
+                  <button type="button" onClick={() => setSelectedNode(node)} className="group mt-2 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:text-coral focus-visible:outline-offset-2">
+                    <span className="truncate">{node.name}</span><Info size={14} className="shrink-0 text-sky opacity-60 transition group-hover:opacity-100" />
+                  </button>
+                  <p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>
+                  {node.status === "AFFECTED" && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {(events.length > 0 ? events : [undefined]).map((event, eventIndex) => (
+                        <span key={event?.id ?? `affected-${eventIndex}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${event?.severity ? severityStyle[event.severity] : "bg-slate-100 text-ink-soft"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${event?.severity === "CRITICAL" || event?.severity === "HIGH" ? "bg-coral" : event?.severity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} />
+                          {event?.title ?? "受事件影响"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}
+    </>
+  );
 }
 
 function formatTime(value: string) { return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }); }

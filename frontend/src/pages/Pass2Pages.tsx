@@ -1,20 +1,29 @@
 import { useState } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { groupMembers, guides } from "../mocks/data";
-import { getPlaceDetail } from "../mocks/places";
+import { getPlaceDetail, getPlaceImage } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
 import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
-import type { ItineraryNode } from "../types";
+import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, Severity } from "../types";
 
 function useToast() {
   const [message, setMessage] = useState("");
   return { toast: message ? <Toast message={message} onClose={() => setMessage("")} /> : null, show: setMessage };
+}
+
+function buildEventsByNode(impacts: ImpactAssessment[] | undefined): Record<number, ExternalEvent[]> {
+  return (impacts ?? []).reduce<Record<number, ExternalEvent[]>>((map, impact) => {
+    if (impact.affectedNode?.id && impact.event) {
+      map[impact.affectedNode.id] = [...(map[impact.affectedNode.id] ?? []), impact.event];
+    }
+    return map;
+  }, {});
 }
 
 export function GroupsPage() {
@@ -334,11 +343,55 @@ const dataNodes = [{
 
 export function EventsPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events"], queryFn: api.events });
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const impactsQuery = useQuery({ queryKey: ["impacts", tripId], queryFn: () => api.impacts(tripId as number), enabled: tripId !== undefined });
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "TRAFFIC" | EventType>("ALL");
+  const [severityFilter, setSeverityFilter] = useState<"ALL" | Severity>("ALL");
+  const [keyword, setKeyword] = useState("");
   const { toast, show } = useToast();
   if (isLoading) return <LoadingState label="正在同步事件信号…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
   if (!data) return <EmptyState title="暂时没有事件数据" />;
-  return <><PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button>} /><div className="mb-6 flex flex-wrap gap-2"><select className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option>事件类型：全部</option><option>天气</option><option>交通</option><option>景点闭馆</option></select><select className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option>严重度：全部</option><option>HIGH</option><option>MEDIUM</option></select><input type="date" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></div><Card className="divide-y divide-slate-100 p-5">{data.length === 0 ? <p className="py-8 text-center text-sm text-ink-soft">当前没有活跃事件。</p> : data.map((event) => <div key={event.id} className="flex flex-wrap items-start justify-between gap-4 py-5 first:pt-0 last:pb-0"><div className="flex gap-4"><div className={`rounded-xl p-3 ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></div><div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" ? "risk" : "sun"}>{event.severity}</Badge>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p>{event.placeName && <p className="mt-2 font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</p>}</div></div><Button variant="ghost" onClick={() => show("事件已加入影响分析队列")}>分析影响</Button></div>)}</Card>{toast}</>;
+  const eventNodeMatches = (impactsQuery.data ?? []).reduce<Record<number, ItineraryNode[]>>((map, impact) => {
+    if (impact.event?.id && impact.affectedNode) {
+      map[impact.event.id] = [...(map[impact.event.id] ?? []), impact.affectedNode];
+    }
+    return map;
+  }, {});
+  const typeTabs: { value: "ALL" | "TRAFFIC" | EventType; label: string }[] = [
+    { value: "ALL", label: "全部" },
+    { value: "WEATHER", label: "天气" },
+    { value: "TRAFFIC", label: "交通类" },
+    { value: "ATTRACTION_CLOSURE", label: "景点闭馆" },
+    { value: "LARGE_EVENT", label: "大型活动" },
+  ];
+  const filteredEvents = data.filter((event) => {
+    const typeMatches = typeFilter === "ALL" || (typeFilter === "TRAFFIC" ? event.eventType === "ROAD_WORK" || event.eventType === "TRAFFIC_CONTROL" : event.eventType === typeFilter);
+    const severityMatches = severityFilter === "ALL" || event.severity === severityFilter;
+    const searchText = `${event.title ?? ""} ${event.description ?? ""} ${event.placeName ?? ""}`.toLowerCase();
+    return typeMatches && severityMatches && searchText.includes(keyword.trim().toLowerCase());
+  });
+  return (
+    <>
+      <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button>} />
+      <Card className="mb-6 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {typeTabs.map((tab) => <button key={tab.value} type="button" onClick={() => setTypeFilter(tab.value)} className={`rounded-full px-4 py-2 text-xs font-semibold transition ${typeFilter === tab.value ? "bg-ink text-white shadow-sm" : "bg-paper text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{tab.label}</button>)}
+          <label className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs text-ink-soft"><span>严重度</span><select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as "ALL" | Severity)} className="bg-transparent font-semibold text-ink outline-none"><option value="ALL">全部</option><option value="CRITICAL">紧急</option><option value="HIGH">高</option><option value="MEDIUM">中</option><option value="LOW">低</option></select></label>
+        </div>
+        <label className="relative mt-3 block"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索事件标题、描述或地点" className="w-full rounded-xl border border-slate-200 bg-paper py-2.5 pl-9 pr-4 text-sm text-ink outline-none transition focus:border-sky" /></label>
+      </Card>
+      <Card className="overflow-hidden p-3">
+        {filteredEvents.length === 0 ? <p className="py-10 text-center text-sm text-ink-soft">{data.length === 0 ? "当前没有活跃事件。" : "没有符合筛选条件的事件。"}</p> : filteredEvents.map((event) => {
+          const matches = eventNodeMatches[event.id] ?? [];
+          const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint";
+          return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{event.severity}</Badge>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${dashboardQuery.data?.activeTrip?.title ?? "当前行程"}` : "未匹配到当前行程节点"}</span></div></div><Button variant="ghost" onClick={() => show("事件已加入影响分析队列")}>分析影响</Button></div>;
+        })}
+      </Card>
+      {toast}
+    </>
+  );
 }
 
 export function ImpactsPage() {
@@ -358,7 +411,8 @@ export function ImpactsPage() {
   const affectedNodes = statusAffectedNodes.length > 0
     ? statusAffectedNodes
     : impacts?.map((item) => item.affectedNode).filter((node): node is NonNullable<typeof node> => node !== undefined) ?? [];
-  return <><PageHeader eyebrow="IMPACT & RISK" title="影响与风险" description="把一条外部消息，翻译成你们路线中具体的下一步。" action={<Button onClick={() => { void refetchRisk(); void refetchImpacts(); show("影响分析已刷新"); }}>刷新影响分析</Button>} /><div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]"><Card className="flex flex-col items-center p-7 text-center"><p className="eyebrow">TRIP RISK REPORT</p><div className="mt-5"><RiskGauge score={risk.overallScore ?? 0} label={risk.riskLevel ?? "暂无评级"} /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">{risk.affectedNodes > 0 ? "路线需要一个决定" : "当前路线暂无影响"}</h2><p className="mt-2 max-w-xs text-sm leading-6 text-ink-soft">{risk.affectedNodes} / {risk.totalNodes} 个节点被事件命中。</p><Link to="/plans" className="mt-5 text-sm font-semibold text-sky">查看替代方案 →</Link></Card><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">SCORING BREAKDOWN</p><h2 className="mt-2 font-display text-xl font-bold">风险是怎么来的</h2></div><CircleAlert className="text-coral" /></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><div className="rounded-xl bg-paper p-4"><div className="flex justify-between text-sm font-semibold"><span>总体风险</span><span className="font-mono text-coral">{risk.overallScore}/100</span></div><div className="mt-3 h-2 rounded-full bg-white"><div className="h-full rounded-full bg-coral" style={{ width: `${Math.min(100, Math.max(0, risk.overallScore))}%` }} /></div><p className="mt-2 text-xs text-ink-soft">{risk.assessments?.length ?? 0} 条影响评估</p></div></div></Card></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">AFFECTED NODES</p><h2 className="mt-2 font-display text-xl font-bold">受影响节点</h2></div><Badge tone="coral">{affectedNodes.length} 个节点</Badge></div><div className="mt-6"><RouteTrail nodes={affectedNodes} /></div></Card>{toast}</>;
+  const eventsByNode = buildEventsByNode(impacts);
+  return <><PageHeader eyebrow="IMPACT & RISK" title="影响与风险" description="把一条外部消息，翻译成你们路线中具体的下一步。" action={<Button onClick={() => { void refetchRisk(); void refetchImpacts(); show("影响分析已刷新"); }}>刷新影响分析</Button>} /><div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]"><Card className="flex flex-col items-center bg-coral/5 p-7 text-center"><p className="eyebrow">TRIP RISK REPORT</p><div className="mt-5"><RiskGauge score={risk.overallScore ?? 0} label={risk.riskLevel ?? "暂无评级"} /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">{risk.affectedNodes > 0 ? "路线需要一个决定" : "当前路线暂无影响"}</h2><p className="mt-2 max-w-xs text-sm leading-6 text-ink-soft">{risk.affectedNodes} / {risk.totalNodes} 个节点被事件命中。</p><Link to="/plans" className="mt-5 text-sm font-semibold text-sky">查看替代方案 →</Link></Card><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">SCORING BREAKDOWN</p><h2 className="mt-2 font-display text-xl font-bold">风险是怎么来的</h2></div><CircleAlert className="text-coral" /></div><div className="mt-6 grid gap-4 sm:grid-cols-2"><div className="rounded-card bg-sky/5 p-4"><div className="flex justify-between text-sm font-semibold"><span>总体风险</span><span className="font-mono text-coral">{risk.overallScore}/100</span></div><div className="mt-3 h-2 rounded-full bg-white"><div className="h-full rounded-full bg-coral" style={{ width: `${Math.min(100, Math.max(0, risk.overallScore))}%` }} /></div><p className="mt-2 text-xs text-ink-soft">{risk.assessments?.length ?? 0} 条影响评估</p></div></div></Card></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">AFFECTED NODES</p><h2 className="mt-2 font-display text-xl font-bold">受影响节点</h2></div><Badge tone="coral">{affectedNodes.length} 个节点</Badge></div><div className="mt-6"><RouteTrail nodes={affectedNodes} eventsByNode={eventsByNode} /></div></Card>{toast}</>;
 }
 
 export function PlansPage() {
