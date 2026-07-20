@@ -82,6 +82,64 @@ export type AiPlanResult = {
   message?: string;
 };
 
+export type MapPlace = {
+  name?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  province?: string;
+  city?: string;
+  area?: string;
+  uid?: string;
+  telephone?: string;
+};
+
+export type MapPlaceDetail = {
+  uid?: string;
+  name?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  telephone?: string;
+  overallRating?: number;
+  commentNum?: number;
+  price?: number;
+  tag?: string;
+  image?: string;
+};
+
+export type MapRoute = {
+  available: boolean;
+  mode: "driving" | "riding" | "walking";
+  distanceMeters?: number;
+  durationSeconds?: number;
+  message?: string;
+};
+
+export type MapConfig = {
+  available: boolean;
+  ak: string;
+};
+
+export type MapSearchResult = {
+  available: boolean;
+  places: MapPlace[];
+  message?: string;
+};
+
+export type MapPlaceResult = {
+  available: boolean;
+  place?: MapPlaceDetail;
+  message?: string;
+};
+
+export type MapGeocode = {
+  available: boolean;
+  lat?: number;
+  lng?: number;
+  message?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const endpoint = `${apiBase}${path}`;
   const token = getToken();
@@ -213,6 +271,35 @@ export const api = {
     const params = new URLSearchParams({ city, days: String(days) });
     if (interests?.trim()) params.set("interests", interests.trim());
     return request<AiPlanResult>(`/api/ai/plan?${params.toString()}`);
+  },
+  async mapConfig(): Promise<MapConfig> {
+    return request<MapConfig>("/api/map/config");
+  },
+  async mapSearch(query: string, region: string): Promise<MapSearchResult> {
+    const params = new URLSearchParams({ query, region });
+    return request<MapSearchResult>(`/api/map/search?${params.toString()}`);
+  },
+  async mapPlace(uid: string): Promise<MapPlaceResult> {
+    return request<MapPlaceResult>(`/api/map/place?uid=${encodeURIComponent(uid)}`);
+  },
+  async mapRoute(
+    fromLat: number,
+    fromLng: number,
+    toLat: number,
+    toLng: number,
+    mode: MapRoute["mode"] = "driving",
+  ): Promise<MapRoute> {
+    const params = new URLSearchParams({
+      fromLat: String(fromLat),
+      fromLng: String(fromLng),
+      toLat: String(toLat),
+      toLng: String(toLng),
+      mode,
+    });
+    return request<MapRoute>(`/api/map/route?${params.toString()}`);
+  },
+  async mapGeocode(address: string): Promise<MapGeocode> {
+    return request<MapGeocode>(`/api/map/geocode?address=${encodeURIComponent(address)}`);
   },
   async groups() {
     return request<TravelGroup[]>("/api/groups");

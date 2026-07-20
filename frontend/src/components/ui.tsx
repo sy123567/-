@@ -58,10 +58,12 @@ export function RouteTrail({
   nodes,
   compact = false,
   eventsByNode,
+  onNodeClick,
 }: {
   nodes: ItineraryNode[];
   compact?: boolean;
   eventsByNode?: Record<number, ExternalEvent[]>;
+  onNodeClick?: (node: ItineraryNode) => void;
 }) {
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
   return (
@@ -88,7 +90,7 @@ export function RouteTrail({
                     <p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p>
                     <StatusBadge status={node.status} />
                   </div>
-                  <button type="button" onClick={() => setSelectedNode(node)} className="group mt-2 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:text-coral focus-visible:outline-offset-2">
+                  <button type="button" onClick={() => onNodeClick ? onNodeClick(node) : setSelectedNode(node)} className="group mt-2 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:text-coral focus-visible:outline-offset-2 motion-reduce:transition-none">
                     <span className="truncate">{node.name}</span><Info size={14} className="shrink-0 text-sky opacity-60 transition group-hover:opacity-100" />
                   </button>
                   <p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type AiPlace, type WeatherPreview } from "../api/client";
+import { api, type AiPlace, type MapPlace, type WeatherPreview } from "../api/client";
 import { groupMembers, guides } from "../mocks/data";
 import { getCitySuggestions, getPlaceDetail, getPlaceImage, suggestPlaces, type SuggestedPlace } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
@@ -467,6 +467,10 @@ export function NewTripPage() {
   const [nodeDraft, setNodeDraft] = useState<NodeDraft>(emptyNodeDraft());
   const [weatherPreview, setWeatherPreview] = useState<WeatherPreview | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [mapSearchTerm, setMapSearchTerm] = useState("");
+  const [mapPlaces, setMapPlaces] = useState<MapPlace[]>([]);
+  const [mapSearchLoading, setMapSearchLoading] = useState(false);
+  const [mapSearchMessage, setMapSearchMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -492,6 +496,36 @@ export function NewTripPage() {
       .then(setWeatherPreview)
       .catch(() => setWeatherPreview({ available: false, hasAlert: false, hasPrecipitation: false, message: "天气服务暂不可用，可稍后再查" }))
       .finally(() => setWeatherLoading(false));
+  };
+  const searchMapPlaces = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const query = mapSearchTerm.trim() || nodeDraft.placeName.trim();
+    if (!query) return;
+    setMapSearchLoading(true);
+    setMapSearchMessage("");
+    try {
+      const result = await api.mapSearch(query, city.trim() || nodeDraft.placeName.trim());
+      setMapPlaces(result.places);
+      if (!result.available) setMapSearchMessage(result.message ?? "地图暂不可用，可继续使用本地地点补全。");
+      else if (result.places.length === 0) setMapSearchMessage("没有找到匹配地点，可以换个关键词试试。");
+    } catch {
+      setMapPlaces([]);
+      setMapSearchMessage("地图暂不可用，可继续使用本地地点补全。");
+    } finally {
+      setMapSearchLoading(false);
+    }
+  };
+  const chooseMapPlace = (place: MapPlace) => {
+    const name = place.name ?? "";
+    setNodeDraft((current) => ({
+      ...current,
+      name,
+      placeName: name,
+      latitude: place.lat === undefined ? current.latitude : String(place.lat),
+      longitude: place.lng === undefined ? current.longitude : String(place.lng),
+    }));
+    setMapSearchTerm(name);
+    if (place.lat !== undefined && place.lng !== undefined) previewLocationWeather(String(place.lat), String(place.lng));
   };
 
   const planItinerary = async () => {
@@ -623,6 +657,7 @@ export function NewTripPage() {
 
   return <>
     <PageHeader eyebrow="NEW ROUTE" title="创建一段新行程" description="先把目的地和成员放在同一张桌上，再让每个节点都带着天气上下文出发。" />
+    {activeTrip && <MapSearchPicker term={mapSearchTerm} onTermChange={setMapSearchTerm} onSearch={searchMapPlaces} places={mapPlaces} loading={mapSearchLoading} message={mapSearchMessage} onChoose={chooseMapPlace} />}
     {errorMessage && <div className="mb-5 rounded-card border border-coral/20 bg-coral/5 px-4 py-3 text-sm text-coral-deep">{errorMessage}</div>}
     {!activeTrip && <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
       <Card className="p-6">
@@ -664,6 +699,61 @@ export function NewTripPage() {
       <Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">LIVE ITINERARY</p><h2 className="mt-2 font-display text-xl font-bold text-ink">已经加入的节点</h2></div><Badge tone="coral">{nodes.length} 个节点</Badge></div>{nodes.length > 0 ? <div className="mt-6"><RouteTrail nodes={nodes} compact /></div> : <div className="mt-8 rounded-card bg-paper p-6 text-center text-sm leading-6 text-ink-soft">还没有节点。选一个地点，天气提示会先帮你看一眼再保存。</div>}<Button type="button" variant="secondary" className="mt-6 w-full" onClick={() => navigate(`/trips/${activeTrip.id}`)}>完成并查看行程<ArrowRight size={16} className="ml-2 inline" /></Button></Card>
     </div>}
   </>;
+}
+
+function MapSearchPicker({
+  term,
+  onTermChange,
+  onSearch,
+  places,
+  loading,
+  message,
+  onChoose,
+}: {
+  term: string;
+  onTermChange: (value: string) => void;
+  onSearch: (event: React.FormEvent) => void;
+  places: MapPlace[];
+  loading: boolean;
+  message: string;
+  onChoose: (place: MapPlace) => void;
+}) {
+  return (
+    <Card className="mb-5 border-sky/20 bg-sky/5 p-5">
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-sky shadow-sm">
+          <Search size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="eyebrow text-sky">MAP PICKER</p>
+          <h2 className="mt-1 font-display text-lg font-bold text-ink">用地图搜索并选一个节点</h2>
+          <p className="mt-1 text-xs leading-5 text-ink-soft">选中后会自动填入地点和经纬度，并立即刷新天气预览。</p>
+        </div>
+      </div>
+      <form onSubmit={onSearch} className="mt-4 flex gap-2">
+        <Input value={term} onChange={(event) => onTermChange(event.target.value)} placeholder="搜索西湖、故宫、附近餐馆…" />
+        <Button type="submit" variant="secondary" disabled={loading} className="shrink-0">
+          {loading ? "搜索中…" : "搜索"}
+        </Button>
+      </form>
+      {message && <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs text-ink-soft">{message}</p>}
+      {places.length > 0 && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {places.slice(0, 6).map((place, index) => (
+            <button
+              key={`${place.uid ?? place.name}-${index}`}
+              type="button"
+              onClick={() => onChoose(place)}
+              className="rounded-xl border border-white bg-white px-3 py-3 text-left transition hover:-translate-y-0.5 hover:border-sky/40 motion-reduce:transition-none"
+            >
+              <p className="truncate text-sm font-semibold text-ink">{place.name ?? "未命名地点"}</p>
+              <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{place.address ?? place.area ?? "百度地图地点"}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 const severityRank: Record<Severity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
