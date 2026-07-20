@@ -110,6 +110,10 @@ export interface ExternalEvent {
   severity?: Severity;
   startTime?: string;
   endTime?: string;
+  tripId?: number;
+  tripTitle?: string;
+  tempMin?: number;
+  tempMax?: number;
 }
 
 export interface ImpactAssessment {

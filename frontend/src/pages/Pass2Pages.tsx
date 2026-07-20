@@ -321,7 +321,17 @@ export function TripsPage() {
   if (isLoading) return <LoadingState label="正在装载你的行程…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
   const trips = data?.trips ?? [];
-  return <><PageHeader eyebrow="ALL ROUTES" title="行程总览" description="每一张登机牌，都是一次共同决定过的出发。" action={<Link to="/trips/new"><Button><Plus size={16} className="mr-2 inline" />新建行程</Button></Link>} /><div className="mb-5 flex gap-2">{["全部", "进行中", "已规划", "已完成"].map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-sm font-semibold ${status === item ? "bg-ink text-white" : "bg-white text-ink-soft"}`}>{item}</button>)}</div><div className="grid gap-5 md:grid-cols-2">{trips.filter((trip) => status === "全部" || (status === "进行中" ? trip.status === "ONGOING" : status === "已规划" ? trip.status === "PLANNED" : trip.status === "COMPLETED")).map((trip) => <BoardingPassCard key={trip.id} trip={trip} onClick={() => window.location.assign(`/trips/${trip.id}`)} />)}</div></>;
+  const filteredTrips = trips.filter((trip) => {
+    if (status === "全部") return true;
+    if (status === "进行中") return trip.status === "ONGOING";
+    if (status === "已规划") return trip.status === "PLANNED";
+    if (status === "已完成") return trip.status === "COMPLETED";
+    return true;
+  });
+  const orderedTrips = [...filteredTrips].sort((left, right) => Number(right.status === "ONGOING") - Number(left.status === "ONGOING"));
+  const featuredTrip = orderedTrips[0];
+  const otherTrips = orderedTrips.slice(1);
+  return <><div className="relative"><div className="gallery-orbit pointer-events-none absolute -right-8 -top-16 h-40 w-40 rounded-full border-[18px] border-coral/10 motion-reduce:animate-none" /><PageHeader eyebrow="ALL ROUTES" title="行程总览" description="每一张登机牌，都是一次共同决定过的出发。" action={<Link to="/trips/new"><Button><Plus size={16} className="mr-2 inline" />新建行程</Button></Link>} /></div><div className="mb-6 flex flex-wrap gap-2">{["全部", "进行中", "已规划", "已完成"].map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${status === item ? "bg-ink text-white" : "bg-white text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{item}</button>)}</div>{featuredTrip ? <div className="grid gap-5 md:grid-cols-2 lg:grid-rows-2"><div className="md:row-span-2"><BoardingPassCard trip={featuredTrip} featured onClick={() => window.location.assign(`/trips/${featuredTrip.id}`)} /></div>{otherTrips.map((trip) => <BoardingPassCard key={trip.id} trip={trip} onClick={() => window.location.assign(`/trips/${trip.id}`)} />)}</div> : <EmptyState title="还没有符合条件的行程" message="换一个状态筛选，或创建一段新的出发。" />}</>;
 }
 
 export function NewTripPage() {
@@ -341,6 +351,20 @@ const dataNodes = [{
   id: 2, name: "豫园", placeName: "豫园", latitude: 31.23, longitude: 121.49, nodeType: "ATTRACTION" as const, plannedStart: "2025-04-19T14:30:00", plannedEnd: "2025-04-19T17:00:00", cost: 40, sequenceOrder: 2, status: "PLANNED" as const,
 }];
 
+const severityRank: Record<Severity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+const severityLabel: Record<Severity, string> = { LOW: "低", MEDIUM: "中", HIGH: "高", CRITICAL: "紧急" };
+
+function eventGroupKey(event: ExternalEvent): string {
+  return event.tripTitle?.trim() || (event.tripId ? `行程 #${event.tripId}` : "未关联行程");
+}
+
+function eventGroupSeverity(events: ExternalEvent[]): Severity | undefined {
+  return events.reduce<Severity | undefined>((worst, event) => {
+    if (!event.severity || (worst && severityRank[worst] >= severityRank[event.severity])) return worst;
+    return event.severity;
+  }, undefined);
+}
+
 export function EventsPage() {
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events"], queryFn: api.events });
   const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
@@ -349,6 +373,7 @@ export function EventsPage() {
   const [typeFilter, setTypeFilter] = useState<"ALL" | "TRAFFIC" | EventType>("ALL");
   const [severityFilter, setSeverityFilter] = useState<"ALL" | Severity>("ALL");
   const [keyword, setKeyword] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const { toast, show } = useToast();
   if (isLoading) return <LoadingState label="正在同步事件信号…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
@@ -372,6 +397,20 @@ export function EventsPage() {
     const searchText = `${event.title ?? ""} ${event.description ?? ""} ${event.placeName ?? ""}`.toLowerCase();
     return typeMatches && severityMatches && searchText.includes(keyword.trim().toLowerCase());
   });
+  const groupedEvents = filteredEvents.reduce<Record<string, { title: string; events: ExternalEvent[]; worstSeverity?: Severity }>>((groups, event) => {
+    const key = eventGroupKey(event);
+    const group = groups[key] ?? { title: key, events: [] };
+    group.events.push(event);
+    group.worstSeverity = eventGroupSeverity(group.events);
+    groups[key] = group;
+    return groups;
+  }, {});
+  const activeTripTitle = dashboardQuery.data?.activeTrip?.title;
+  const eventGroups = Object.entries(groupedEvents).sort(([left], [right]) => {
+    if (left === activeTripTitle) return -1;
+    if (right === activeTripTitle) return 1;
+    return left.localeCompare(right, "zh-CN");
+  });
   return (
     <>
       <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button>} />
@@ -382,13 +421,13 @@ export function EventsPage() {
         </div>
         <label className="relative mt-3 block"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索事件标题、描述或地点" className="w-full rounded-xl border border-slate-200 bg-paper py-2.5 pl-9 pr-4 text-sm text-ink outline-none transition focus:border-sky" /></label>
       </Card>
-      <Card className="overflow-hidden p-3">
-        {filteredEvents.length === 0 ? <p className="py-10 text-center text-sm text-ink-soft">{data.length === 0 ? "当前没有活跃事件。" : "没有符合筛选条件的事件。"}</p> : filteredEvents.map((event) => {
-          const matches = eventNodeMatches[event.id] ?? [];
-          const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint";
-          return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{event.severity}</Badge>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${dashboardQuery.data?.activeTrip?.title ?? "当前行程"}` : "未匹配到当前行程节点"}</span></div></div><Button variant="ghost" onClick={() => show("事件已加入影响分析队列")}>分析影响</Button></div>;
+      <div className="space-y-4">
+        {eventGroups.length === 0 ? <Card className="py-10 text-center text-sm text-ink-soft">{data.length === 0 ? "当前没有活跃事件。" : "没有符合筛选条件的事件。"}</Card> : eventGroups.map(([key, group]) => {
+          const expanded = !collapsedGroups.includes(key);
+          const groupTone = group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "risk" : group.worstSeverity === "MEDIUM" ? "sun" : group.worstSeverity === "LOW" ? "mint" : "neutral";
+          return <Card key={key} className="overflow-hidden p-0"><button type="button" aria-expanded={expanded} onClick={() => setCollapsedGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-paper motion-reduce:transition-none"><div className="flex min-w-0 items-center gap-3"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "bg-coral" : group.worstSeverity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} /><div className="min-w-0"><p className="truncate font-display text-lg font-bold text-ink">{group.title}</p><p className="mt-1 text-xs text-ink-soft">{group.events.length} 条事件</p></div></div><div className="flex items-center gap-3"><Badge tone={groupTone}>{group.worstSeverity ? severityLabel[group.worstSeverity] : "未评级"}</Badge><ChevronRight size={18} className={`text-ink-soft transition-transform duration-300 ${expanded ? "rotate-90" : ""} motion-reduce:transition-none`} /></div></button><div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="min-h-0 overflow-hidden"><div className="space-y-3 border-t border-slate-100 p-3">{group.events.map((event) => { const matches = eventNodeMatches[event.id] ?? []; const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint"; return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{severityLabel[event.severity]}</Badge>}{event.tempMin !== undefined && event.tempMax !== undefined && <span className="rounded-full bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-blue-700">{Math.round(event.tempMin)}~{Math.round(event.tempMax)}°C</span>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${dashboardQuery.data?.activeTrip?.title ?? "当前行程"}` : "未匹配到当前行程节点"}</span></div></div><Button variant="ghost" onClick={(event) => { event.stopPropagation(); show("事件已加入影响分析队列"); }}>分析影响</Button></div>; })}</div></div></div></Card>;
         })}
-      </Card>
+      </div>
       {toast}
     </>
   );
