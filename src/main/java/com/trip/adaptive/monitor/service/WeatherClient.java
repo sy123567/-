@@ -92,6 +92,35 @@ public class WeatherClient {
             + "&language=zh-cn&details=true");
   }
 
+  public WeatherSummary summary(double lat, double lon) {
+    String unavailable = "天气服务暂不可用，可稍后再查";
+    try {
+      if (!enabled())
+        return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+      String loc = locationKey(lat, lon);
+      if (loc == null || loc.isBlank()) {
+        return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+      }
+      JsonNode forecastResponse = dailyForecast(loc);
+      if (forecastResponse == null) {
+        return new WeatherSummary(false, loc, null, null, null, false, false, unavailable);
+      }
+      JsonNode forecast = forecastResponse.path("DailyForecasts").path(0);
+      JsonNode day = forecast.path("Day");
+      JsonNode alertsResponse = alerts(loc);
+      boolean hasAlert =
+          alertsResponse != null && alertsResponse.isArray() && alertsResponse.size() > 0;
+      boolean hasPrecipitation = day.path("HasPrecipitation").asBoolean(false);
+      String phrase = firstText(day, "IconPhrase", "ShortPhrase", "LongPhrase");
+      Double tempMin = temperature(forecast.path("Temperature").path("Minimum"));
+      Double tempMax = temperature(forecast.path("Temperature").path("Maximum"));
+      return new WeatherSummary(
+          true, loc, tempMin, tempMax, phrase, hasAlert, hasPrecipitation, null);
+    } catch (Exception ex) {
+      return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+    }
+  }
+
   private JsonNode get(String url) {
     try {
       String body = http.getForObject(url, String.class);
@@ -115,4 +144,28 @@ public class WeatherClient {
       return null; // 失败降级
     }
   }
+
+  private static String firstText(JsonNode node, String... fields) {
+    for (String field : fields) {
+      String value = node.path(field).asText("");
+      if (!value.isBlank()) return value;
+    }
+    return "";
+  }
+
+  private static Double temperature(JsonNode node) {
+    if (!node.path("Value").isNumber()) return null;
+    double value = node.path("Value").asDouble();
+    return "F".equalsIgnoreCase(node.path("Unit").asText("")) ? (value - 32) * 5 / 9 : value;
+  }
+
+  public record WeatherSummary(
+      boolean available,
+      String placeName,
+      Double tempMin,
+      Double tempMax,
+      String phrase,
+      boolean hasAlert,
+      boolean hasPrecipitation,
+      String message) {}
 }
