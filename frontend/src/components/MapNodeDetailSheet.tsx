@@ -26,7 +26,6 @@ export function MapNodeDetailSheet({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
-  const region = useMemo(() => regionForNode(node, trip.title), [node, trip.title]);
   const sortedNodes = useMemo(
     () => [...(trip.itineraryNodes ?? [])].sort((left, right) => left.sequenceOrder - right.sequenceOrder),
     [trip.itineraryNodes],
@@ -55,10 +54,10 @@ export function MapNodeDetailSheet({
     })),
   });
   const recommendationQueries = useQueries({
-    queries: ["美食", "景点"].map((query) => ({
-      queryKey: ["map-search", query, region],
-      queryFn: () => api.mapSearch(query, region),
-      enabled: Boolean(region),
+    queries: ["美食", "景点", "休闲娱乐"].map((query) => ({
+      queryKey: ["map-nearby", query, node.id],
+      queryFn: () => api.mapNearby(query, node.latitude, node.longitude, 3000),
+      enabled: hasCoordinates(node),
     })),
   });
   const detailQuery = useQuery({
@@ -66,7 +65,51 @@ export function MapNodeDetailSheet({
     queryFn: () => api.mapPlace(selectedUid),
     enabled: Boolean(selectedUid),
   });
-  const recommendations = recommendationQueries.flatMap((query) => query.data?.places ?? []);
+  const recommendations = useMemo(() => {
+    const unique = new Map<string, MapPlace>();
+    recommendationQueries
+      .flatMap((query) => query.data?.places ?? [])
+      .forEach((place) => {
+        const key = place.uid ?? `${place.name ?? ""}:${place.lat ?? ""}:${place.lng ?? ""}`;
+        if (!unique.has(key)) unique.set(key, place);
+      });
+    return [...unique.values()]
+      .sort(
+        (left, right) =>
+          (left.distanceMeters ?? Number.POSITIVE_INFINITY) -
+          (right.distanceMeters ?? Number.POSITIVE_INFINITY),
+      )
+      .slice(0, 8);
+  }, [recommendationQueries]);
+  const selectedPlace = useMemo(
+    () => recommendations.find((place) => place.uid === selectedUid),
+    [recommendations, selectedUid],
+  );
+  const recommendationRouteQuery = useQuery({
+    queryKey: [
+      "map-route-recommendation",
+      node.id,
+      selectedUid,
+      selectedPlace?.lat,
+      selectedPlace?.lng,
+    ],
+    queryFn: () =>
+      api.mapRoute(
+        node.latitude,
+        node.longitude,
+        selectedPlace?.lat ?? 0,
+        selectedPlace?.lng ?? 0,
+        "walking",
+      ),
+    enabled:
+      Boolean(selectedUid) &&
+      hasCoordinates(node) &&
+      selectedPlace !== undefined &&
+      selectedPlace.lat !== undefined &&
+      selectedPlace.lng !== undefined &&
+      Number.isFinite(selectedPlace.lat) &&
+      Number.isFinite(selectedPlace.lng),
+  });
   const weather = weatherQuery.data;
   const detail = detailQuery.data?.place;
 
@@ -141,7 +184,7 @@ export function MapNodeDetailSheet({
           <section>
             <div className="flex items-end justify-between gap-3">
               <SectionHeading icon={<Star size={17} />} title="周边推荐" tone="mint" />
-              <span className="text-xs text-ink-soft">{region || "附近"} · 美食 / 景点</span>
+              <span className="text-xs text-ink-soft">附近 3km · 美食 / 景点 / 休闲</span>
             </div>
             {recommendationQueries.some((query) => query.isLoading) ? (
               <InfoPanel>正在寻找附近值得停留的地方…</InfoPanel>
@@ -149,7 +192,7 @@ export function MapNodeDetailSheet({
               <InfoPanel>暂时没有推荐结果，可稍后再试。</InfoPanel>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {recommendations.slice(0, 8).map((place, index) => (
+                {recommendations.map((place, index) => (
                   <RecommendationCard
                     key={`${place.uid ?? place.name}-${index}`}
                     place={place}
@@ -162,6 +205,12 @@ export function MapNodeDetailSheet({
 
           {selectedUid && (
             <section className="rounded-card border border-coral/15 bg-white p-4">
+              {selectedPlace && (
+                <RecommendationRoute
+                  route={recommendationRouteQuery.data}
+                  loading={recommendationRouteQuery.isLoading}
+                />
+              )}
               {detailQuery.isLoading ? (
                 <InfoPanel>正在读取地点详情…</InfoPanel>
               ) : detail ? (
@@ -233,12 +282,53 @@ function RecommendationCard({ place, onClick }: { place: MapPlace; onClick: () =
       onClick={onClick}
       className="rounded-card border border-slate-100 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-coral/30 hover:shadow-soft disabled:cursor-default disabled:opacity-70 motion-reduce:transition-none"
     >
+      <div className="mb-3 h-24 overflow-hidden rounded-2xl">
+        <ImageFallback
+          src={place.image || getPlaceImage(place.name ?? "附近地点", "OTHER")}
+          alt={place.name ?? "附近地点"}
+          city={place.city || place.area || "附近地点"}
+        />
+      </div>
       <div className="flex items-start justify-between gap-3">
         <p className="line-clamp-2 font-semibold text-ink">{place.name ?? "附近地点"}</p>
         {place.uid && <Badge tone="coral">详情</Badge>}
       </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {place.distanceMeters !== undefined && (
+          <Badge tone="sky">{formatDistance(place.distanceMeters)}</Badge>
+        )}
+        {place.overallRating !== undefined && <Badge tone="sun">评分 {place.overallRating}</Badge>}
+        {place.price !== undefined && <Badge tone="mint">人均 ¥{place.price}</Badge>}
+      </div>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-ink-soft">{place.address ?? place.area ?? "百度地图推荐地点"}</p>
     </button>
+  );
+}
+
+function RecommendationRoute({ route, loading }: { route?: MapRoute; loading?: boolean }) {
+  const distance = route?.distanceMeters;
+  const duration = route?.durationSeconds;
+  const convenience =
+    distance !== undefined && duration !== undefined
+      ? convenienceLabel(distance, duration)
+      : "待查询";
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-paper px-3 py-3">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-ink">从当前节点步行到这里</p>
+        <p className="mt-1 flex items-center gap-1 text-xs text-ink-soft">
+          <Clock3 size={13} />
+          {loading
+            ? "正在计算路程…"
+            : distance !== undefined && duration !== undefined
+              ? `${formatDistance(distance)} · ${Math.ceil(duration / 60)} 分钟`
+              : route?.message ?? "路线暂不可用"}
+        </p>
+      </div>
+      <Badge tone={convenience === "便利" ? "mint" : convenience === "一般" ? "sun" : "neutral"}>
+        {convenience}
+      </Badge>
+    </div>
   );
 }
 
@@ -254,15 +344,16 @@ function hasCoordinates(node: ItineraryNode) {
   return Number.isFinite(node.latitude) && Number.isFinite(node.longitude) && node.latitude !== 0 && node.longitude !== 0;
 }
 
-function regionForNode(node: ItineraryNode, tripTitle: string) {
-  const titleCity = tripTitle.match(/(上海|北京|成都|杭州|西安|广州|重庆|南京|深圳|厦门|苏州|武汉)/)?.[1];
-  return titleCity ?? node.placeName ?? "";
-}
-
 function convenienceLabel(distanceMeters: number, durationSeconds: number) {
   const distanceKm = distanceMeters / 1000;
   const durationMinutes = durationSeconds / 60;
   if (distanceKm <= 5 && durationMinutes <= 20) return "便利";
   if (distanceKm <= 15 && durationMinutes <= 45) return "一般";
   return "较远";
+}
+
+function formatDistance(distanceMeters: number) {
+  return distanceMeters < 1000
+    ? `${Math.round(distanceMeters)} m`
+    : `${(distanceMeters / 1000).toFixed(1)} km`;
 }
