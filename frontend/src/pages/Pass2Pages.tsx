@@ -681,7 +681,7 @@ function eventGroupSeverity(events: ExternalEvent[]): Severity | undefined {
 }
 
 export function EventsPage() {
-  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events"], queryFn: api.events });
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events", "mine"], queryFn: api.myEvents });
   const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
   const tripId = dashboardQuery.data?.activeTrip?.id;
   const impactsQuery = useQuery({ queryKey: ["impacts", tripId], queryFn: () => api.impacts(tripId as number), enabled: tripId !== undefined });
