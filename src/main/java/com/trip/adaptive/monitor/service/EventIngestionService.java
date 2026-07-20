@@ -91,6 +91,8 @@ public class EventIngestionService {
       e.setStartTime(n.getPlannedStart().minusHours(1));
       e.setEndTime(n.getPlannedEnd().plusHours(1));
       e.setSource("mock-provider");
+      e.setTripId(t.getId());
+      e.setTripTitle(t.getTitle());
       out.add(events.save(e));
     }
     return out;
@@ -166,15 +168,25 @@ public class EventIngestionService {
     if (!createdAlert) {
       JsonNode fc = weather.dailyForecast(loc);
       if (fc != null) {
-        JsonNode day = fc.path("DailyForecasts").path(0).path("Day");
+        JsonNode forecast = fc.path("DailyForecasts").path(0);
+        JsonNode day = forecast.path("Day");
         boolean rain = day.path("HasPrecipitation").asBoolean(false);
         String headline = fc.path("Headline").path("Text").asText("");
+        String phrase = firstText(day, "IconPhrase", "ShortPhrase", "LongPhrase");
+        Double tempMin = temperature(forecast.path("Temperature").path("Minimum"));
+        Double tempMax = temperature(forecast.path("Temperature").path("Maximum"));
         if (rain || headline.matches(".*(雨|雪|暴|雷).*")) {
           for (ItineraryNode n : nodes) {
             ExternalEvent ev = new ExternalEvent();
             ev.setEventType(Enums.EventType.WEATHER);
-            ev.setTitle(headline.isBlank() ? "预报有降水" : headline);
-            ev.setDescription(fc.path("Headline").path("Text").asText("天气预报"));
+            String title = phrase.isBlank() ? (headline.isBlank() ? "预报有降水" : headline) : phrase;
+            ev.setTitle(title);
+            ev.setDescription(
+                tempMin != null && tempMax != null
+                    ? String.format("%s · 气温 %.0f~%.0f°C", title, tempMin, tempMax)
+                    : (headline.isBlank() ? "天气预报" : headline));
+            ev.setTempMin(tempMin);
+            ev.setTempMax(tempMax);
             ev.setSeverity(Enums.Severity.MEDIUM);
             fill(ev, n, "weathercn-forecast");
             save(out, ev);
@@ -193,6 +205,8 @@ public class EventIngestionService {
     e.setStartTime(n.getPlannedStart());
     e.setEndTime(n.getPlannedEnd());
     e.setSource(source);
+    e.setTripId(n.getTrip().getId());
+    e.setTripTitle(n.getTrip().getTitle());
   }
 
   // 去重后再存库,定时轮询每 100分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
@@ -207,5 +221,19 @@ public class EventIngestionService {
     JsonNode v = node.get(field);
     if (v == null) return def;
     return v.isObject() ? v.path("Localized").asText(def) : v.asText(def);
+  }
+
+  private static String firstText(JsonNode node, String... fields) {
+    for (String field : fields) {
+      String value = node.path(field).asText("");
+      if (!value.isBlank()) return value;
+    }
+    return "";
+  }
+
+  private static Double temperature(JsonNode node) {
+    if (!node.path("Value").isNumber()) return null;
+    double value = node.path("Value").asDouble();
+    return "F".equalsIgnoreCase(node.path("Unit").asText("")) ? (value - 32) * 5 / 9 : value;
   }
 }
