@@ -72,16 +72,23 @@ export function RouteTrail({
   showNearby?: boolean;
 }) {
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
+  const topLevelNodes = nodes.filter((node) => node.parentId === null || node.parentId === undefined);
+  const childrenByParent = new Map<number, ItineraryNode[]>();
+  nodes.filter((node) => node.parentId !== null && node.parentId !== undefined).forEach((node) => {
+    const children = childrenByParent.get(node.parentId!) ?? [];
+    children.push(node);
+    childrenByParent.set(node.parentId!, children);
+  });
   return (
     <>
       <div className={`relative ${compact ? "space-y-3" : "space-y-5"}`}>
-        {nodes.map((node, index) => {
+        {topLevelNodes.map((node, index) => {
           const events = eventsByNode?.[node.id] ?? [];
           const uniqueEvents = Array.from(new Map(events.map((event) => [event.title ?? `event-${event.id}`, event])).values());
           const Icon = nodeIcon[node.nodeType];
           return (
             <div key={node.id} className="group/route relative flex gap-3">
-              {index < nodes.length - 1 && (
+              {index < topLevelNodes.length - 1 && (
                 <div className="absolute bottom-[-1.5rem] left-6 top-[4.5rem] w-0.5 border-l-2 border-dashed border-coral/30 bg-gradient-to-b from-coral/30 via-mint/60 to-coral/30 transition-colors group-hover/route:border-coral/70">
                   <Send size={13} className="route-plane absolute -left-[7px] top-1/2 rotate-90 bg-paper text-mint" />
                 </div>
@@ -110,11 +117,21 @@ export function RouteTrail({
                       ))}
                     </div>
                   )}
-                  {showSegments && index < nodes.length - 1 && (
-                    <RouteSegment from={node} to={nodes[index + 1]} compact={compact} />
+                  {showSegments && index < topLevelNodes.length - 1 && (
+                    <RouteSegment from={node} to={topLevelNodes[index + 1]} compact={compact} />
                   )}
                   {showNearby && (
                     <NearbyPlay node={node} compact={compact} onNodeClick={onNodeClick ?? setSelectedNode} />
+                  )}
+                  {(childrenByParent.get(node.id) ?? []).length > 0 && (
+                    <div className="mt-4 space-y-2 border-l-2 border-dashed border-mint/40 pl-4">
+                      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                        <Sparkles size={12} />分支玩法
+                      </p>
+                      {(childrenByParent.get(node.id) ?? []).map((child) => (
+                        <BranchNode key={child.id} node={child} compact={compact} onNodeClick={onNodeClick ?? setSelectedNode} />
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
@@ -198,6 +215,27 @@ function NearbyPlay({
         </div>
       )}
     </div>
+  );
+}
+
+function BranchNode({
+  node,
+  compact,
+  onNodeClick,
+}: {
+  node: ItineraryNode;
+  compact: boolean;
+  onNodeClick: (node: ItineraryNode) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNodeClick(node)}
+      className={`flex w-full items-center justify-between gap-3 rounded-xl border border-mint/15 bg-mint/5 px-3 py-2 text-left transition hover:-translate-y-0.5 hover:bg-mint/10 motion-reduce:transition-none ${compact ? "text-[11px]" : ""}`}
+    >
+      <span className="min-w-0 truncate text-xs font-semibold text-ink">{node.placeName || node.name}</span>
+      <span className="shrink-0 font-mono text-[10px] text-ink-soft">{formatTime(node.plannedStart)}</span>
+    </button>
   );
 }
 

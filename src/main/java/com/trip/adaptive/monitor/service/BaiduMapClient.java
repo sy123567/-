@@ -2,6 +2,7 @@ package com.trip.adaptive.monitor.service;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -146,7 +147,49 @@ public class BaiduMapClient {
               text(detail, "image"),
               longValue(detail, "distance")));
     }
-    return places;
+    List<Place> consumerPlaces =
+        places.stream()
+            .filter(BaiduMapClient::isConsumerPlace)
+            .sorted(BaiduMapClient::compareConsumerPlaces)
+            .toList();
+    return consumerPlaces.isEmpty()
+        ? places.stream()
+            .sorted(Comparator.comparing(BaiduMapClient::distanceOrMax))
+            .limit(8)
+            .toList()
+        : consumerPlaces;
+  }
+
+  private static boolean isConsumerPlace(Place place) {
+    String text =
+        normalize(
+            (place.name() == null ? "" : place.name())
+                + " "
+                + (place.tag() == null ? "" : place.tag()));
+    return !containsAny(
+        text, "公司", "有限公司", "企业", "集团", "大厦", "写字楼", "办公", "科技园", "产业园", "工业园", "厂", "事务所", "银行后台",
+        "银行后勤", "营业部办公室");
+  }
+
+  private static int compareConsumerPlaces(Place left, Place right) {
+    int metadata = Integer.compare(metadataScore(right), metadataScore(left));
+    return metadata != 0 ? metadata : Long.compare(distanceOrMax(left), distanceOrMax(right));
+  }
+
+  private static int metadataScore(Place place) {
+    return (place.tag() == null || place.tag().isBlank() ? 0 : 1)
+        + (place.overallRating() != null ? 1 : 0);
+  }
+
+  private static long distanceOrMax(Place place) {
+    return place.distanceMeters() == null ? Long.MAX_VALUE : place.distanceMeters();
+  }
+
+  private static boolean containsAny(String value, String... terms) {
+    for (String term : terms) {
+      if (value.contains(normalize(term))) return true;
+    }
+    return false;
   }
 
   public ResolvedPlace resolve(String name, double lat, double lng) {

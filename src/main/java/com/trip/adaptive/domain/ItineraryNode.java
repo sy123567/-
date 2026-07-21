@@ -25,6 +25,7 @@ public class ItineraryNode {
 
   private String name, placeName;
   private Double latitude, longitude;
+  private Long parentId;
 
   @Enumerated(EnumType.STRING)
   private Enums.NodeType nodeType;
@@ -82,6 +83,14 @@ public class ItineraryNode {
 
   public void setLongitude(Double v) {
     longitude = v;
+  }
+
+  public Long getParentId() {
+    return parentId;
+  }
+
+  public void setParentId(Long v) {
+    parentId = v;
   }
 
   public Enums.NodeType getNodeType() {

@@ -1,5 +1,6 @@
 package com.trip.adaptive.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trip.adaptive.domain.ItineraryNode;
+import com.trip.adaptive.domain.NodeNote;
 import com.trip.adaptive.domain.Route;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.service.TripService;
@@ -71,6 +73,20 @@ public class TripController {
     return ResponseEntity.noContent().build();
   }
 
+  @GetMapping("/{tripId}/nodes/{nodeId}/notes")
+  public List<NoteView> notes(@PathVariable Long tripId, @PathVariable Long nodeId) {
+    return s.notes(tripId, nodeId).stream().map(TripController::noteView).toList();
+  }
+
+  @PostMapping("/{tripId}/nodes/{nodeId}/notes")
+  public NoteView addNote(
+      @PathVariable Long tripId,
+      @PathVariable Long nodeId,
+      @RequestBody NoteRequest request,
+      Authentication authentication) {
+    return noteView(s.addNote(tripId, nodeId, currentUser(authentication), request.content()));
+  }
+
   @GetMapping("/{id}/routes")
   public List<Route> routes(@PathVariable Long id) {
     return s.routes(id);
@@ -79,4 +95,18 @@ public class TripController {
   private com.trip.adaptive.domain.User currentUser(Authentication authentication) {
     return (com.trip.adaptive.domain.User) authentication.getPrincipal();
   }
+
+  private static NoteView noteView(NodeNote note) {
+    return new NoteView(
+        note.getId(),
+        note.getContent(),
+        note.getAuthor().getId(),
+        note.getAuthor().getName(),
+        note.getCreatedAt());
+  }
+
+  public record NoteRequest(String content) {}
+
+  public record NoteView(
+      Long id, String content, Long authorId, String authorName, LocalDateTime createdAt) {}
 }

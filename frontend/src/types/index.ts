@@ -48,12 +48,21 @@ export interface ItineraryNode {
   placeName: string;
   latitude: number;
   longitude: number;
+  parentId?: Id | null;
   nodeType: NodeType;
   plannedStart: string;
   plannedEnd: string;
   cost: number;
   sequenceOrder: number;
   status: NodeStatus;
+}
+
+export interface NodeNote {
+  id: Id;
+  content: string;
+  authorId: Id;
+  authorName: string;
+  createdAt: string;
 }
 
 export interface PlaceFood {

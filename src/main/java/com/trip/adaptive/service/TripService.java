@@ -5,12 +5,14 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.trip.adaptive.domain.ItineraryNode;
+import com.trip.adaptive.domain.NodeNote;
 import com.trip.adaptive.domain.Route;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.ItineraryNodeRepository;
+import com.trip.adaptive.repository.NodeNoteRepository;
 import com.trip.adaptive.repository.RouteRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
 import com.trip.adaptive.repository.TripRepository;
@@ -21,6 +23,7 @@ public class TripService {
   private final TravelGroupRepository groups;
   private final GroupMemberRepository members;
   private final ItineraryNodeRepository nodes;
+  private final NodeNoteRepository notes;
   private final RouteRepository routes;
 
   public TripService(
@@ -28,11 +31,13 @@ public class TripService {
       TravelGroupRepository g,
       GroupMemberRepository m,
       ItineraryNodeRepository n,
+      NodeNoteRepository nn,
       RouteRepository r) {
     trips = t;
     groups = g;
     members = m;
     nodes = n;
+    notes = nn;
     routes = r;
   }
 
@@ -65,7 +70,9 @@ public class TripService {
   }
 
   public ItineraryNode addNode(Long id, ItineraryNode n) {
-    n.setTrip(get(id));
+    Trip trip = get(id);
+    if (n.getParentId() != null) nodeForTrip(id, n.getParentId());
+    n.setTrip(trip);
     return nodes.save(n);
   }
 
@@ -80,11 +87,29 @@ public class TripService {
     if (payload.getPlannedEnd() != null) node.setPlannedEnd(payload.getPlannedEnd());
     if (payload.getCost() != null) node.setCost(payload.getCost());
     if (payload.getSequenceOrder() > 0) node.setSequenceOrder(payload.getSequenceOrder());
+    if (payload.getParentId() != null) node.setParentId(payload.getParentId());
     return nodes.save(node);
   }
 
   public void deleteNode(Long tripId, Long nodeId) {
     nodes.delete(nodeForTrip(tripId, nodeId));
+  }
+
+  public List<NodeNote> notes(Long tripId, Long nodeId) {
+    nodeForTrip(tripId, nodeId);
+    return notes.findByNodeIdOrderByCreatedAtAsc(nodeId);
+  }
+
+  public NodeNote addNote(Long tripId, Long nodeId, User author, String content) {
+    ItineraryNode node = nodeForTrip(tripId, nodeId);
+    if (content == null || content.isBlank()) {
+      throw new IllegalArgumentException("备注内容不能为空");
+    }
+    NodeNote note = new NodeNote();
+    note.setNode(node);
+    note.setAuthor(author);
+    note.setContent(content.trim());
+    return notes.save(note);
   }
 
   private ItineraryNode nodeForTrip(Long tripId, Long nodeId) {
