@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.trip.adaptive.monitor.service.BaiduMapClient;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Geocode;
+import com.trip.adaptive.monitor.service.BaiduMapClient.HotelRecommendations;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Place;
 import com.trip.adaptive.monitor.service.BaiduMapClient.PlaceDetail;
 import com.trip.adaptive.monitor.service.BaiduMapClient.ResolvedPlace;
@@ -75,6 +76,22 @@ public class MapController {
     return place == null
         ? new ResolveResult(false, null, null, null, null)
         : new ResolveResult(true, place.lat(), place.lng(), place.uid(), place.name());
+  }
+
+  @GetMapping("/hotels")
+  public HotelRecommendations hotels(
+      @RequestParam(defaultValue = "") String lat,
+      @RequestParam(defaultValue = "") String lng,
+      @RequestParam(defaultValue = "2500") int radius) {
+    if (!maps.enabled()) return new HotelRecommendations(false, List.of(), UNAVAILABLE);
+    Double parsedLat = number(lat);
+    Double parsedLng = number(lng);
+    if (parsedLat == null || parsedLng == null) {
+      return new HotelRecommendations(false, List.of(), "坐标无效");
+    }
+    int safeRadius = Math.max(500, Math.min(radius, 5000));
+    HotelRecommendations result = maps.hotels(parsedLat, parsedLng, safeRadius);
+    return result == null ? new HotelRecommendations(false, List.of(), UNAVAILABLE) : result;
   }
 
   @GetMapping("/place")

@@ -100,6 +100,22 @@ public class BaiduMapClient {
   }
 
   public List<Place> searchNearby(String query, double lat, double lng, int radius) {
+    List<Place> places = searchNearbyRaw(query, lat, lng, radius);
+    if (places == null) return null;
+    List<Place> consumerPlaces =
+        places.stream()
+            .filter(BaiduMapClient::isConsumerPlace)
+            .sorted(BaiduMapClient::compareConsumerPlaces)
+            .toList();
+    return consumerPlaces.isEmpty()
+        ? places.stream()
+            .sorted(Comparator.comparing(BaiduMapClient::distanceOrMax))
+            .limit(8)
+            .toList()
+        : consumerPlaces;
+  }
+
+  private List<Place> searchNearbyRaw(String query, double lat, double lng, int radius) {
     if (!enabled() || query == null || query.isBlank()) return List.of();
     String normalizedQuery = normalize(query);
     String roundedLat = String.format(Locale.ROOT, "%.4f", lat);
@@ -147,17 +163,7 @@ public class BaiduMapClient {
               text(detail, "image"),
               longValue(detail, "distance")));
     }
-    List<Place> consumerPlaces =
-        places.stream()
-            .filter(BaiduMapClient::isConsumerPlace)
-            .sorted(BaiduMapClient::compareConsumerPlaces)
-            .toList();
-    return consumerPlaces.isEmpty()
-        ? places.stream()
-            .sorted(Comparator.comparing(BaiduMapClient::distanceOrMax))
-            .limit(8)
-            .toList()
-        : consumerPlaces;
+    return places;
   }
 
   private static boolean isConsumerPlace(Place place) {
@@ -219,27 +225,149 @@ public class BaiduMapClient {
     String normalizedName = normalize(name);
     JsonNode best = null;
     double bestDistance = Double.POSITIVE_INFINITY;
-    boolean bestMatches = false;
+    int bestMatchTier = -1;
+    int bestResultIndex = Integer.MAX_VALUE;
+    int resultIndex = 0;
     for (JsonNode item : root.path("results")) {
       JsonNode location = item.path("location");
       Double candidateLat = number(location, "lat");
       Double candidateLng = number(location, "lng");
       String candidateName = text(item, "name");
-      if (candidateLat == null || candidateLng == null || candidateName == null) continue;
-      boolean matches =
-          normalize(candidateName).contains(normalizedName)
-              || normalizedName.contains(normalize(candidateName));
+      if (candidateLat == null || candidateLng == null || candidateName == null) {
+        resultIndex++;
+        continue;
+      }
+      String normalizedCandidateName = normalize(candidateName);
+      int matchTier =
+          normalizedCandidateName.equals(normalizedName)
+              ? 2
+              : normalizedCandidateName.contains(normalizedName)
+                      || normalizedName.contains(normalizedCandidateName)
+                  ? 1
+                  : 0;
       double distance = Math.pow(candidateLat - lat, 2) + Math.pow(candidateLng - lng, 2);
-      if ((matches && !bestMatches) || (matches == bestMatches && distance < bestDistance)) {
+      if (matchTier > bestMatchTier
+          || (matchTier == bestMatchTier && resultIndex < bestResultIndex)
+          || (matchTier == bestMatchTier
+              && resultIndex == bestResultIndex
+              && distance < bestDistance)) {
         best = item;
         bestDistance = distance;
-        bestMatches = matches;
+        bestMatchTier = matchTier;
+        bestResultIndex = resultIndex;
       }
+      resultIndex++;
     }
     if (best == null) return null;
     JsonNode location = best.path("location");
     return new ResolvedPlace(
         number(location, "lat"), number(location, "lng"), text(best, "uid"), text(best, "name"));
+  }
+
+  public HotelRecommendations hotels(double lat, double lng, int radius) {
+    if (!enabled()) return null;
+    List<Place> hotels = searchNearbyRaw("酒店", lat, lng, radius);
+    if (hotels == null) return null;
+    List<Place> metros = searchNearbyRaw("地铁站", lat, lng, radius);
+    List<Place> food = searchNearbyRaw("小吃 美食", lat, lng, radius);
+    List<Hotel> classified = new ArrayList<>();
+    for (Place hotel : hotels) {
+      if (hotel.lat() == null || hotel.lng() == null || hotel.name() == null) continue;
+      long distance = placeDistanceMeters(lat, lng, hotel.lat(), hotel.lng());
+      Long nearestMetro = nearestDistance(metros, hotel.lat(), hotel.lng());
+      Long nearestFood = nearestDistance(food, hotel.lat(), hotel.lng());
+      boolean hasMetro = metros != null && !metros.isEmpty();
+      boolean transitConvenient =
+          hasMetro ? nearestMetro != null && nearestMetro <= 800 : distance <= 1500;
+      String transitNote =
+          hasMetro && nearestMetro != null
+              ? "距地铁 " + formatDistance(nearestMetro)
+              : "距节点约 " + formatDistance(distance);
+      boolean foodNearby = nearestFood != null && nearestFood <= 250;
+      String foodNote = foodNearby ? "楼下约 " + formatDistance(nearestFood) + " 有小吃" : null;
+      String category = hotelCategory(hotel);
+      classified.add(
+          new Hotel(
+              hotel.uid(),
+              hotel.name(),
+              hotel.lat(),
+              hotel.lng(),
+              hotel.address(),
+              hotel.price(),
+              hotel.overallRating(),
+              hotel.tag(),
+              hotel.image(),
+              distance,
+              transitConvenient,
+              transitNote,
+              foodNearby,
+              foodNote,
+              category));
+    }
+    List<HotelCategory> categories = new ArrayList<>();
+    for (String key : List.of("value", "business", "luxury", "scenic")) {
+      List<Hotel> categoryHotels =
+          classified.stream().filter(hotel -> hotel.category().equals(key)).limit(8).toList();
+      categories.add(new HotelCategory(key, hotelCategoryLabel(key), categoryHotels));
+    }
+    return new HotelRecommendations(true, categories, null);
+  }
+
+  private static String hotelCategory(Place hotel) {
+    String text =
+        normalize(
+            (hotel.name() == null ? "" : hotel.name())
+                + " "
+                + (hotel.tag() == null ? "" : hotel.tag()));
+    double rating = hotel.overallRating() == null ? 0 : hotel.overallRating();
+    double price = hotel.price() == null ? Double.NaN : hotel.price();
+    if ((Double.isFinite(price) && price >= 500)
+        || rating >= 4.8
+        || containsAny(text, "五星", "豪华", "度假", "大酒店", "希尔顿", "万豪", "洲际", "凯悦")) {
+      return "luxury";
+    }
+    if (containsAny(text, "观景", "湖", "江", "山", "景区", "景观", "度假区")) return "scenic";
+    if (Double.isFinite(price) && price <= 300 && rating >= 3.8) return "value";
+    if (containsAny(text, "商务", "购物中心", "万达", "cbd", "商圈") || rating >= 4.3) {
+      return "business";
+    }
+    return Double.isFinite(price) && price <= 350 ? "value" : "business";
+  }
+
+  private static String hotelCategoryLabel(String key) {
+    return switch (key) {
+      case "value" -> "性价比";
+      case "business" -> "商圈";
+      case "luxury" -> "高端";
+      case "scenic" -> "观景好";
+      default -> key;
+    };
+  }
+
+  private static Long nearestDistance(List<Place> places, double lat, double lng) {
+    if (places == null || places.isEmpty()) return null;
+    return places.stream()
+        .filter(place -> place.lat() != null && place.lng() != null)
+        .map(place -> placeDistanceMeters(lat, lng, place.lat(), place.lng()))
+        .min(Long::compareTo)
+        .orElse(null);
+  }
+
+  private static long placeDistanceMeters(double lat1, double lng1, double lat2, double lng2) {
+    double radians = Math.PI / 180;
+    double deltaLat = (lat2 - lat1) * radians;
+    double deltaLng = (lng2 - lng1) * radians;
+    double value =
+        Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
+            + Math.cos(lat1 * radians)
+                * Math.cos(lat2 * radians)
+                * Math.sin(deltaLng / 2)
+                * Math.sin(deltaLng / 2);
+    return Math.round(6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
+  }
+
+  private static String formatDistance(long meters) {
+    return meters < 1000 ? meters + "m" : String.format(Locale.ROOT, "%.1fkm", meters / 1000d);
   }
 
   public PlaceDetail placeDetail(String uid) {
@@ -438,4 +566,26 @@ public class BaiduMapClient {
   public record Geocode(Double lat, Double lng) {}
 
   public record ResolvedPlace(Double lat, Double lng, String uid, String name) {}
+
+  public record HotelRecommendations(
+      boolean available, List<HotelCategory> categories, String message) {}
+
+  public record HotelCategory(String key, String label, List<Hotel> hotels) {}
+
+  public record Hotel(
+      String uid,
+      String name,
+      Double lat,
+      Double lng,
+      String address,
+      Double price,
+      Double rating,
+      String tag,
+      String image,
+      Long distanceMeters,
+      boolean transitConvenient,
+      String transitNote,
+      boolean foodNearby,
+      String foodNote,
+      String category) {}
 }
