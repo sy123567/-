@@ -29,6 +29,7 @@ public class NodeChange {
   private Enums.ChangeType changeType;
 
   private String newPlaceName;
+  private Double newLatitude, newLongitude;
   private LocalDateTime newStart, newEnd;
   private BigDecimal newCost;
   private String note;
@@ -69,6 +70,22 @@ public class NodeChange {
 
   public void setNewPlaceName(String v) {
     newPlaceName = v;
+  }
+
+  public Double getNewLatitude() {
+    return newLatitude;
+  }
+
+  public void setNewLatitude(Double v) {
+    newLatitude = v;
+  }
+
+  public Double getNewLongitude() {
+    return newLongitude;
+  }
+
+  public void setNewLongitude(Double v) {
+    newLongitude = v;
   }
 
   public LocalDateTime getNewStart() {
