@@ -9,7 +9,7 @@ import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
 import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
-import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, MemberConstraint, NodeType, Severity, Trip } from "../types";
+import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, MemberConstraint, NodeType, Severity, TravelGuide, Trip } from "../types";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -1246,16 +1246,82 @@ export function GuideDetailPage() {
   if (guideQuery.isLoading) return <LoadingState label="正在读取攻略…" />;
   if (guideQuery.isError || !guide) return <ErrorState message={guideQuery.error instanceof Error ? guideQuery.error.message : "攻略不存在"} onRetry={() => void guideQuery.refetch()} />;
   const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), "2025-05-03", guide.days);
-  return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><img src={guide.author.avatar} alt="" className="h-10 w-10 rounded-full" /><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">4.9 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal open={open} onClose={() => setOpen(false)} onDone={() => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate("/trips/1"); }} />{toast}</>;
+  return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{guide.author.name.slice(0, 1)}</div><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">{guide.rating.toFixed(1)} 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal guide={guide} open={open} onClose={() => setOpen(false)} onDone={(tripId) => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate(`/trips/${tripId}`); }} />{toast}</>;
 }
 
-function ApplyGuideModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
-  return <Modal open={open} title="攻略纳用" onClose={onClose}><div className="space-y-5"><label className="block text-sm font-semibold">目标小组<select className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option>周末慢游组 · 4 位成员</option></select></label><label className="block text-sm font-semibold">实际出发日期<input type="date" defaultValue="2025-05-03" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold">相对 → 绝对时间</p><div className="mt-3 space-y-2 text-xs text-ink-soft"><p><span className="font-mono">第 1 天 09:30</span><span className="mx-2">→</span>2025-05-03 周六 09:30</p><p><span className="font-mono">第 2 天 10:00</span><span className="mx-2">→</span>2025-05-04 周日 10:00</p></div></div><div className="flex items-start gap-3 rounded-xl bg-sun/15 p-4 text-sm leading-6 text-amber-900/75"><CircleAlert size={18} className="mt-0.5 shrink-0 text-amber-600" />按当前小组约束，预算约超出 ¥180；纳用后可以自动裁剪非必访节点。</div><Button className="w-full" onClick={onDone}>确认纳用并创建行程</Button></div></Modal>;
+function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide; open: boolean; onClose: () => void; onDone: (tripId: number) => void }) {
+  const queryClient = useQueryClient();
+  const groupsQuery = useQuery({ queryKey: ["groups"], queryFn: api.groups, enabled: open });
+  const [groupId, setGroupId] = useState<number | "">("");
+  const [departDate, setDepartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState("");
+  const groups = groupsQuery.data ?? [];
+  const selectedGroupId = groupId === "" ? groups[0]?.id : groupId;
+  const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).map(offlinePlannerPlace), departDate, guide.days);
+  const applyMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedGroupId === undefined) throw new Error("请先创建或加入一个小组");
+      if (templateNodes.length === 0) throw new Error(`本地地点库暂时没有 ${guide.city} 的模板地点`);
+      const trip = await api.createTrip(selectedGroupId, {
+        title: guide.title,
+        status: "DRAFT",
+        startDate: departDate,
+        endDate: dateAfter(departDate, guide.days - 1),
+        totalBudget: templateNodes.reduce((sum, node) => sum + node.cost, 0),
+      });
+      for (const node of templateNodes) {
+        await api.addNode(trip.id, {
+          name: node.name,
+          placeName: node.placeName,
+          latitude: node.latitude,
+          longitude: node.longitude,
+          nodeType: node.nodeType,
+          plannedStart: node.plannedStart,
+          plannedEnd: node.plannedEnd,
+          cost: node.cost,
+          sequenceOrder: node.sequenceOrder,
+          status: node.status,
+        });
+      }
+      return trip.id;
+    },
+    onSuccess: (tripId) => {
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["groups"] });
+      onDone(tripId);
+    },
+    onError: (mutationError) => setError(mutationError instanceof Error ? mutationError.message : "纳用失败，请稍后再试"),
+  });
+  const previewNodes = templateNodes.slice(0, 3);
+  return <Modal open={open} title="攻略纳用" onClose={onClose}><div className="space-y-5">
+    <label className="block text-sm font-semibold">目标小组
+      {groupsQuery.isLoading ? <p className="mt-2 text-sm text-ink-soft">正在读取小组…</p> : groups.length === 0 ? <p className="mt-2 text-sm text-coral-deep">还没有小组，先去创建或加入一个小组。</p> : <select value={selectedGroupId ?? ""} onChange={(event) => setGroupId(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm">{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.members?.length ?? group.memberCount ?? 0} 位成员</option>)}</select>}
+    </label>
+    <label className="block text-sm font-semibold">实际出发日期<input type="date" value={departDate} onChange={(event) => setDepartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label>
+    <div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold">相对 → 绝对时间</p><div className="mt-3 space-y-2 text-xs text-ink-soft">{previewNodes.length === 0 ? <p>本地地点库暂时没有 {guide.city} 的模板地点。</p> : previewNodes.map((node) => <p key={node.sequenceOrder}><span className="font-mono">{node.placeName}</span><span className="mx-2">→</span>{node.plannedStart.replace("T", " ").slice(0, 16)}</p>)}{templateNodes.length > previewNodes.length && <p>… 共 {templateNodes.length} 个节点</p>}</div></div>
+    {error && <div className="flex items-start gap-3 rounded-xl bg-coral/10 p-4 text-sm leading-6 text-coral-deep"><CircleAlert size={18} className="mt-0.5 shrink-0" />{error}</div>}
+    <Button className="w-full" disabled={applyMutation.isPending || groups.length === 0} onClick={() => { setError(""); applyMutation.mutate(); }}>{applyMutation.isPending ? "正在创建行程…" : "确认纳用并创建行程"}</Button>
+  </div></Modal>;
 }
 
 export function AdminPage() {
-  const bars = [{ label: "上海", value: 82 }, { label: "成都", value: 61 }, { label: "杭州", value: 48 }, { label: "大理", value: 36 }, { label: "厦门", value: 24 }];
-  return <><PageHeader eyebrow="OPERATIONS / ADMIN" title="数据统计后台" description="看见大家如何出发、哪里被打断，以及哪些替代方案真正帮上了忙。" action={<Badge tone="mint">管理员视图</Badge>} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Stat label="总行程数" value="128" detail="+18% 较上月" tone="coral" /><Stat label="预算中位数" value="¥2,480" detail="人均 ¥820" tone="mint" /><Stat label="事件命中率" value="23.6%" detail="30 / 127 条事件" tone="sky" /><Stat label="方案采纳率" value="71.4%" detail="15 / 21 个方案" tone="sun" /></div><div className="mt-6 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TRIPS BY DESTINATION</p><h2 className="mt-2 font-display text-xl font-bold">热门目的地</h2></div><span className="text-xs text-ink-soft">近 30 天</span></div><div className="mt-7 space-y-5">{bars.map((bar) => <div key={bar.label} className="flex items-center gap-4"><span className="w-12 text-sm font-semibold text-ink">{bar.label}</span><div className="h-3 flex-1 rounded-full bg-paper"><div className="h-full rounded-full bg-coral" style={{ width: `${bar.value}%` }} /></div><span className="font-mono text-xs text-ink-soft">{bar.value}</span></div>)}</div></Card><Card className="p-6"><p className="eyebrow">BUDGET DISTRIBUTION</p><h2 className="mt-2 font-display text-xl font-bold">预算分布</h2><div className="mx-auto mt-7 grid h-44 w-44 place-items-center rounded-full" style={{ background: "conic-gradient(#FF5B4C 0 38%, #17C3A2 38% 65%, #2F9BFF 65% 84%, #FFC53D 84%)" }}><div className="grid h-28 w-28 place-items-center rounded-full bg-white text-center"><p className="font-display text-2xl font-bold">¥318k</p><p className="text-[10px] text-ink-soft">总计划预算</p></div></div><div className="mt-5 flex flex-wrap justify-center gap-3 text-xs text-ink-soft"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-coral" />1k 以下</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-mint" />1—3k</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-sky" />3—5k</span></div></Card></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">EVENT SOURCES</p><h2 className="mt-2 font-display text-xl font-bold">事件源健康度</h2></div><Button variant="ghost">管理事件源</Button></div><div className="mt-5 grid gap-3 md:grid-cols-3"><div className="rounded-xl bg-mint/10 p-4"><p className="text-sm font-semibold text-emerald-800">天气服务</p><p className="mt-2 text-xs text-emerald-700/70">正常 · 最近同步 2 分钟前</p></div><div className="rounded-xl bg-mint/10 p-4"><p className="text-sm font-semibold text-emerald-800">交通公告</p><p className="mt-2 text-xs text-emerald-700/70">正常 · 最近同步 8 分钟前</p></div><div className="rounded-xl bg-sun/15 p-4"><p className="text-sm font-semibold text-amber-800">城市活动</p><p className="mt-2 text-xs text-amber-700/70">延迟 · 最近同步 24 分钟前</p></div></div></Card></>;
+  const statsQuery = useQuery({ queryKey: ["admin-stats"], queryFn: api.adminStats });
+  if (statsQuery.isLoading) return <LoadingState label="正在统计全局数据…" />;
+  if (statsQuery.isError || !statsQuery.data) return <ErrorState onRetry={() => void statsQuery.refetch()} />;
+  const stats = statsQuery.data;
+  const maxPlace = Math.max(1, ...stats.topPlaces.map((place) => place.count));
+  const hitRate = stats.totalEvents > 0 ? ((stats.hitEvents / stats.totalEvents) * 100).toFixed(1) : "0.0";
+  const adoptRate = stats.totalPlans > 0 ? ((stats.acceptedPlans / stats.totalPlans) * 100).toFixed(1) : "0.0";
+  const bucketTotal = Math.max(1, stats.budgetBuckets.reduce((sum, bucket) => sum + bucket.count, 0));
+  const bucketColors = ["#FF5B4C", "#17C3A2", "#2F9BFF", "#FFC53D"];
+  const gradientStops = stats.budgetBuckets
+    .reduce<{ stops: string[]; cursor: number }>((acc, bucket, index) => {
+      const end = acc.cursor + (bucket.count / bucketTotal) * 100;
+      acc.stops.push(`${bucketColors[index % bucketColors.length]} ${acc.cursor}% ${end}%`);
+      return { stops: acc.stops, cursor: end };
+    }, { stops: [], cursor: 0 })
+    .stops.join(", ");
+  return <><PageHeader eyebrow="OPERATIONS / ADMIN" title="数据统计后台" description="看见大家如何出发、哪里被打断，以及哪些替代方案真正帮上了忙。" action={<Badge tone="mint">管理员视图</Badge>} /><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Stat label="总行程数" value={String(stats.totalTrips)} detail="全部小组累计" tone="coral" /><Stat label="预算中位数" value={`¥${stats.budgetMedian.toLocaleString()}`} detail={`总预算 ¥${stats.totalBudget.toLocaleString()}`} tone="mint" /><Stat label="事件命中率" value={`${hitRate}%`} detail={`${stats.hitEvents} / ${stats.totalEvents} 条事件影响了行程`} tone="sky" /><Stat label="方案采纳率" value={`${adoptRate}%`} detail={`${stats.acceptedPlans} / ${stats.totalPlans} 个方案`} tone="sun" /></div><div className="mt-6 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">TOP PLACES</p><h2 className="mt-2 font-display text-xl font-bold">热门地点</h2></div><span className="text-xs text-ink-soft">按行程节点统计</span></div><div className="mt-7 space-y-5">{stats.topPlaces.length === 0 ? <p className="text-sm text-ink-soft">还没有行程节点数据。</p> : stats.topPlaces.map((bar) => <div key={bar.label} className="flex items-center gap-4"><span className="w-24 truncate text-sm font-semibold text-ink">{bar.label}</span><div className="h-3 flex-1 rounded-full bg-paper"><div className="h-full rounded-full bg-coral" style={{ width: `${(bar.count / maxPlace) * 100}%` }} /></div><span className="font-mono text-xs text-ink-soft">{bar.count}</span></div>)}</div></Card><Card className="p-6"><p className="eyebrow">BUDGET DISTRIBUTION</p><h2 className="mt-2 font-display text-xl font-bold">预算分布</h2><div className="mx-auto mt-7 grid h-44 w-44 place-items-center rounded-full" style={{ background: `conic-gradient(${gradientStops})` }}><div className="grid h-28 w-28 place-items-center rounded-full bg-white text-center"><p className="font-display text-2xl font-bold">¥{stats.totalBudget.toLocaleString()}</p><p className="text-[10px] text-ink-soft">总计划预算</p></div></div><div className="mt-5 flex flex-wrap justify-center gap-3 text-xs text-ink-soft">{stats.budgetBuckets.map((bucket, index) => <span key={bucket.label}><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: bucketColors[index % bucketColors.length] }} />{bucket.label} · {bucket.count}</span>)}</div></Card></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><div><p className="eyebrow">EVENT SOURCES</p><h2 className="mt-2 font-display text-xl font-bold">事件源</h2></div><Link to="/events"><Button variant="ghost">管理事件源</Button></Link></div><div className="mt-5 grid gap-3 md:grid-cols-2"><div className="rounded-xl bg-mint/10 p-4"><p className="text-sm font-semibold text-emerald-800">天气服务</p><p className="mt-2 text-xs text-emerald-700/70">可在事件监测页手动拉取各行程的天气事件</p></div><div className="rounded-xl bg-sky/10 p-4"><p className="text-sm font-semibold text-blue-800">模拟事件</p><p className="mt-2 text-xs text-blue-700/70">可在事件监测页注入演练事件，验证重规划链路</p></div></div></Card></>;
 }
 
 export function RouteMapPage() {
@@ -1277,7 +1343,7 @@ export function RouteMapPage() {
   });
   const totalDistance = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").distance, 0);
   const totalMinutes = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").minutes, 0);
-  return <><PageHeader eyebrow="TRIP · TODAY'S LEGS" title={trip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段 · 估算距离（降级）`} action={<Button>重新规划路线</Button>} /><section className="relative mb-6 overflow-hidden rounded-card bg-gradient-to-br from-ink via-[#1d4e83] to-sky p-6 text-white shadow-soft md:p-8"><div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border-[38px] border-white/10" /><div className="absolute inset-0 opacity-30"><svg className="h-full w-full" viewBox="0 0 900 260" preserveAspectRatio="none"><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="9 12" className="animate-route" /><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#fff" strokeWidth="1" strokeDasharray="2 16" /></svg></div><div className="relative max-w-xl"><p className="font-mono text-[10px] tracking-[0.24em] text-coral">BOARDING PASS / ROUTE MAP</p><h2 className="mt-4 font-display text-3xl font-bold md:text-4xl">一段一段，飞向下一站。</h2><div className="mt-7 flex flex-wrap gap-3 text-xs text-white/70"><span className="rounded-full bg-white/10 px-3 py-2">出发 SH</span><span className="rounded-full bg-white/10 px-3 py-2">抵达 {getPlaceDetail(nodes[nodes.length - 1].placeName, nodes[nodes.length - 1].nodeType).code ?? "WP" + nodes[nodes.length - 1].sequenceOrder}</span><span className="rounded-full bg-white/10 px-3 py-2">共 {segments.length} 个航段</span></div></div></section><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id] ?? "DRIVE"} onModeChange={(mode) => setModes({ ...modes, [segment.from.id]: mode })} onPlaceClick={(node) => setSelectedNode(node)} />)}</div><div className="relative mt-6 overflow-hidden rounded-card border border-slate-100 bg-[#eaf5fb] p-5"><svg className="h-40 w-full" viewBox="0 0 800 180" preserveAspectRatio="none" aria-hidden="true"><circle cx="104" cy="112" r="4" fill="#2F9BFF" /><circle cx="390" cy="54" r="5" fill="#17C3A2" /><circle cx="686" cy="115" r="4" fill="#FF5B4C" /><path d="M104 112 C 220 10, 300 150, 390 54 S 580 12, 686 115" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="8 10" className="animate-route" /></svg><p className="text-center text-xs text-ink-soft">路线图使用节点坐标进行估算，未接入外部地图服务时仍可继续规划。</p></div>{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}</>;
+  return <><PageHeader eyebrow="TRIP · TODAY'S LEGS" title={trip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段 · 估算距离（降级）`} action={<Link to="/plans"><Button>重新规划路线</Button></Link>} /><section className="relative mb-6 overflow-hidden rounded-card bg-gradient-to-br from-ink via-[#1d4e83] to-sky p-6 text-white shadow-soft md:p-8"><div className="absolute -right-20 -top-28 h-72 w-72 rounded-full border-[38px] border-white/10" /><div className="absolute inset-0 opacity-30"><svg className="h-full w-full" viewBox="0 0 900 260" preserveAspectRatio="none"><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="9 12" className="animate-route" /><path d="M-20 220C140 120 190 250 340 150S630 65 920 118" fill="none" stroke="#fff" strokeWidth="1" strokeDasharray="2 16" /></svg></div><div className="relative max-w-xl"><p className="font-mono text-[10px] tracking-[0.24em] text-coral">BOARDING PASS / ROUTE MAP</p><h2 className="mt-4 font-display text-3xl font-bold md:text-4xl">一段一段，飞向下一站。</h2><div className="mt-7 flex flex-wrap gap-3 text-xs text-white/70"><span className="rounded-full bg-white/10 px-3 py-2">出发 SH</span><span className="rounded-full bg-white/10 px-3 py-2">抵达 {getPlaceDetail(nodes[nodes.length - 1].placeName, nodes[nodes.length - 1].nodeType).code ?? "WP" + nodes[nodes.length - 1].sequenceOrder}</span><span className="rounded-full bg-white/10 px-3 py-2">共 {segments.length} 个航段</span></div></div></section><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id] ?? "DRIVE"} onModeChange={(mode) => setModes({ ...modes, [segment.from.id]: mode })} onPlaceClick={(node) => setSelectedNode(node)} />)}</div><div className="relative mt-6 overflow-hidden rounded-card border border-slate-100 bg-[#eaf5fb] p-5"><svg className="h-40 w-full" viewBox="0 0 800 180" preserveAspectRatio="none" aria-hidden="true"><circle cx="104" cy="112" r="4" fill="#2F9BFF" /><circle cx="390" cy="54" r="5" fill="#17C3A2" /><circle cx="686" cy="115" r="4" fill="#FF5B4C" /><path d="M104 112 C 220 10, 300 150, 390 54 S 580 12, 686 115" fill="none" stroke="#FF5B4C" strokeWidth="3" strokeDasharray="8 10" className="animate-route" /></svg><p className="text-center text-xs text-ink-soft">路线图使用节点坐标进行估算，未接入外部地图服务时仍可继续规划。</p></div>{selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}</>;
 }
 
 type RouteModeType = "WALK" | "DRIVE" | "TRANSIT";
@@ -1310,13 +1376,62 @@ function formatLegTime(value: string) {
   return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+const EXPENSE_CATEGORIES = ["餐饮", "住宿", "交通", "门票", "购物", "其他"];
+
 export function BudgetPage() {
-  const expenses = [{ label: "住宿 · 外滩茂悦", amount: 760 }, { label: "餐饮 · 老吉士", amount: 168 }, { label: "交通 · 高铁", amount: 332 }];
-  return <><PageHeader eyebrow="BUDGET & EXPENSES" title="预算与费用" description="预算不是一条紧绷的线，而是让团队知道什么时候该留一点余地。" action={<Button>记录一笔费用</Button>} /><div className="grid gap-5 md:grid-cols-3"><Stat label="总预算" value="¥2,400" detail="成员最低预算上限" tone="coral" /><Stat label="已用金额" value="¥1,260" detail="52.5% 已使用" tone="mint" /><Stat label="剩余预算" value="¥1,140" detail="预计足够覆盖替代方案" tone="sky" /></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><h2 className="font-display text-xl font-bold">费用明细</h2><Badge tone="mint">未超支</Badge></div><div className="mt-5 divide-y divide-slate-100">{expenses.map((item) => <div key={item.label} className="flex justify-between py-4 text-sm"><span className="text-ink-soft">{item.label}</span><span className="font-mono font-bold">¥{item.amount}</span></div>)}</div></Card></>;
+  const queryClient = useQueryClient();
+  const { toast, show } = useToast();
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const trip = dashboardQuery.data?.activeTrip;
+  const tripId = trip?.id;
+  const expensesQuery = useQuery({ queryKey: ["expenses", tripId], queryFn: () => api.expenses(tripId as number), enabled: tripId !== undefined });
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
+  const addMutation = useMutation({
+    mutationFn: () => api.addExpense(tripId as number, { label: label.trim(), category, amount: Number(amount) }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["expenses", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["settlement", tripId] });
+      setLabel(""); setAmount(""); setOpen(false); show("费用已记录");
+    },
+    onError: (mutationError) => setError(mutationError instanceof Error ? mutationError.message : "记录失败，请稍后再试"),
+  });
+  if (dashboardQuery.isLoading) return <LoadingState label="正在加载预算…" />;
+  if (dashboardQuery.isError) return <ErrorState onRetry={() => void dashboardQuery.refetch()} />;
+  if (!trip) return <EmptyState title="还没有行程" message="先创建一段行程，再记录费用。" />;
+  const expenses = expensesQuery.data ?? [];
+  const totalBudget = trip.totalBudget ?? 0;
+  const spent = expenses.reduce((sum, item) => sum + item.amount, 0);
+  const percent = totalBudget > 0 ? Math.round((spent / totalBudget) * 100) : 0;
+  const submit = () => {
+    setError("");
+    if (!label.trim() || !Number.isFinite(Number(amount)) || Number(amount) <= 0) { setError("请填写费用名称和有效金额。"); return; }
+    addMutation.mutate();
+  };
+  return <><PageHeader eyebrow="BUDGET & EXPENSES" title={`预算与费用 · ${trip.title ?? ""}`} description="预算不是一条紧绷的线，而是让团队知道什么时候该留一点余地。" action={<Button onClick={() => setOpen(true)}>记录一笔费用</Button>} /><div className="grid gap-5 md:grid-cols-3"><Stat label="总预算" value={`¥${totalBudget.toLocaleString()}`} detail="行程总预算" tone="coral" /><Stat label="已用金额" value={`¥${spent.toLocaleString()}`} detail={totalBudget > 0 ? `${percent}% 已使用` : "尚未设置预算"} tone="mint" /><Stat label="剩余预算" value={`¥${Math.max(0, totalBudget - spent).toLocaleString()}`} detail={spent > totalBudget && totalBudget > 0 ? "已超支" : "仍在预算内"} tone="sky" /></div><Card className="mt-5 p-6"><div className="flex items-center justify-between"><h2 className="font-display text-xl font-bold">费用明细</h2><Badge tone={spent > totalBudget && totalBudget > 0 ? "coral" : "mint"}>{spent > totalBudget && totalBudget > 0 ? "已超支" : "未超支"}</Badge></div><div className="mt-5 divide-y divide-slate-100">{expensesQuery.isLoading ? <p className="py-4 text-sm text-ink-soft">正在读取费用…</p> : expenses.length === 0 ? <p className="py-4 text-sm text-ink-soft">还没有费用记录，点右上角「记录一笔费用」开始。</p> : expenses.map((item) => <div key={item.id} className="flex justify-between py-4 text-sm"><span className="text-ink-soft">{item.category} · {item.label}<span className="ml-2 text-xs">by {item.payerName}</span></span><span className="font-mono font-bold">¥{item.amount.toLocaleString()}</span></div>)}</div></Card>
+  <Modal open={open} title="记录一笔费用" onClose={() => setOpen(false)}><div className="space-y-4">
+    <label className="block text-sm font-semibold">费用名称<Input className="mt-2" value={label} onChange={(event) => setLabel(event.target.value)} placeholder="例如：外滩茂悦一晚" /></label>
+    <label className="block text-sm font-semibold">类别<select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm">{EXPENSE_CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+    <label className="block text-sm font-semibold">金额 (¥)<Input className="mt-2" type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+    {error && <p className="text-sm text-coral-deep" role="alert">{error}</p>}
+    <Button className="w-full" disabled={addMutation.isPending} onClick={submit}>{addMutation.isPending ? "保存中…" : "保存费用"}</Button>
+  </div></Modal>{toast}</>;
 }
 
 export function SettlementPage() {
-  return <><PageHeader eyebrow="AA SETTLEMENT" title="分账与结算" description="共同消费按人平分，尽量用最少的转账次数结清。" action={<Button>录入共同消费</Button>} /><div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]"><Card className="p-6"><p className="eyebrow">WHO PAYS WHO</p><h2 className="mt-2 font-display text-xl font-bold">建议结算</h2><div className="mt-6 space-y-3"><SettlementRow from="周知远" to="林小满" amount="¥316" /><SettlementRow from="陈一禾" to="林小满" amount="¥84" /><SettlementRow from="许桃" to="周知远" amount="¥42" /></div></Card><Card className="p-6"><p className="eyebrow">TRIP SHARES</p><h2 className="mt-2 font-display text-xl font-bold">成员账单</h2><div className="mt-6 space-y-4"><div className="flex justify-between text-sm"><span>林小满</span><span className="font-mono">¥420 · 已垫付</span></div><div className="flex justify-between text-sm"><span>周知远</span><span className="font-mono">¥330</span></div><div className="flex justify-between text-sm"><span>许桃</span><span className="font-mono">¥255</span></div><div className="flex justify-between text-sm"><span>陈一禾</span><span className="font-mono">¥255</span></div></div></Card></div></>;
+  const navigate = useNavigate();
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const settlementQuery = useQuery({ queryKey: ["settlement", tripId], queryFn: () => api.settlement(tripId as number), enabled: tripId !== undefined });
+  if (dashboardQuery.isLoading || settlementQuery.isLoading) return <LoadingState label="正在计算分账…" />;
+  if (dashboardQuery.isError || settlementQuery.isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void settlementQuery.refetch(); }} />;
+  if (!tripId) return <EmptyState title="还没有行程" message="先创建一段行程，再进行分账结算。" />;
+  const settlement = settlementQuery.data;
+  if (!settlement) return <EmptyState title="暂无结算数据" message="先在预算页记录几笔共同消费。" />;
+  return <><PageHeader eyebrow="AA SETTLEMENT" title="分账与结算" description="共同消费按人平分，尽量用最少的转账次数结清。" action={<Button onClick={() => navigate("/budget")}>录入共同消费</Button>} /><div className="grid gap-5 md:grid-cols-2"><Stat label="共同消费总额" value={`¥${settlement.total.toLocaleString()}`} detail={`${settlement.members.length} 位成员参与平摊`} tone="coral" /><Stat label="人均应摊" value={`¥${settlement.perPerson.toLocaleString()}`} detail="按成员人数平均" tone="mint" /></div><div className="mt-5 grid gap-5 lg:grid-cols-[1fr_0.8fr]"><Card className="p-6"><p className="eyebrow">WHO PAYS WHO</p><h2 className="mt-2 font-display text-xl font-bold">建议结算</h2><div className="mt-6 space-y-3">{settlement.transfers.length === 0 ? <p className="text-sm text-ink-soft">目前不需要任何转账——大家已经结清或还没有共同消费。</p> : settlement.transfers.map((transfer) => <SettlementRow key={`${transfer.fromId}-${transfer.toId}`} from={transfer.fromName} to={transfer.toName} amount={`¥${transfer.amount.toLocaleString()}`} />)}</div></Card><Card className="p-6"><p className="eyebrow">TRIP SHARES</p><h2 className="mt-2 font-display text-xl font-bold">成员账单</h2><div className="mt-6 space-y-4">{settlement.members.map((member) => <div key={member.userId} className="flex justify-between text-sm"><span>{member.name}</span><span className="font-mono">¥{member.paid.toLocaleString()} 已垫付 · {member.balance >= 0 ? `应收 ¥${member.balance.toLocaleString()}` : `应付 ¥${Math.abs(member.balance).toLocaleString()}`}</span></div>)}</div></Card></div></>;
 }
 
 function SettlementRow({ from, to, amount }: { from: string; to: string; amount: string }) {

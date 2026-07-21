@@ -185,6 +185,7 @@ export interface TravelGuide {
   tags: string[];
   author: User;
   saves: number;
+  savedBy?: Id[];
   description: string;
 }
 
@@ -196,6 +197,35 @@ export interface DiscussionPost {
   createdAt: string;
   likes: number;
   likedByMe: boolean;
+}
+
+export interface TripExpenseItem {
+  id: Id;
+  label: string;
+  category: string;
+  amount: number;
+  payerId: Id;
+  payerName: string;
+  createdAt: string;
+}
+
+export interface TripSettlement {
+  total: number;
+  perPerson: number;
+  members: { userId: Id; name: string; paid: number; balance: number }[];
+  transfers: { fromId: Id; fromName: string; toId: Id; toName: string; amount: number }[];
+}
+
+export interface AdminStats {
+  totalTrips: number;
+  budgetMedian: number;
+  totalBudget: number;
+  totalEvents: number;
+  hitEvents: number;
+  totalPlans: number;
+  acceptedPlans: number;
+  topPlaces: { label: string; count: number }[];
+  budgetBuckets: { label: string; count: number }[];
 }
 
 export interface NotificationItem {

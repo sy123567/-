@@ -34,6 +34,11 @@ public class GuideController {
     return s.get(id);
   }
 
+  @PostMapping("/{id}/save")
+  public TravelGuide toggleSave(@PathVariable Long id, Authentication authentication) {
+    return s.toggleSave(id, (User) authentication.getPrincipal());
+  }
+
   @PostMapping
   public ResponseEntity<TravelGuide> create(
       @RequestBody TravelGuide payload, Authentication authentication) {

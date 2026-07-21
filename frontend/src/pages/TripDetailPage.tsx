@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { ArrowLeft, CalendarDays, Car, Check, CircleDollarSign, Footprints, Map as MapIcon, MoreHorizontal, Pencil, Share2, Trash2, Users, X } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Badge, Button, Card, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
@@ -17,11 +17,15 @@ function draftFromNode(node: ItineraryNode): NodeDraft {
 
 export function TripDetailPage() {
   const { id = "1" } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [shareFeedback, setShareFeedback] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
   const [draft, setDraft] = useState<NodeDraft | null>(null);
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
   const tripQuery = useQuery({ queryKey: ["trip", id], queryFn: () => api.trip(Number(id)) });
+  const expensesQuery = useQuery({ queryKey: ["expenses", Number(id)], queryFn: () => api.expenses(Number(id)), enabled: Boolean(id) });
   const impactsQuery = useQuery({ queryKey: ["impacts", id], queryFn: () => api.impacts(Number(id)), enabled: Boolean(id) });
   const itineraryNodes = useMemo(
     () => [...(tripQuery.data?.itineraryNodes ?? [])].sort((left, right) => left.sequenceOrder - right.sequenceOrder),
@@ -63,7 +67,7 @@ export function TripDetailPage() {
   const trip = tripQuery.data;
   if (!trip) return <EmptyState title="找不到这段行程" message="它可能已被删除，或者你还没有加入对应的小组。" />;
   const totalBudget = trip.totalBudget ?? 0;
-  const spentBudget = trip.spentBudget ?? 0;
+  const spentBudget = (expensesQuery.data ?? []).reduce((sum, item) => sum + item.amount, 0);
   const spendPercent = totalBudget > 0 ? Math.min(100, Math.round((spentBudget / totalBudget) * 100)) : 0;
   const eventsByNode = (impactsQuery.data ?? []).reduce<Record<number, ExternalEvent[]>>((map, impact) => {
     if (impact.affectedNode?.id && impact.event) map[impact.affectedNode.id] = [...(map[impact.affectedNode.id] ?? []), impact.event];
@@ -74,9 +78,20 @@ export function TripDetailPage() {
   const cancelEditing = () => { setEditingNodeId(null); setDraft(null); updateNodeMutation.reset(); deleteNodeMutation.reset(); };
   const saveEditing = (event: FormEvent) => { event.preventDefault(); if (editingNodeId !== null && draft) updateNodeMutation.mutate({ nodeId: editingNodeId, payload: draft }); };
   const editingError = updateNodeMutation.error ?? deleteNodeMutation.error;
+  const shareTrip = async () => {
+    const shareText = `【${trip.title ?? "未命名行程"}】${window.location.origin}/trips/${trip.id}${trip.roomCode ? ` · 房间码 ${trip.roomCode}` : ""}`;
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setShareFeedback("链接已复制，发给同伴吧");
+    } catch {
+      setShareFeedback(shareText);
+    }
+    window.setTimeout(() => setShareFeedback(""), 3000);
+  };
   return <>
     <div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/" className="flex items-center gap-2 transition hover:text-ink motion-reduce:transition-none"><ArrowLeft size={16} />返回首页</Link><span>/</span><span className="text-ink">{trip.title ?? "未命名行程"}</span></div>
-    <PageHeader eyebrow="TRIP · LIVE ROUTE" title={trip.title ?? "未命名行程"} description="每个节点都在和现实保持同步。出现变化时，团队会一起决定下一步。" action={<div className="flex gap-2"><Link to={`/trips/${trip.id}/changelog`}><Button variant="ghost">变更记录</Button></Link><Button variant="ghost" className="flex items-center gap-2"><Share2 size={16} />分享</Button><Button variant="secondary" className="p-3" aria-label="更多操作"><MoreHorizontal size={18} /></Button></div>} />
+    <PageHeader eyebrow="TRIP · LIVE ROUTE" title={trip.title ?? "未命名行程"} description="每个节点都在和现实保持同步。出现变化时，团队会一起决定下一步。" action={<div className="flex gap-2"><Link to={`/trips/${trip.id}/changelog`}><Button variant="ghost">变更记录</Button></Link><Button variant="ghost" className="flex items-center gap-2" onClick={() => void shareTrip()}><Share2 size={16} />分享</Button><div className="relative"><Button variant="secondary" className="p-3" aria-label="更多操作" onClick={() => setMenuOpen((current) => !current)}><MoreHorizontal size={18} /></Button>{menuOpen && <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-soft">{[{ label: "行程讨论区", to: "/discussions" }, { label: "预算与费用", to: "/budget" }, { label: "分账与结算", to: "/settlement" }, { label: "替代方案", to: "/plans" }].map((item) => <button key={item.to} type="button" onClick={() => { setMenuOpen(false); navigate(item.to); }} className="block w-full px-4 py-3 text-left text-sm text-ink-soft transition hover:bg-paper hover:text-ink">{item.label}</button>)}</div>}</div></div>} />
+    {shareFeedback && <div className="mb-4 rounded-xl bg-mint/10 px-4 py-3 text-sm text-emerald-700" role="status">{shareFeedback}</div>}
     <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div>
       <TripMapCard
         nodes={overviewNodes}
