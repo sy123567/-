@@ -8,11 +8,15 @@ import type {
   GroupMember,
   ImpactAssessment,
   ItineraryNode,
+  MemberConstraint,
   NodeNote,
+  PlanVote,
   TravelGuide,
   TravelGroup,
   Trip,
 } from "../types";
+
+export type VoteChoice = "APPROVE" | "REJECT" | "ABSTAIN";
 
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 
@@ -424,6 +428,39 @@ export const api = {
   },
   async risk(tripId: number): Promise<TripRisk> {
     return request<TripRisk>(`/api/trips/${tripId}/risk`);
+  },
+  async assess(tripId: number): Promise<ImpactAssessment[]> {
+    return request<ImpactAssessment[]>(`/api/trips/${tripId}/assess`, { method: "POST" });
+  },
+  async replan(tripId: number): Promise<AlternativePlan[]> {
+    return request<AlternativePlan[]>(`/api/trips/${tripId}/replan`, { method: "POST" });
+  },
+  async startVoting(planId: number): Promise<AlternativePlan> {
+    return request<AlternativePlan>(`/api/plans/${planId}/start-voting`, { method: "POST" });
+  },
+  async submitVote(planId: number, memberId: number, choice: VoteChoice, comment?: string): Promise<PlanVote> {
+    return request<PlanVote>(`/api/plans/${planId}/votes`, {
+      method: "POST",
+      body: JSON.stringify({ memberId, choice, comment }),
+    });
+  },
+  async planVotes(planId: number): Promise<PlanVote[]> {
+    return request<PlanVote[]>(`/api/plans/${planId}/votes`);
+  },
+  async tally(planId: number): Promise<Trip> {
+    return request<Trip>(`/api/plans/${planId}/tally`, { method: "POST" });
+  },
+  async saveConstraint(groupId: number, memberId: number, constraint: MemberConstraint): Promise<GroupMember> {
+    return request<GroupMember>(`/api/groups/${groupId}/members/${memberId}/constraint`, {
+      method: "PUT",
+      body: JSON.stringify(constraint),
+    });
+  },
+  async triggerMockEvent(tripId: number): Promise<ExternalEvent[]> {
+    return request<ExternalEvent[]>(`/api/trips/${tripId}/events/mock`, { method: "POST" });
+  },
+  async triggerWeatherEvents(tripId: number): Promise<ExternalEvent[]> {
+    return request<ExternalEvent[]>(`/api/trips/${tripId}/events/weather`, { method: "POST" });
   },
   async removeMember(groupId: number, memberId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });

@@ -288,7 +288,26 @@ public class ReplanningService {
             .flatMap(c -> c.getMustVisitPlaces().stream())
             .distinct()
             .toList();
-    return new ReplanConstraints(budgetCap, mustVisit);
+    // 团队体力取最弱者（LOW 优先），保证替代地点对所有人可达。
+    Enums.FitnessLevel fitness =
+        memberConstraints.stream()
+            .map(MemberConstraint::getFitnessLevel)
+            .filter(Objects::nonNull)
+            .min(Comparator.comparingInt(Enum::ordinal))
+            .orElse(null);
+    List<String> dietary =
+        memberConstraints.stream()
+            .filter(c -> c.getDietaryNeeds() != null)
+            .flatMap(c -> c.getDietaryNeeds().stream())
+            .distinct()
+            .toList();
+    List<String> accessibility =
+        memberConstraints.stream()
+            .filter(c -> c.getAccessibilityNeeds() != null)
+            .flatMap(c -> c.getAccessibilityNeeds().stream())
+            .distinct()
+            .toList();
+    return new ReplanConstraints(budgetCap, mustVisit, fitness, dietary, accessibility);
   }
 
   @Transactional

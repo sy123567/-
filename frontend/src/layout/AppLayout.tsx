@@ -1,7 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Bell, Compass, LayoutDashboard, Menu, Search, Settings, Users, X } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
-import { getCurrentUser } from "../auth";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCurrentUser, getToken } from "../auth";
+import { api } from "../api/client";
+import { useTripRealtime, type TripEvent } from "../api/realtime";
 
 const groups = [
   { label: "社交", items: [{ label: "我的小组", to: "/groups", icon: Users }, { label: "好友与邀请", to: "/friends", icon: Users }] },
@@ -18,7 +21,32 @@ function WalletIcon() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <div className="min-h-screen bg-paper"><Sidebar open={open} onClose={() => setOpen(false)} /><div className="lg:pl-[248px]"><TopBar onMenu={() => setOpen(true)} /><main className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10">{children}</main></div></div>;
+  return <div className="min-h-screen bg-paper"><RealtimeBridge /><Sidebar open={open} onClose={() => setOpen(false)} /><div className="lg:pl-[248px]"><TopBar onMenu={() => setOpen(true)} /><main className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10">{children}</main></div></div>;
+}
+
+/**
+ * 全局实时桥：订阅当前活动行程的 WebSocket 事件，收到方案生成/通过/否决时
+ * 让相关 React Query 缓存失效并自动刷新对应页面。
+ */
+function RealtimeBridge() {
+  const queryClient = useQueryClient();
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard, enabled: !!getToken() });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const onEvent = useCallback(
+    (event: TripEvent) => {
+      void queryClient.invalidateQueries({ queryKey: ["plans", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["risk", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["changelogs", tripId] });
+      if (event.type === "plan-accepted" || event.type === "plan-rejected") {
+        void queryClient.invalidateQueries({ queryKey: ["plan-votes"] });
+      }
+    },
+    [queryClient, tripId],
+  );
+  useTripRealtime(tripId, onEvent);
+  return null;
 }
 
 function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {

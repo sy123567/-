@@ -2,15 +2,15 @@ import { useState } from "react";
 import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type AiPlace, type MapPlace, type WeatherPreview } from "../api/client";
-import { groupMembers, guides } from "../mocks/data";
+import { api, type AiPlace, type MapPlace, type VoteChoice, type WeatherPreview } from "../api/client";
+import { guides } from "../mocks/data";
 import { getCitySuggestions, getPlaceDetail, getPlaceImage, suggestPlaces, type SuggestedPlace } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
 import { ImageFallback, Modal, Toast } from "../components/pass2";
 import { EmptyState, ErrorState, LoadingState } from "../components/AsyncState";
 import { PlaceDetailSheet } from "../components/PlaceDetailSheet";
 import { getCurrentUser, signOut, updateCurrentUser } from "../auth";
-import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, NodeType, Severity, Trip } from "../types";
+import type { EventType, ExternalEvent, ImpactAssessment, ItineraryNode, MemberConstraint, NodeType, Severity, Trip } from "../types";
 
 function useToast() {
   const [message, setMessage] = useState("");
@@ -133,12 +133,29 @@ export function GroupDetailPage() {
 }
 
 export function ConstraintPage() {
-  const { id = "1" } = useParams();
-  const member = groupMembers.find((item) => item.id === Number(id)) ?? groupMembers[0];
-  const [places, setPlaces] = useState(member.constraint.mustVisitPlaces);
-  const [newPlace, setNewPlace] = useState("");
+  const { id = "", memberId = "" } = useParams();
+  const groupId = Number(id);
+  const memberIdNum = Number(memberId);
+  const queryClient = useQueryClient();
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow={`CONSTRAINTS / ${member.user.name}`} title="成员约束" description="约束不是限制，而是让每个人都能放心上车的底线。" action={<Button onClick={() => show("成员约束已保存")}>保存修改</Button>} /><div className="grid gap-5 lg:grid-cols-2"><Card className="p-6"><h2 className="font-display text-xl font-bold">可用时间与预算</h2><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-ink">最早可出发<input type="date" defaultValue={member.constraint.availableFrom} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><label className="text-sm font-semibold text-ink">最晚可返回<input type="date" defaultValue={member.constraint.availableTo} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label></div><label className="mt-5 block text-sm font-semibold text-ink">人均预算上限<input type="number" defaultValue={member.constraint.maxBudget} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><label className="mt-5 block text-sm font-semibold text-ink">体力水平<select defaultValue={member.constraint.fitnessLevel} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option>LOW</option><option>MEDIUM</option><option>HIGH</option></select></label></Card><Card className="p-6"><h2 className="font-display text-xl font-bold">想去与需要避开的事</h2><p className="mt-2 text-sm text-ink-soft">这些地点会优先进入初始计划，饮食和无障碍需求会影响路线筛选。</p><div className="mt-5 flex flex-wrap gap-2">{places.map((place) => <button key={place} onClick={() => setPlaces(places.filter((item) => item !== place))} className="rounded-full bg-coral/10 px-3 py-2 text-xs font-semibold text-coral-deep">#{place} ×</button>)}</div><div className="mt-4 flex gap-2"><Input value={newPlace} onChange={(event) => setNewPlace(event.target.value)} placeholder="添加必访地点" /><Button variant="secondary" onClick={() => { if (newPlace) { setPlaces([...places, newPlace]); setNewPlace(""); } }}>添加</Button></div><div className="mt-7 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">饮食需求<textarea defaultValue={member.constraint.dietaryNeeds.join("、")} className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm" placeholder="例如：不吃辣、素食" /></label><label className="text-sm font-semibold">无障碍需求<textarea defaultValue={member.constraint.accessibilityNeeds.join("、")} className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm" placeholder="例如：少走楼梯" /></label></div></Card></div>{toast}</>;
+  const membersQuery = useQuery({ queryKey: ["members", groupId], queryFn: () => api.members(groupId), enabled: !Number.isNaN(groupId) });
+  const member = (membersQuery.data ?? []).find((item) => item.id === memberIdNum);
+  const [form, setForm] = useState<MemberConstraint | null>(null);
+  const [newPlace, setNewPlace] = useState("");
+  const [newDiet, setNewDiet] = useState("");
+  const [newAccess, setNewAccess] = useState("");
+  const current: MemberConstraint | null = form ?? member?.constraint ?? null;
+  const patch = (partial: Partial<MemberConstraint>) => setForm({ ...(current as MemberConstraint), ...partial });
+  const save = useMutation({
+    mutationFn: () => api.saveConstraint(groupId, memberIdNum, current as MemberConstraint),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["members", groupId] }); setForm(null); show("成员约束已保存"); },
+    onError: (error) => show(error instanceof Error ? error.message : "保存失败"),
+  });
+  if (membersQuery.isLoading) return <LoadingState label="正在读取成员约束…" />;
+  if (membersQuery.isError) return <ErrorState message="无法读取成员约束" onRetry={() => void membersQuery.refetch()} />;
+  if (!member || !current) return <EmptyState title="未找到成员" message="该成员可能已被移除，请返回小组重试。" />;
+  const chip = (text: string, onRemove: () => void, key: string) => <button key={key} onClick={onRemove} className="rounded-full bg-coral/10 px-3 py-2 text-xs font-semibold text-coral-deep">#{text} ×</button>;
+  return <><PageHeader eyebrow={`CONSTRAINTS / ${member.user.name}`} title="成员约束" description="约束不是限制，而是让每个人都能放心上车的底线。" action={<Button disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? "保存中…" : "保存修改"}</Button>} /><div className="grid gap-5 lg:grid-cols-2"><Card className="p-6"><h2 className="font-display text-xl font-bold">可用时间与预算</h2><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold text-ink">最早可出发<input type="date" value={current.availableFrom ?? ""} onChange={(event) => patch({ availableFrom: event.target.value })} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><label className="text-sm font-semibold text-ink">最晚可返回<input type="date" value={current.availableTo ?? ""} onChange={(event) => patch({ availableTo: event.target.value })} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label></div><label className="mt-5 block text-sm font-semibold text-ink">人均预算上限<input type="number" value={current.maxBudget ?? 0} onChange={(event) => patch({ maxBudget: Number(event.target.value) })} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><label className="mt-5 block text-sm font-semibold text-ink">体力水平<select value={current.fitnessLevel} onChange={(event) => patch({ fitnessLevel: event.target.value as MemberConstraint["fitnessLevel"] })} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="LOW">LOW</option><option value="MEDIUM">MEDIUM</option><option value="HIGH">HIGH</option></select></label></Card><Card className="p-6"><h2 className="font-display text-xl font-bold">想去与需要避开的事</h2><p className="mt-2 text-sm text-ink-soft">必访地点优先进入计划；饮食与无障碍需求会作为重规划筛选依据。</p><p className="mt-5 text-xs font-semibold text-ink-soft">必访地点</p><div className="mt-2 flex flex-wrap gap-2">{current.mustVisitPlaces.map((place) => chip(place, () => patch({ mustVisitPlaces: current.mustVisitPlaces.filter((item) => item !== place) }), `p-${place}`))}</div><div className="mt-3 flex gap-2"><Input value={newPlace} onChange={(event) => setNewPlace(event.target.value)} placeholder="添加必访地点" /><Button variant="ghost" onClick={() => { if (newPlace.trim() && !current.mustVisitPlaces.includes(newPlace.trim())) { patch({ mustVisitPlaces: [...current.mustVisitPlaces, newPlace.trim()] }); setNewPlace(""); } }}>添加</Button></div><p className="mt-5 text-xs font-semibold text-ink-soft">饮食需求（如 素食 / 清真）</p><div className="mt-2 flex flex-wrap gap-2">{current.dietaryNeeds.map((diet) => chip(diet, () => patch({ dietaryNeeds: current.dietaryNeeds.filter((item) => item !== diet) }), `d-${diet}`))}</div><div className="mt-3 flex gap-2"><Input value={newDiet} onChange={(event) => setNewDiet(event.target.value)} placeholder="添加饮食需求" /><Button variant="ghost" onClick={() => { if (newDiet.trim() && !current.dietaryNeeds.includes(newDiet.trim())) { patch({ dietaryNeeds: [...current.dietaryNeeds, newDiet.trim()] }); setNewDiet(""); } }}>添加</Button></div><p className="mt-5 text-xs font-semibold text-ink-soft">无障碍需求（如 轮椅 / 电梯）</p><div className="mt-2 flex flex-wrap gap-2">{current.accessibilityNeeds.map((access) => chip(access, () => patch({ accessibilityNeeds: current.accessibilityNeeds.filter((item) => item !== access) }), `a-${access}`))}</div><div className="mt-3 flex gap-2"><Input value={newAccess} onChange={(event) => setNewAccess(event.target.value)} placeholder="添加无障碍需求" /><Button variant="ghost" onClick={() => { if (newAccess.trim() && !current.accessibilityNeeds.includes(newAccess.trim())) { patch({ accessibilityNeeds: [...current.accessibilityNeeds, newAccess.trim()] }); setNewAccess(""); } }}>添加</Button></div></Card></div>{toast}</>;
 }
 
 export function FriendsPage() {
@@ -850,6 +867,22 @@ export function EventsPage() {
   const [keyword, setKeyword] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   const { toast, show } = useToast();
+  const queryClient = useQueryClient();
+  const refreshMonitor = () => {
+    void queryClient.invalidateQueries({ queryKey: ["events", "mine"] });
+    void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
+    void queryClient.invalidateQueries({ queryKey: ["risk", tripId] });
+  };
+  const fetchWeather = useMutation({
+    mutationFn: () => api.triggerWeatherEvents(tripId as number),
+    onSuccess: () => { refreshMonitor(); show("已拉取当前行程的天气事件"); },
+    onError: (err) => show(err instanceof Error ? err.message : "拉取天气事件失败"),
+  });
+  const assess = useMutation({
+    mutationFn: () => api.assess(tripId as number),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] }); void queryClient.invalidateQueries({ queryKey: ["risk", tripId] }); show("已重新评估影响与风险"); },
+    onError: (err) => show(err instanceof Error ? err.message : "评估失败"),
+  });
   if (isLoading) return <LoadingState label="正在同步事件信号…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
   if (!data) return <EmptyState title="暂时没有事件数据" />;
@@ -888,7 +921,7 @@ export function EventsPage() {
   });
   return (
     <>
-      <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button>} />
+      <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={tripId === undefined || fetchWeather.isPending} onClick={() => fetchWeather.mutate()}>{fetchWeather.isPending ? "拉取中…" : "拉取天气事件"}</Button><Button variant="ghost" disabled={tripId === undefined || assess.isPending} onClick={() => assess.mutate()}>{assess.isPending ? "评估中…" : "评估影响"}</Button><Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button></div>} />
       <Card className="mb-6 p-4">
         <div className="flex flex-wrap items-center gap-2">
           {typeTabs.map((tab) => <button key={tab.value} type="button" onClick={() => setTypeFilter(tab.value)} className={`rounded-full px-4 py-2 text-xs font-semibold transition ${typeFilter === tab.value ? "bg-ink text-white shadow-sm" : "bg-paper text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{tab.label}</button>)}
@@ -951,17 +984,64 @@ export function PlansPage() {
   const [selectedId, setSelectedId] = useState<number>();
   const selected = plans.find((plan) => plan.id === selectedId) ?? plans[0];
   const { toast, show } = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const regenerate = useMutation({
+    mutationFn: () => api.replan(tripId as number),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["plans", tripId] }); show("已根据最新影响重新生成方案"); },
+    onError: (error) => show(error instanceof Error ? error.message : "重新生成失败"),
+  });
+  const startVoting = useMutation({
+    mutationFn: (planId: number) => api.startVoting(planId),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["plans", tripId] }); show("已发起投票，前往投票中心"); navigate("/votes"); },
+    onError: (error) => show(error instanceof Error ? error.message : "发起投票失败"),
+  });
   if (dashboardQuery.isLoading || plansQuery.isLoading) return <LoadingState label="正在读取替代方案…" />;
   if (dashboardQuery.isError || plansQuery.isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void plansQuery.refetch(); }} message={(dashboardQuery.error ?? plansQuery.error) instanceof Error ? (dashboardQuery.error ?? plansQuery.error)?.message : undefined} />;
-  if (!selected) return <EmptyState title="暂无替代方案" message="当行程受到事件影响并生成方案后，这里会显示可比较的选项。" />;
-  return <><PageHeader eyebrow="RECOVERY OPTIONS" title="替代方案" description="不同的取舍，没有绝对正确的答案。把成本、时间和改变程度放在一起比较。" action={<Button onClick={() => show("投票功能将在方案决策接口接入后开启")}>发起投票</Button>} /><div className="grid gap-5 xl:grid-cols-3">{plans.map((plan) => <button key={plan.id} onClick={() => setSelectedId(plan.id)} className={`card p-5 text-left transition hover:-translate-y-1 ${selected.id === plan.id ? "border-coral ring-2 ring-coral/20" : ""}`}><div className="flex items-center justify-between"><Badge tone={plan.status === "VOTING" ? "coral" : "neutral"}>{plan.status === "VOTING" ? "投票中" : plan.status}</Badge><span className="font-mono text-xs text-ink-soft">{plan.strategy.replace("MIN_", "")}</span></div><h2 className="mt-4 font-display text-lg font-bold text-ink">{plan.title}</h2><div className="mt-5 grid grid-cols-3 gap-2 border-y border-slate-100 py-4 text-center"><div><p className="font-mono text-lg font-bold text-ink">¥{plan.extraCost}</p><p className="text-[10px] text-ink-soft">额外成本</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.extraDelayMinutes}m</p><p className="text-[10px] text-ink-soft">额外延误</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.changedNodeCount}</p><p className="text-[10px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{plan.summary}</p><p className="mt-5 text-sm font-semibold text-sky">查看变更清单 →</p></button>)}</div><Card className="mt-6 p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">SELECTED PLAN</p><h2 className="mt-2 font-display text-xl font-bold">{selected.title}</h2></div><Badge tone="mint">可行</Badge></div><div className="mt-5 space-y-3">{selected.changes.map((change) => <div key={change.place} className="flex items-center gap-3 rounded-xl bg-paper p-4"><span className="rounded-lg bg-white p-2 text-coral"><SlidersHorizontal size={16} /></span><div><p className="text-sm font-semibold text-ink">{change.type === "RESCHEDULE" ? "调整时间" : change.type === "REPLACE" ? "替换节点" : "移除节点"} · {change.place}</p><p className="mt-1 text-xs text-ink-soft">{change.note}</p></div></div>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button onClick={() => show("投票功能将在方案决策接口接入后开启")}>选择并发起投票</Button><Link to="/votes"><Button variant="ghost">去投票中心</Button></Link></div></Card>{toast}</>;
+  if (!selected) return <><PageHeader eyebrow="RECOVERY OPTIONS" title="替代方案" description="不同的取舍，没有绝对正确的答案。" action={<Button disabled={tripId === undefined || regenerate.isPending} onClick={() => regenerate.mutate()}>{regenerate.isPending ? "生成中…" : "生成替代方案"}</Button>} /><EmptyState title="暂无替代方案" message="当行程受到事件影响后，点右上角“生成替代方案”即可生成可比较的选项。" />{toast}</>;
+  return <><PageHeader eyebrow="RECOVERY OPTIONS" title="替代方案" description="不同的取舍，没有绝对正确的答案。把成本、时间和改变程度放在一起比较。" action={<div className="flex gap-2"><Button variant="ghost" disabled={tripId === undefined || regenerate.isPending} onClick={() => regenerate.mutate()}>{regenerate.isPending ? "生成中…" : "重新生成"}</Button><Button disabled={!selected || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{startVoting.isPending ? "发起中…" : selected?.status === "VOTING" ? "投票进行中" : "发起投票"}</Button></div>} /><div className="grid gap-5 xl:grid-cols-3">{plans.map((plan) => <button key={plan.id} onClick={() => setSelectedId(plan.id)} className={`card p-5 text-left transition hover:-translate-y-1 ${selected.id === plan.id ? "border-coral ring-2 ring-coral/20" : ""}`}><div className="flex items-center justify-between"><Badge tone={plan.status === "VOTING" ? "coral" : "neutral"}>{plan.status === "VOTING" ? "投票中" : plan.status}</Badge><span className="font-mono text-xs text-ink-soft">{plan.strategy.replace("MIN_", "")}</span></div><h2 className="mt-4 font-display text-lg font-bold text-ink">{plan.title}</h2><div className="mt-5 grid grid-cols-3 gap-2 border-y border-slate-100 py-4 text-center"><div><p className="font-mono text-lg font-bold text-ink">¥{plan.extraCost}</p><p className="text-[10px] text-ink-soft">额外成本</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.extraDelayMinutes}m</p><p className="text-[10px] text-ink-soft">额外延误</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.changedNodeCount}</p><p className="text-[10px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{plan.summary}</p><p className="mt-5 text-sm font-semibold text-sky">查看变更清单 →</p></button>)}</div><Card className="mt-6 p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">SELECTED PLAN</p><h2 className="mt-2 font-display text-xl font-bold">{selected.title}</h2></div><Badge tone="mint">可行</Badge></div><div className="mt-5 space-y-3">{selected.changes.map((change) => <div key={change.place} className="flex items-center gap-3 rounded-xl bg-paper p-4"><span className="rounded-lg bg-white p-2 text-coral"><SlidersHorizontal size={16} /></span><div><p className="text-sm font-semibold text-ink">{change.type === "RESCHEDULE" ? "调整时间" : change.type === "REPLACE" ? "替换节点" : "移除节点"} · {change.place}</p><p className="mt-1 text-xs text-ink-soft">{change.note}</p></div></div>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button disabled={!selected || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{selected?.status === "VOTING" ? "投票进行中" : "选择并发起投票"}</Button><Link to="/votes"><Button variant="ghost">去投票中心</Button></Link></div></Card>{toast}</>;
 }
 
 export function VotesPage() {
-  const [choice, setChoice] = useState("");
-  const [tallied, setTallied] = useState(false);
+  const [choice, setChoice] = useState<VoteChoice | "">("");
   const { toast, show } = useToast();
-  return <><PageHeader eyebrow="GROUP DECISION" title="投票中心" description="每个人的一票都在路线里留下位置。过半同意后，方案会自动应用到行程。" /><Card className="p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><Badge tone="coral">投票中</Badge><h2 className="mt-3 font-display text-2xl font-bold">少等一会儿 · 先去室内</h2><p className="mt-2 text-sm text-ink-soft">最低延误策略 · 额外成本 ¥160 · 变更 2 个节点</p></div><div className="text-right"><p className="font-mono text-3xl font-bold text-ink">2 / 4</p><p className="text-xs text-ink-soft">赞成票</p></div></div><div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-1/2 rounded-full bg-mint" /></div><p className="mt-2 text-xs text-ink-soft">还需要 1 票赞成即可通过</p><div className="mt-7 grid gap-3 sm:grid-cols-2">{groupMembers.map((member, index) => <div key={member.id} className="flex items-center justify-between rounded-xl bg-paper p-3"><div className="flex items-center gap-3"><img src={member.user.avatar} alt="" className="h-9 w-9 rounded-full" /><span className="text-sm font-semibold">{member.user.name}</span></div><Badge tone={index < 2 ? "mint" : "neutral"}>{index < 2 ? "已赞成" : "待投票"}</Badge></div>)}</div><div className="mt-7 border-t border-slate-100 pt-6"><p className="text-sm font-semibold text-ink">你的选择</p><div className="mt-3 flex flex-wrap gap-2">{["APPROVE", "REJECT", "ABSTAIN"].map((item) => <button key={item} onClick={() => setChoice(item)} className={`rounded-xl border px-5 py-3 text-sm font-semibold ${choice === item ? "border-coral bg-coral/10 text-coral-deep" : "border-slate-200 text-ink-soft"}`}>{item === "APPROVE" ? "赞成" : item === "REJECT" ? "反对" : "弃权"}</button>)}</div><Button className="mt-4" disabled={!choice} onClick={() => show("你的投票已记录")}>提交投票</Button></div></Card><Card className="mt-5 flex flex-wrap items-center justify-between gap-4 p-6"><div><p className="eyebrow">TALLY RESULT</p><h2 className="mt-2 font-display text-xl font-bold">{tallied ? "方案已通过并应用" : "等待计票"}</h2><p className="mt-1 text-sm text-ink-soft">{tallied ? "豫园已替换为上海博物馆，行程风险降至 24。" : "群主可以在成员完成投票后计票。"}</p></div><Button variant={tallied ? "secondary" : "primary"} onClick={() => { setTallied(true); show("计票完成，方案已应用"); }}>{tallied ? "已完成" : "计票并应用"}</Button></Card>{toast}</>;
+  const queryClient = useQueryClient();
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const groupId = dashboardQuery.data?.activeTrip?.group?.id;
+  const plansQuery = useQuery({ queryKey: ["plans", tripId], queryFn: () => api.plans(tripId as number), enabled: tripId !== undefined });
+  const membersQuery = useQuery({ queryKey: ["members", groupId], queryFn: () => api.members(groupId as number), enabled: groupId !== undefined });
+  const votingPlan = (plansQuery.data ?? []).find((plan) => plan.status === "VOTING");
+  const votesQuery = useQuery({ queryKey: ["plan-votes", votingPlan?.id], queryFn: () => api.planVotes(votingPlan?.id as number), enabled: votingPlan?.id !== undefined });
+  const members = membersQuery.data ?? [];
+  const votes = votesQuery.data ?? [];
+  const currentUser = getCurrentUser();
+  const myMember = members.find((member) => member.user.id === currentUser?.id);
+  const voteByMember = new Map(votes.map((vote) => [vote.memberName, vote.choice] as const));
+  const approveCount = votes.filter((vote) => vote.choice === "APPROVE").length;
+  const total = members.length || 1;
+  const needed = Math.floor(total / 2) + 1;
+  const submitVote = useMutation({
+    mutationFn: () => api.submitVote(votingPlan?.id as number, myMember?.id as number, choice as VoteChoice),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["plan-votes", votingPlan?.id] }); show("你的投票已记录"); },
+    onError: (error) => show(error instanceof Error ? error.message : "投票失败"),
+  });
+  const tally = useMutation({
+    mutationFn: () => api.tally(votingPlan?.id as number),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["plans", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["plan-votes", votingPlan?.id] });
+      void queryClient.invalidateQueries({ queryKey: ["changelogs", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      show("计票完成");
+    },
+    onError: (error) => show(error instanceof Error ? error.message : "计票失败"),
+  });
+  if (dashboardQuery.isLoading || plansQuery.isLoading) return <LoadingState label="正在读取投票…" />;
+  if (dashboardQuery.isError || plansQuery.isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void plansQuery.refetch(); }} message={(dashboardQuery.error ?? plansQuery.error) instanceof Error ? (dashboardQuery.error ?? plansQuery.error)?.message : undefined} />;
+  if (!votingPlan) return <><PageHeader eyebrow="GROUP DECISION" title="投票中心" description="每个人的一票都在路线里留下位置。过半同意后，方案会自动应用到行程。" /><EmptyState title="还没有进行中的投票" message="去“替代方案”页选择一个方案并发起投票，这里就会显示投票进度。" />{toast}</>;
+  const label = (item: VoteChoice) => (item === "APPROVE" ? "赞成" : item === "REJECT" ? "反对" : "弃权");
+  return <><PageHeader eyebrow="GROUP DECISION" title="投票中心" description="每个人的一票都在路线里留下位置。过半同意后，方案会自动应用到行程。" /><Card className="p-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><Badge tone="coral">投票中</Badge><h2 className="mt-3 font-display text-2xl font-bold">{votingPlan.title ?? "替代方案"}</h2><p className="mt-2 text-sm text-ink-soft">{(votingPlan.strategy ?? "").replace("MIN_", "")} · 额外成本 ¥{votingPlan.extraCost ?? 0} · 变更 {votingPlan.changedNodeCount ?? 0} 个节点</p></div><div className="text-right"><p className="font-mono text-3xl font-bold text-ink">{approveCount} / {total}</p><p className="text-xs text-ink-soft">赞成票</p></div></div><div className="mt-6 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-mint transition-all" style={{ width: `${Math.min(100, (approveCount / total) * 100)}%` }} /></div><p className="mt-2 text-xs text-ink-soft">{approveCount >= needed ? "已达到通过所需票数，群主可计票应用" : `还需要 ${needed - approveCount} 票赞成即可通过`}</p><div className="mt-7 grid gap-3 sm:grid-cols-2">{members.map((member) => { const c = voteByMember.get(member.user.name); return <div key={member.id} className="flex items-center justify-between rounded-xl bg-paper p-3"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-coral/10 font-semibold text-coral">{member.user.name.slice(0, 1)}</div><span className="text-sm font-semibold">{member.user.name}</span></div><Badge tone={c === "APPROVE" ? "mint" : c === "REJECT" ? "coral" : "neutral"}>{c ? label(c) : "待投票"}</Badge></div>; })}</div><div className="mt-7 border-t border-slate-100 pt-6"><p className="text-sm font-semibold text-ink">你的选择{myMember ? "" : "（你不是该行程成员，无法投票）"}</p><div className="mt-3 flex flex-wrap gap-2">{(["APPROVE", "REJECT", "ABSTAIN"] as VoteChoice[]).map((item) => <button key={item} disabled={!myMember} onClick={() => setChoice(item)} className={`rounded-xl border px-5 py-3 text-sm font-semibold disabled:opacity-50 ${choice === item ? "border-coral bg-coral/10 text-coral-deep" : "border-slate-200 text-ink-soft"}`}>{label(item)}</button>)}</div><Button className="mt-4" disabled={!choice || !myMember || submitVote.isPending} onClick={() => submitVote.mutate()}>{submitVote.isPending ? "提交中…" : "提交投票"}</Button></div></Card><Card className="mt-5 flex flex-wrap items-center justify-between gap-4 p-6"><div><p className="eyebrow">TALLY RESULT</p><h2 className="mt-2 font-display text-xl font-bold">计票并应用</h2><p className="mt-1 text-sm text-ink-soft">达到法定人数（过半参与）后计票：赞成过半自动应用到行程并重算路线。</p></div><Button disabled={tally.isPending} onClick={() => tally.mutate()}>{tally.isPending ? "计票中…" : "计票并应用"}</Button></Card>{toast}</>;
 }
 
 export function ChangelogPage() {

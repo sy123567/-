@@ -81,12 +81,17 @@ public class VotingService {
   @Transactional
   public Trip tally(Long id) {
     AlternativePlan p = get(id);
-    long approves =
-        votes.findByPlanId(id).stream()
-            .filter(v -> v.getChoice() == Enums.VoteChoice.APPROVE)
-            .count();
+    List<PlanVote> all = votes.findByPlanId(id);
+    long approves = all.stream().filter(v -> v.getChoice() == Enums.VoteChoice.APPROVE).count();
+    long rejects = all.stream().filter(v -> v.getChoice() == Enums.VoteChoice.REJECT).count();
     int total = p.getTrip().getGroup().getMembers().size();
-    if (approves > total / 2) {
+    long cast = all.size();
+    // 法定人数：需过半成员参与投票，否则维持投票中，等待更多人投票。
+    if (total > 0 && cast * 2 < total) return p.getTrip();
+    // 弃权不计入有效票；在有效票中赞成过半即通过。
+    long effective = approves + rejects;
+    boolean accepted = effective > 0 ? approves * 2 > effective : approves > 0;
+    if (accepted) {
       p.setStatus(Enums.PlanStatus.ACCEPTED);
       p.getProposedNodeChanges()
           .forEach(
@@ -117,6 +122,10 @@ public class VotingService {
       logs.save(l);
       trips.save(p.getTrip());
       notification.trip(p.getTrip().getId(), "plan-accepted", p);
+    } else {
+      // 已达法定人数但未获通过：否决该方案，群组可另选方案重新发起投票。
+      p.setStatus(Enums.PlanStatus.REJECTED);
+      notification.trip(p.getTrip().getId(), "plan-rejected", p);
     }
     return p.getTrip();
   }
