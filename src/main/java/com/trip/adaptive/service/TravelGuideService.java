@@ -32,4 +32,16 @@ public class TravelGuideService {
     if (payload.getRating() <= 0) payload.setRating(5.0);
     return repo.save(payload);
   }
+
+  @Transactional
+  public TravelGuide toggleSave(Long id, User user) {
+    TravelGuide guide = get(id);
+    if (guide.getSavedBy().add(user.getId())) {
+      guide.setSaves(guide.getSaves() + 1);
+    } else {
+      guide.getSavedBy().remove(user.getId());
+      guide.setSaves(Math.max(0, guide.getSaves() - 1));
+    }
+    return repo.save(guide);
+  }
 }

@@ -3,7 +3,9 @@ package com.trip.adaptive.domain;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
@@ -35,6 +37,8 @@ public class TravelGuide {
   private int reviews;
   private int saves;
   private LocalDateTime createdAt;
+
+  @ElementCollection private Set<Long> savedBy = new HashSet<>();
 
   public TravelGuide() {
     createdAt = LocalDateTime.now();
@@ -142,5 +146,13 @@ public class TravelGuide {
 
   public LocalDateTime getCreatedAt() {
     return createdAt;
+  }
+
+  public Set<Long> getSavedBy() {
+    return savedBy;
+  }
+
+  public void setSavedBy(Set<Long> v) {
+    savedBy = v;
   }
 }

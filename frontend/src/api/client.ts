@@ -1,5 +1,6 @@
 import { getToken, type AuthUser } from "../auth";
 import type {
+  AdminStats,
   AlternativePlan,
   ChangeLog,
   DashboardData,
@@ -15,6 +16,8 @@ import type {
   TravelGuide,
   TravelGroup,
   Trip,
+  TripExpenseItem,
+  TripSettlement,
 } from "../types";
 
 export type VoteChoice = "APPROVE" | "REJECT" | "ABSTAIN";
@@ -290,19 +293,31 @@ export const api = {
     return request<void>(`/api/friends/${friendId}`, { method: "DELETE" });
   },
   async dashboard(): Promise<DashboardData> {
-    const [trips, user, events] = await Promise.all([
+    const [trips, user, events, inbox] = await Promise.all([
       request<Trip[]>("/api/trips"),
       api.me(),
       request<ExternalEvent[]>("/api/events/active"),
+      api.notifications().catch(() => [] as NotificationItem[]),
     ]);
     const activeTrip = trips.find((trip) => trip.status === "ONGOING") ?? trips[0];
-    return { user, trips, activeTrip, events, notifications: [] };
+    const tones: Record<string, "coral" | "mint" | "sky"> = { "new-plans": "sky", "plan-accepted": "mint", "plan-rejected": "coral" };
+    const notifications = inbox.slice(0, 5).map((item) => ({
+      id: item.id,
+      title: item.title,
+      detail: item.detail,
+      time: item.createdAt,
+      tone: tones[item.type] ?? "sky",
+    }));
+    return { user, trips, activeTrip, events, notifications };
   },
   async guides(): Promise<TravelGuide[]> {
     return request<TravelGuide[]>("/api/guides");
   },
   async guide(id: number): Promise<TravelGuide> {
     return request<TravelGuide>(`/api/guides/${id}`);
+  },
+  async toggleGuideSave(id: number): Promise<TravelGuide> {
+    return request<TravelGuide>(`/api/guides/${id}/save`, { method: "POST" });
   },
   async createGuide(draft: GuideDraft): Promise<TravelGuide> {
     return request<TravelGuide>("/api/guides", {
@@ -334,6 +349,21 @@ export const api = {
   },
   async markAllNotificationsRead(): Promise<void> {
     await request<void>("/api/notifications/read-all", { method: "POST" });
+  },
+  async expenses(tripId: number): Promise<TripExpenseItem[]> {
+    return request<TripExpenseItem[]>(`/api/trips/${tripId}/expenses`);
+  },
+  async addExpense(tripId: number, expense: { label: string; category: string; amount: number }): Promise<TripExpenseItem> {
+    return request<TripExpenseItem>(`/api/trips/${tripId}/expenses`, {
+      method: "POST",
+      body: JSON.stringify(expense),
+    });
+  },
+  async settlement(tripId: number): Promise<TripSettlement> {
+    return request<TripSettlement>(`/api/trips/${tripId}/settlement`);
+  },
+  async adminStats(): Promise<AdminStats> {
+    return request<AdminStats>("/api/admin/stats");
   },
   async trip(id: number): Promise<Trip> {
     return request<Trip>(`/api/trips/${id}`);
