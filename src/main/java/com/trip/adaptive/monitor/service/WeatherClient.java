@@ -134,15 +134,19 @@ public class WeatherClient {
     try {
       String cached = redis.opsForValue().get(cacheKey);
       if (cached != null) return mapper.readTree(cached); // 命中缓存,不发 HTTP
-      String body = http.getForObject(url, String.class);
-      if (body == null) return null;
+    } catch (Exception ex) {
+      // Redis 不可用/缓存损坏时降级：跳过缓存,继续查 API
+    }
+    JsonNode result = get(url);
+    if (result == null) return null; // HTTP 失败降级
+    try {
       redis
           .opsForValue()
-          .set(cacheKey, body, java.time.Duration.ofMinutes(cacheTtlMinutes)); // 存原始 JSON,带 TTL
-      return mapper.readTree(body);
-    } catch (Exception e) {
-      return null; // 失败降级
+          .set(cacheKey, result.toString(), java.time.Duration.ofMinutes(cacheTtlMinutes));
+    } catch (Exception ignore) {
+      // 写缓存失败不影响返回
     }
+    return result;
   }
 
   private static String firstText(JsonNode node, String... fields) {
