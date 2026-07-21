@@ -17,6 +17,7 @@ type BMapSize = {
 type BMapOverlay = {
   addEventListener?: (event: string, callback: () => void) => void;
   openInfoWindow?: (infoWindow: BMapInfoWindow) => void;
+  setLabel?: (label: BMapLabel) => void;
   setIcon?: (icon: unknown) => void;
 };
 
@@ -24,9 +25,15 @@ type BMapInfoWindow = {
   close?: () => void;
 };
 
+type BMapLabel = {
+  setStyle?: (style: Record<string, string>) => void;
+};
+
 type BMapMap = {
   centerAndZoom: (point: BMapPoint, zoom: number) => void;
   addOverlay: (overlay: unknown) => void;
+  enableScrollWheelZoom?: (enable: boolean) => void;
+  addControl?: (control: unknown) => void;
   clearOverlays: () => void;
   removeOverlay?: (overlay: unknown) => void;
   openInfoWindow?: (infoWindow: BMapInfoWindow, point: BMapPoint) => void;
@@ -46,9 +53,11 @@ type BMapNamespace = {
   Point: new (lng: number, lat: number) => BMapPoint;
   Size: new (width: number, height: number) => BMapSize;
   Icon: new (url: string, size: BMapSize, options?: Record<string, unknown>) => unknown;
+  Label?: new (content: string, options?: Record<string, unknown>) => BMapLabel;
   Marker: new (point: BMapPoint, options?: Record<string, unknown>) => BMapOverlay;
   Polyline: new (points: BMapPoint[], options: Record<string, unknown>) => BMapOverlay;
   InfoWindow: new (content: string, options?: Record<string, unknown>) => BMapInfoWindow;
+  NavigationControl?: new (options?: Record<string, unknown>) => unknown;
   WalkingRoute?: new (map: BMapMap, options?: Record<string, unknown>) => BMapRoute;
   DrivingRoute?: new (map: BMapMap, options?: Record<string, unknown>) => BMapRoute;
 };
@@ -140,6 +149,10 @@ export function BaiduMap({
     if (!scriptReady || !mapRef.current || !window.BMap || mapNodes.length === 0) return;
     const map = new window.BMap.Map(mapRef.current);
     mapInstance.current = map;
+    map.enableScrollWheelZoom?.(true);
+    if (window.BMap.NavigationControl) {
+      map.addControl?.(new window.BMap.NavigationControl());
+    }
     const nodePoints = mapNodes.map((node) => new window.BMap!.Point(node.longitude, node.latitude));
     const placePoints = mapPlaces.map((place) => new window.BMap!.Point(place.lng!, place.lat!));
     const allPoints = [...nodePoints, ...placePoints];
@@ -150,6 +163,22 @@ export function BaiduMap({
     map.clearOverlays();
     nodePoints.forEach((point, index) => {
       const marker = new window.BMap!.Marker(point);
+      if (window.BMap!.Label) {
+        const label = new window.BMap!.Label(String(index + 1), { offset: new window.BMap!.Size(-6, -8) });
+        label.setStyle?.({
+          color: "#ffffff",
+          backgroundColor: "#FF6B5F",
+          border: "0",
+          borderRadius: "999px",
+          fontSize: "11px",
+          fontWeight: "700",
+          lineHeight: "20px",
+          textAlign: "center",
+          width: "20px",
+          height: "20px",
+        });
+        marker.setLabel?.(label);
+      }
       marker.addEventListener?.("click", () => onMarkerClick?.(mapNodes[index]));
       overlays.push(marker);
       map.addOverlay(marker);
