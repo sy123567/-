@@ -85,6 +85,48 @@ class ReplacementCandidateServiceTest {
   }
 
   @Test
+  void lowFitnessRejectsFarCandidateAndKeepsNearOne() {
+    when(ai.enabled()).thenReturn(false);
+    when(maps.enabled()).thenReturn(true);
+    when(maps.searchNearby(anyString(), anyDouble(), anyDouble(), anyInt()))
+        .thenReturn(List.of(place("远处馆", 31.25, 121.45), place("近处馆", 31.205, 121.405)));
+    when(weather.summary(anyDouble(), anyDouble())).thenReturn(weather(false, false));
+
+    ReplanConstraints low =
+        new ReplanConstraints(
+            null, List.of(), Enums.FitnessLevel.LOW, List.of(), List.of()); // LOW -> 2km 可达
+
+    Optional<Candidate> result =
+        service()
+            .findSafeReplacement(
+                node(), node().getPlannedStart(), node().getPlannedEnd(), low, List.of(), false);
+
+    assertTrue(result.isPresent());
+    assertEquals("近处馆", result.get().name());
+  }
+
+  @Test
+  void vegetarianDietExcludesMeatMealCandidate() {
+    ItineraryNode meal = node();
+    meal.setNodeType(Enums.NodeType.MEAL);
+    when(ai.enabled()).thenReturn(false);
+    when(maps.enabled()).thenReturn(true);
+    when(maps.searchNearby(anyString(), anyDouble(), anyDouble(), anyInt()))
+        .thenReturn(List.of(place("城中烤肉店", 31.205, 121.405), place("素食餐厅", 31.206, 121.406)));
+    when(weather.summary(anyDouble(), anyDouble())).thenReturn(weather(false, false));
+
+    ReplanConstraints veg = new ReplanConstraints(null, List.of(), null, List.of("素食"), List.of());
+
+    Optional<Candidate> result =
+        service()
+            .findSafeReplacement(
+                meal, meal.getPlannedStart(), meal.getPlannedEnd(), veg, List.of(), false);
+
+    assertTrue(result.isPresent());
+    assertEquals("素食餐厅", result.get().name());
+  }
+
+  @Test
   void rejectsCandidateInsideHighSeverityEventArea() {
     when(ai.enabled()).thenReturn(false);
     when(maps.enabled()).thenReturn(true);

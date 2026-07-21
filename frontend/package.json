@@ -10,17 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.0.0",
     "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^1.24.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0"
+    "react-router-dom": "^6.28.0",
+    "sockjs-client": "^1.6.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.5.2",
     "eslint": "^9.39.5",

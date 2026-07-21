@@ -56,17 +56,60 @@ public class ReplacementCandidateService {
     double lat = node.getLatitude();
     double lng = node.getLongitude();
     String query = queryFor(node.getNodeType(), rainy);
+    double reachKm = reachKm(constraints); // 体力约束→可达半径
     List<Candidate> candidates = new ArrayList<>();
     candidates.addAll(aiCandidates(node, query, constraints)); // AI 提名 → 百度落坐标
     candidates.addAll(nearbyCandidates(node, query, lat, lng)); // 百度就近搜索兜底
     for (Candidate candidate : candidates) {
       if (isSamePlace(node, candidate)) continue;
       if (!withinBudget(candidate, constraints)) continue;
+      if (!withinReach(node, candidate, reachKm)) continue; // 体力约束：不超出可达半径
+      if (!dietOk(node, candidate, constraints)) continue; // 饮食约束：排除冲突餐饮
       if (!weatherSafe(candidate)) continue; // 天气闭环校验
       if (hitByEvent(candidate, start, end, activeEvents)) continue; // 事件闭环校验
       return Optional.of(candidate);
     }
     return Optional.empty();
+  }
+
+  /** 体力等级映射为替代地点的可达半径（公里）：体力越低越就近。 */
+  private static double reachKm(ReplanConstraints c) {
+    if (c == null || c.fitnessLevel() == null) return Double.MAX_VALUE;
+    return switch (c.fitnessLevel()) {
+      case LOW -> 2.0;
+      case MEDIUM -> 5.0;
+      case HIGH -> Double.MAX_VALUE;
+    };
+  }
+
+  private static boolean withinReach(ItineraryNode node, Candidate candidate, double reachKm) {
+    if (reachKm == Double.MAX_VALUE || node.getLatitude() == null || node.getLongitude() == null)
+      return true;
+    return ImpactMatchingService.distance(
+            node.getLatitude(), node.getLongitude(), candidate.lat(), candidate.lng())
+        <= reachKm;
+  }
+
+  /** 饮食约束：仅对餐饮类节点生效，按关键词排除与需求冲突的候选（保守命中才排除）。 */
+  private static boolean dietOk(ItineraryNode node, Candidate candidate, ReplanConstraints c) {
+    if (node.getNodeType() != Enums.NodeType.MEAL) return true;
+    if (c == null || c.dietaryNeeds() == null || c.dietaryNeeds().isEmpty()) return true;
+    String text = (candidate.name() + " " + candidate.reason()).toLowerCase(java.util.Locale.ROOT);
+    for (String need : c.dietaryNeeds()) {
+      if (need == null) continue;
+      String n = need.toLowerCase(java.util.Locale.ROOT);
+      List<String> banned = new ArrayList<>();
+      if (n.contains("素") || n.contains("vegetar") || n.contains("vegan")) {
+        banned.addAll(List.of("烤肉", "牛排", "海鲜", "火锅", "烧烤", "涮"));
+      }
+      if (n.contains("清真") || n.contains("halal") || n.contains("穆斯林")) {
+        banned.addAll(List.of("猪", "烤肉", "日料", "居酒屋"));
+      }
+      for (String b : banned) {
+        if (text.contains(b.toLowerCase(java.util.Locale.ROOT))) return false;
+      }
+    }
+    return true;
   }
 
   private List<Candidate> aiCandidates(ItineraryNode node, String query, ReplanConstraints c) {
@@ -182,13 +225,29 @@ public class ReplacementCandidateService {
     if (c != null && c.mustVisitPlaces() != null && !c.mustVisitPlaces().isEmpty()) {
       sb.append("如与以下必访地点相关请优先：").append(String.join("、", c.mustVisitPlaces())).append("。");
     }
+    if (c != null && c.fitnessLevel() == Enums.FitnessLevel.LOW) {
+      sb.append("团队体力较弱，请优先步行可达、无需爬坡或长距离步行的地点。");
+    }
+    if (c != null && c.dietaryNeeds() != null && !c.dietaryNeeds().isEmpty()) {
+      sb.append("餐饮需满足以下饮食需求：").append(String.join("、", c.dietaryNeeds())).append("。");
+    }
+    if (c != null && c.accessibilityNeeds() != null && !c.accessibilityNeeds().isEmpty()) {
+      sb.append("需满足无障碍需求：")
+          .append(String.join("、", c.accessibilityNeeds()))
+          .append("，请优先有电梯/无障碍通道的地点。");
+    }
     return sb.toString();
   }
 
-  /** 生成/校验用到的成员约束依据。 */
-  public record ReplanConstraints(BigDecimal budgetCap, List<String> mustVisitPlaces) {
+  /** 生成/校验用到的成员约束依据（预算/必访/体力/饮食/无障碍）。 */
+  public record ReplanConstraints(
+      BigDecimal budgetCap,
+      List<String> mustVisitPlaces,
+      Enums.FitnessLevel fitnessLevel,
+      List<String> dietaryNeeds,
+      List<String> accessibilityNeeds) {
     public static ReplanConstraints none() {
-      return new ReplanConstraints(null, List.of());
+      return new ReplanConstraints(null, List.of(), null, List.of(), List.of());
     }
   }
 
