@@ -1,15 +1,16 @@
 import { getToken, type AuthUser } from "../auth";
-import { guides } from "../mocks/data";
 import type {
   AlternativePlan,
   ChangeLog,
   DashboardData,
+  DiscussionPost,
   ExternalEvent,
   GroupMember,
   ImpactAssessment,
   ItineraryNode,
   MemberConstraint,
   NodeNote,
+  NotificationItem,
   PlanVote,
   TravelGuide,
   TravelGroup,
@@ -17,6 +18,17 @@ import type {
 } from "../types";
 
 export type VoteChoice = "APPROVE" | "REJECT" | "ABSTAIN";
+
+export type GuideDraft = {
+  title: string;
+  city: string;
+  days: number;
+  theme: string;
+  price: number;
+  cover?: string;
+  description: string;
+  tags: string[];
+};
 
 export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
 
@@ -287,7 +299,41 @@ export const api = {
     return { user, trips, activeTrip, events, notifications: [] };
   },
   async guides(): Promise<TravelGuide[]> {
-    return guides;
+    return request<TravelGuide[]>("/api/guides");
+  },
+  async guide(id: number): Promise<TravelGuide> {
+    return request<TravelGuide>(`/api/guides/${id}`);
+  },
+  async createGuide(draft: GuideDraft): Promise<TravelGuide> {
+    return request<TravelGuide>("/api/guides", {
+      method: "POST",
+      body: JSON.stringify(draft),
+    });
+  },
+  async discussions(tripId: number): Promise<DiscussionPost[]> {
+    return request<DiscussionPost[]>(`/api/trips/${tripId}/discussions`);
+  },
+  async postDiscussion(tripId: number, body: string): Promise<DiscussionPost> {
+    return request<DiscussionPost>(`/api/trips/${tripId}/discussions`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+  },
+  async likeDiscussion(postId: number): Promise<DiscussionPost> {
+    return request<DiscussionPost>(`/api/discussions/${postId}/like`, {
+      method: "POST",
+    });
+  },
+  async notifications(): Promise<NotificationItem[]> {
+    return request<NotificationItem[]>("/api/notifications");
+  },
+  async markNotificationRead(id: number): Promise<NotificationItem> {
+    return request<NotificationItem>(`/api/notifications/${id}/read`, {
+      method: "POST",
+    });
+  },
+  async markAllNotificationsRead(): Promise<void> {
+    await request<void>("/api/notifications/read-all", { method: "POST" });
   },
   async trip(id: number): Promise<Trip> {
     return request<Trip>(`/api/trips/${id}`);

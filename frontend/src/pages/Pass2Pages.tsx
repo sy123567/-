@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageCircle, MoreHorizontal, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronRight, CircleAlert, Copy, Footprints, Heart, Plus, Search, Send, Shield, SlidersHorizontal, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type AiPlace, type MapPlace, type VoteChoice, type WeatherPreview } from "../api/client";
-import { guides } from "../mocks/data";
 import { getCitySuggestions, getPlaceDetail, getPlaceImage, suggestPlaces, type SuggestedPlace } from "../mocks/places";
 import { Badge, BoardingPassCard, Button, Card, EventIcon, Input, PageHeader, RiskGauge, RouteTrail } from "../components/ui";
 import { ImageFallback, Modal, Toast } from "../components/pass2";
@@ -1054,20 +1053,67 @@ export function ChangelogPage() {
   return <><PageHeader eyebrow="TRIP HISTORY" title="变更记录" description="每一次应变都有迹可循，费用、截止时间和关联方案都在这里。" /><Card className="divide-y divide-slate-100 p-6">{data.map((log) => <div key={log.id} className="flex flex-wrap items-start justify-between gap-5 py-5 first:pt-0 last:pb-0"><div><div className="flex items-center gap-2"><Badge tone="mint">已应用</Badge>{log.createdAt && <span className="font-mono text-xs text-ink-soft">{log.createdAt.replace("T", " ")}</span>}</div><h2 className="mt-3 font-semibold text-ink">{log.description ?? "未命名变更"}</h2><p className="mt-2 text-sm text-ink-soft">关联方案：{log.relatedPlan?.title ?? "暂无关联方案"}</p></div><div className="text-right"><p className="font-mono text-lg font-bold text-coral">{log.extraCost !== undefined ? `+¥${log.extraCost}` : "费用待定"}</p>{log.refundDeadline && <p className="mt-1 text-xs text-ink-soft">退款截止 {log.refundDeadline.replace("T", " ")}</p>}</div></div>)}</Card></>;
 }
 
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Math.max(0, Date.now() - then);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "刚刚";
+  if (min < 60) return `${min}分钟前`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}天前`;
+  return new Date(iso).toLocaleDateString();
+}
+
 export function DiscussionsPage() {
   const [text, setText] = useState("");
   const { toast, show } = useToast();
-  const threads = [{ author: "周知远", avatar: "https://i.pravatar.cc/100?img=13", time: "12分钟前", body: "@林小满 豫园如果改到明早，我可以把早餐也一起安排上。", likes: 4 }, { author: "许桃", avatar: "https://i.pravatar.cc/100?img=44", time: "36分钟前", body: "我更倾向方案 2，上海博物馆下雨天也很舒服，大家觉得呢？", likes: 7 }, { author: "林小满", avatar: "https://i.pravatar.cc/100?img=47", time: "1小时前", body: "先把每个人的约束都看一遍，再决定不要让任何人赶路。", likes: 12 }];
-  return <><PageHeader eyebrow="TRIP DISCUSSION" title="讨论区" description="路线之外的想法，也值得被听见。可以 @旅伴，直接针对行程或方案讨论。" action={<Button onClick={() => show("讨论主题已创建")}>新建主题</Button>} /><div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><div className="space-y-4">{threads.map((thread) => <Card key={thread.time} className="p-5"><div className="flex gap-3"><img src={thread.avatar} alt="" className="h-10 w-10 rounded-full" /><div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><div><p className="text-sm font-semibold">{thread.author}</p><p className="mt-1 text-[11px] text-ink-soft">{thread.time} · 上海春日漫游</p></div><button aria-label="更多讨论操作" className="text-ink-soft"><MoreHorizontal size={18} /></button></div><p className="mt-4 text-sm leading-7 text-ink">{thread.body}</p><div className="mt-4 flex gap-4 text-xs text-ink-soft"><button className="flex items-center gap-1.5 hover:text-coral"><ThumbsUp size={14} />{thread.likes}</button><button className="flex items-center gap-1.5 hover:text-sky"><MessageCircle size={14} />回复</button></div></div></div></Card>)}</div><Card className="h-fit p-5"><p className="eyebrow">WRITE TO THE CREW</p><h2 className="mt-3 font-display text-xl font-bold">说点什么</h2><textarea value={text} onChange={(event) => setText(event.target.value)} className="mt-5 min-h-32 w-full rounded-xl border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="@旅伴，分享一个你在意的细节…" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-ink-soft">{text.length}/500</span><Button disabled={!text} onClick={() => { setText(""); show("评论已发布"); }}><Send size={15} className="mr-2 inline" />发布</Button></div></Card></div>{toast}</>;
+  const queryClient = useQueryClient();
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const tripId = dashboardQuery.data?.activeTrip?.id;
+  const tripTitle = dashboardQuery.data?.activeTrip?.title ?? "当前行程";
+  const postsQuery = useQuery({ queryKey: ["discussions", tripId], queryFn: () => api.discussions(tripId as number), enabled: tripId !== undefined });
+  const posts = postsQuery.data ?? [];
+  const publish = useMutation({
+    mutationFn: () => api.postDiscussion(tripId as number, text.trim()),
+    onSuccess: () => { setText(""); void queryClient.invalidateQueries({ queryKey: ["discussions", tripId] }); show("评论已发布"); },
+    onError: (error) => show(error instanceof Error ? error.message : "发布失败"),
+  });
+  const like = useMutation({
+    mutationFn: (postId: number) => api.likeDiscussion(postId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["discussions", tripId] }),
+  });
+  if (dashboardQuery.isLoading) return <LoadingState label="正在读取行程…" />;
+  if (tripId === undefined) return <><PageHeader eyebrow="TRIP DISCUSSION" title="讨论区" description="路线之外的想法，也值得被听见。" /><EmptyState title="还没有进行中的行程" message="创建或加入一个行程后即可在这里讨论。" /></>;
+  return <><PageHeader eyebrow="TRIP DISCUSSION" title="讨论区" description="路线之外的想法，也值得被听见。针对当前行程或方案，直接和旅伴讨论。" /><div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><div className="space-y-4">{postsQuery.isLoading && <LoadingState label="正在读取讨论…" />}{!postsQuery.isLoading && posts.length === 0 && <EmptyState title="还没有讨论" message="成为第一个发言的人。" />}{posts.map((post) => <Card key={post.id} className="p-5"><div className="flex gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-coral/10 font-display text-sm font-bold text-coral">{post.authorName.slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex justify-between gap-3"><div><p className="text-sm font-semibold">{post.authorName}</p><p className="mt-1 text-[11px] text-ink-soft">{relativeTime(post.createdAt)} · {tripTitle}</p></div></div><p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink">{post.body}</p><div className="mt-4 flex gap-4 text-xs text-ink-soft"><button onClick={() => like.mutate(post.id)} className={`flex items-center gap-1.5 transition hover:text-coral ${post.likedByMe ? "text-coral" : ""}`}><ThumbsUp size={14} />{post.likes}</button></div></div></div></Card>)}</div><Card className="h-fit p-5"><p className="eyebrow">WRITE TO THE CREW</p><h2 className="mt-3 font-display text-xl font-bold">说点什么</h2><textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={500} className="mt-5 min-h-32 w-full rounded-xl border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="分享一个你在意的细节…" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-ink-soft">{text.length}/500</span><Button disabled={!text.trim() || publish.isPending} onClick={() => publish.mutate()}><Send size={15} className="mr-2 inline" />发布</Button></div></Card></div>{toast}</>;
 }
+
+const NOTIFICATION_META: Record<string, { label: string; tone: "coral" | "sky" | "mint" }> = {
+  "new-plans": { label: "新方案", tone: "sky" },
+  "plan-accepted": { label: "采纳", tone: "mint" },
+  "plan-rejected": { label: "否决", tone: "coral" },
+};
 
 export function NotificationsPage() {
-  const [read, setRead] = useState<number[]>([2]);
-  const notifications = [{ id: 1, type: "事件", title: "黄浦江沿线短时阵雨", detail: "上海春日漫游有一个节点需要重新确认", time: "8分钟前", color: "coral" }, { id: 2, type: "投票", title: "你已投票：少等一会儿 · 先去室内", detail: "方案当前获得 2 / 4 赞成票", time: "1小时前", color: "sky" }, { id: 3, type: "新方案", title: "有 3 个替代方案等待比较", detail: "来自上海春日漫游 · 周末慢游组", time: "昨天", color: "mint" }, { id: 4, type: "采纳", title: "行程变更已应用", detail: "退款截止时间为 4 月 20 日 18:00", time: "昨天", color: "mint" }];
-  return <><PageHeader eyebrow="INBOX" title="通知" description="事件、影响、方案和投票的每一个关键节点，都不会错过。" action={<Button variant="ghost" onClick={() => setRead(notifications.map((item) => item.id))}>全部标为已读</Button>} /><Card className="divide-y divide-slate-100 p-5">{notifications.map((item) => <div key={item.id} className={`flex gap-4 py-5 first:pt-0 last:pb-0 ${!read.includes(item.id) ? "" : "opacity-60"}`}><div className={`mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.color === "coral" ? "bg-coral/10 text-coral" : item.color === "sky" ? "bg-sky/10 text-sky" : "bg-mint/10 text-mint"}`}><BellIcon type={item.type} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge tone={item.color === "coral" ? "coral" : item.color === "sky" ? "sky" : "mint"}>{item.type}</Badge>{!read.includes(item.id) && <span className="h-2 w-2 rounded-full bg-coral" />}</div><h2 className="mt-2 font-semibold text-ink">{item.title}</h2><p className="mt-1 text-sm text-ink-soft">{item.detail}</p><p className="mt-2 font-mono text-[10px] text-ink-soft">{item.time}</p></div>{!read.includes(item.id) && <button onClick={() => setRead([...read, item.id])} className="self-center text-xs font-semibold text-sky">标为已读</button>}</div>)}</Card></>;
+  const { toast, show } = useToast();
+  const queryClient = useQueryClient();
+  const notificationsQuery = useQuery({ queryKey: ["notifications"], queryFn: api.notifications });
+  const notifications = notificationsQuery.data ?? [];
+  const markRead = useMutation({
+    mutationFn: (id: number) => api.markNotificationRead(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+  const markAll = useMutation({
+    mutationFn: () => api.markAllNotificationsRead(),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); show("已全部标为已读"); },
+  });
+  if (notificationsQuery.isLoading) return <LoadingState label="正在读取通知…" />;
+  return <><PageHeader eyebrow="INBOX" title="通知" description="方案生成、采纳与否决的每一个关键节点，都会同步到这里。" action={<Button variant="ghost" disabled={markAll.isPending || notifications.length === 0} onClick={() => markAll.mutate()}>全部标为已读</Button>} />{notifications.length === 0 ? <EmptyState title="暂时没有通知" message="行程出现新方案或投票结果时，这里会第一时间提醒你。" /> : <Card className="divide-y divide-slate-100 p-5">{notifications.map((item) => { const meta = NOTIFICATION_META[item.type] ?? { label: item.type, tone: "sky" as const }; return <div key={item.id} className={`flex gap-4 py-5 first:pt-0 last:pb-0 ${item.read ? "opacity-60" : ""}`}><div className={`mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${meta.tone === "coral" ? "bg-coral/10 text-coral" : meta.tone === "sky" ? "bg-sky/10 text-sky" : "bg-mint/10 text-mint"}`}><BellIcon type={item.type} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge tone={meta.tone}>{meta.label}</Badge>{!item.read && <span className="h-2 w-2 rounded-full bg-coral" />}</div><h2 className="mt-2 font-semibold text-ink">{item.title}</h2><p className="mt-1 text-sm text-ink-soft">{item.detail}</p><p className="mt-2 font-mono text-[10px] text-ink-soft">{relativeTime(item.createdAt)}</p></div>{!item.read && <button onClick={() => markRead.mutate(item.id)} className="self-center text-xs font-semibold text-sky">标为已读</button>}</div>; })}</Card>}{toast}</>;
 }
 
-function BellIcon({ type }: { type: string }) { return type === "事件" ? <CircleAlert size={18} /> : type === "投票" ? <Check size={18} /> : <Sparkles size={18} />; }
+function BellIcon({ type }: { type: string }) { return type === "plan-accepted" ? <Check size={18} /> : type === "plan-rejected" ? <CircleAlert size={18} /> : <Sparkles size={18} />; }
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -1193,9 +1239,12 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
 export function GuideDetailPage() {
   const { id = "1" } = useParams();
   const navigate = useNavigate();
-  const guide = guides.find((item) => item.id === Number(id)) ?? guides[0];
   const [open, setOpen] = useState(false);
   const { toast, show } = useToast();
+  const guideQuery = useQuery({ queryKey: ["guide", id], queryFn: () => api.guide(Number(id)), enabled: !Number.isNaN(Number(id)) });
+  const guide = guideQuery.data;
+  if (guideQuery.isLoading) return <LoadingState label="正在读取攻略…" />;
+  if (guideQuery.isError || !guide) return <ErrorState message={guideQuery.error instanceof Error ? guideQuery.error.message : "攻略不存在"} onRetry={() => void guideQuery.refetch()} />;
   const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), "2025-05-03", guide.days);
   return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><img src={guide.author.avatar} alt="" className="h-10 w-10 rounded-full" /><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">4.9 分 · {guide.reviews} 条评价</p></div></div></Card></div></div><ApplyGuideModal open={open} onClose={() => setOpen(false)} onDone={() => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate("/trips/1"); }} />{toast}</>;
 }

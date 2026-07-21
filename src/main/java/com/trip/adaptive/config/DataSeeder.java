@@ -18,6 +18,7 @@ import com.trip.adaptive.domain.GroupMember;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.MemberConstraint;
 import com.trip.adaptive.domain.TravelGroup;
+import com.trip.adaptive.domain.TravelGuide;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.repository.FriendshipRepository;
@@ -25,6 +26,7 @@ import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.ItineraryNodeRepository;
 import com.trip.adaptive.repository.MemberConstraintRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
+import com.trip.adaptive.repository.TravelGuideRepository;
 import com.trip.adaptive.repository.TripRepository;
 import com.trip.adaptive.repository.UserRepository;
 
@@ -38,6 +40,7 @@ public class DataSeeder implements CommandLineRunner {
   private final FriendshipRepository friendships;
   private final TripRepository trips;
   private final ItineraryNodeRepository nodes;
+  private final TravelGuideRepository guides;
   private final PasswordEncoder passwordEncoder;
 
   @Value("${app.seed.enabled:true}")
@@ -51,6 +54,7 @@ public class DataSeeder implements CommandLineRunner {
       FriendshipRepository f,
       TripRepository t,
       ItineraryNodeRepository n,
+      TravelGuideRepository gd,
       PasswordEncoder p) {
     users = u;
     groups = g;
@@ -59,6 +63,7 @@ public class DataSeeder implements CommandLineRunner {
     friendships = f;
     trips = t;
     nodes = n;
+    guides = gd;
     passwordEncoder = p;
   }
 
@@ -72,6 +77,8 @@ public class DataSeeder implements CommandLineRunner {
     User b = ensureUser("李四", "lisi@example.com", "13800000002");
     User wangwu = ensureUser("王五", "wangwu@example.com", "13800000005");
     ensureUser("赵六", "zhaoliu@example.com", "13800000006");
+
+    seedGuides(a);
 
     if (groups.findByRoomCode("CN-DEMO").isEmpty()) {
       TravelGroup nationwide = new TravelGroup("全国漫游示例", "全国城市示例行程", a);
@@ -771,6 +778,117 @@ public class DataSeeder implements CommandLineRunner {
       int endHour,
       int sequence,
       BigDecimal cost) {}
+
+  private void seedGuides(User author) {
+    seedGuide(
+        author,
+        "上海春日漫游：从梧桐区走到黄浦江",
+        "上海",
+        2,
+        "城市漫游",
+        "980",
+        "https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=900&q=80",
+        "把外滩、武康路和一顿本帮菜，放进一个松弛的周末。",
+        List.of("Citywalk", "咖啡", "拍照"),
+        4.9,
+        328,
+        1204);
+    seedGuide(
+        author,
+        "成都不赶路：熊猫、茶馆和一场慢火锅",
+        "成都",
+        3,
+        "美食探索",
+        "1280",
+        "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=900&q=80",
+        "不塞满景点，留出午后在人民公园喝茶的时间。",
+        List.of("熊猫", "火锅", "慢生活"),
+        4.8,
+        512,
+        876);
+    seedGuide(
+        author,
+        "杭州西湖：一条不重复的环湖路线",
+        "杭州",
+        2,
+        "自然风光",
+        "860",
+        "https://images.unsplash.com/photo-1538485399081-7c897a9a3d20?auto=format&fit=crop&w=900&q=80",
+        "从北山街的清晨开始，把湖光山色交给脚步。",
+        List.of("西湖", "骑行", "茶园"),
+        4.7,
+        204,
+        633);
+    seedGuide(
+        author,
+        "北京中轴线：把六百年走成一天",
+        "北京",
+        3,
+        "城市漫游",
+        "1120",
+        "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=900&q=80",
+        "从永定门到钟鼓楼，沿着中轴线读懂这座城。",
+        List.of("故宫", "胡同", "历史"),
+        4.8,
+        410,
+        988);
+    seedGuide(
+        author,
+        "厦门海岛慢时光：鼓浪屿到环岛路",
+        "厦门",
+        2,
+        "疗愈放空",
+        "940",
+        "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
+        "把海风、老别墅和一碗沙茶面留给自己。",
+        List.of("海岛", "骑行", "文艺"),
+        4.6,
+        176,
+        502);
+    seedGuide(
+        author,
+        "西安古都寻踪：城墙内外的烟火",
+        "西安",
+        3,
+        "美食探索",
+        "1050",
+        "https://images.unsplash.com/photo-1591122947157-26bad3a117d2?auto=format&fit=crop&w=900&q=80",
+        "兵马俑、回民街和一段夜色里的大雁塔。",
+        List.of("历史", "小吃", "夜景"),
+        4.7,
+        289,
+        741);
+  }
+
+  private void seedGuide(
+      User author,
+      String title,
+      String city,
+      int days,
+      String theme,
+      String price,
+      String cover,
+      String description,
+      List<String> tags,
+      double rating,
+      int reviews,
+      int saves) {
+    if (guides.existsByTitle(title)) return;
+    TravelGuide guide = new TravelGuide();
+    guide.setAuthor(author);
+    guide.setTitle(title);
+    guide.setCity(city);
+    guide.setDays(days);
+    guide.setTheme(theme);
+    guide.setPrice(new BigDecimal(price));
+    guide.setCover(cover);
+    guide.setDescription(description);
+    guide.setTags(new java.util.ArrayList<>(tags));
+    guide.setRating(rating);
+    guide.setReviews(reviews);
+    guide.setSaves(saves);
+    guides.save(guide);
+  }
 
   private User ensureUser(String name, String email, String phone) {
     return users

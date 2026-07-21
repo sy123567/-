@@ -188,6 +188,26 @@ export interface TravelGuide {
   description: string;
 }
 
+export interface DiscussionPost {
+  id: Id;
+  authorId: Id;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  likes: number;
+  likedByMe: boolean;
+}
+
+export interface NotificationItem {
+  id: Id;
+  type: string;
+  title: string;
+  detail: string;
+  read: boolean;
+  tripId?: Id;
+  createdAt: string;
+}
+
 export interface DashboardData {
   user: User;
   trips: Trip[];
