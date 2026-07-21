@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, MapPin, Phone, Route, Star, X } from "lucide-react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { Clock3, MapPin, MessageCircle, Phone, Plus, Route, Star, X } from "lucide-react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type MapPlace, type MapRoute } from "../api/client";
 import type { ItineraryNode, Trip } from "../types";
 import { getPlaceImage } from "../mocks/places";
@@ -18,6 +18,9 @@ export function MapNodeDetailSheet({
   onClose: () => void;
 }) {
   const [selectedUid, setSelectedUid] = useState("");
+  const [addedPlaceKeys, setAddedPlaceKeys] = useState<string[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const queryClient = useQueryClient();
   const resolveQuery = useQuery({
     queryKey: ["map-resolve", node.id, node.placeName || node.name, node.latitude, node.longitude],
     queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude),
@@ -65,7 +68,7 @@ export function MapNodeDetailSheet({
     })),
   });
   const recommendationQueries = useQueries({
-    queries: ["美食", "景点", "休闲娱乐"].map((query) => ({
+    queries: ["美食", "景点"].map((query) => ({
       queryKey: ["map-nearby", query, node.id],
       queryFn: () => api.mapNearby(query, resolvedNode.latitude, resolvedNode.longitude, 3000),
       enabled: resolvedCoordinatesReady,
@@ -75,6 +78,17 @@ export function MapNodeDetailSheet({
     queryKey: ["map-place", selectedUid],
     queryFn: () => api.mapPlace(selectedUid),
     enabled: Boolean(selectedUid),
+  });
+  const notesQuery = useQuery({
+    queryKey: ["node-notes", trip.id, node.id],
+    queryFn: () => api.nodeNotes(trip.id, node.id),
+  });
+  const addNoteMutation = useMutation({
+    mutationFn: (content: string) => api.addNodeNote(trip.id, node.id, content),
+    onSuccess: () => {
+      setNoteDraft("");
+      void queryClient.invalidateQueries({ queryKey: ["node-notes", trip.id, node.id] });
+    },
   });
   const recommendations = useMemo(() => {
     const unique = new Map<string, MapPlace>();
@@ -123,6 +137,26 @@ export function MapNodeDetailSheet({
   });
   const weather = weatherQuery.data;
   const detail = detailQuery.data?.place;
+  const addRecommendation = (place: MapPlace) => {
+    const key = place.uid ?? `${place.name ?? "place"}:${place.lat ?? ""}:${place.lng ?? ""}`;
+    if (!place.lat || !place.lng || addedPlaceKeys.includes(key)) return;
+    void api.addNode(trip.id, {
+      name: place.name ?? "附近推荐地点",
+      placeName: place.name ?? "附近推荐地点",
+      latitude: place.lat,
+      longitude: place.lng,
+      parentId: node.id,
+      nodeType: "ATTRACTION",
+      plannedStart: node.plannedStart,
+      plannedEnd: node.plannedEnd,
+      cost: 0,
+      sequenceOrder: node.sequenceOrder,
+      status: "PLANNED",
+    }).then(() => {
+      setAddedPlaceKeys((current) => [...current, key]);
+      void queryClient.invalidateQueries({ queryKey: ["trip", trip.id] });
+    }).catch(() => undefined);
+  };
 
   return (
     <div
@@ -216,6 +250,8 @@ export function MapNodeDetailSheet({
                     key={`${place.uid ?? place.name}-${index}`}
                     place={place}
                     onClick={() => place.uid && setSelectedUid(place.uid)}
+                    added={addedPlaceKeys.includes(place.uid ?? `${place.name ?? "place"}:${place.lat ?? ""}:${place.lng ?? ""}`)}
+                    onAdd={() => addRecommendation(place)}
                   />
                 ))}
               </div>
@@ -263,7 +299,44 @@ export function MapNodeDetailSheet({
               )}
             </section>
           )}
-          </div>
+
+          <section className="rounded-card border border-sky/15 bg-sky/5 p-4">
+            <SectionHeading icon={<MessageCircle size={17} />} title="团队备注" tone="sky" />
+            <div className="mt-3 space-y-2">
+              {notesQuery.isLoading && <InfoPanel>正在读取团队备注…</InfoPanel>}
+              {notesQuery.isError && <InfoPanel>备注暂不可用，请稍后重试。</InfoPanel>}
+              {!notesQuery.isLoading && !notesQuery.isError && (notesQuery.data ?? []).length === 0 && <InfoPanel>还没有备注，留下第一条现场线索。</InfoPanel>}
+              {(notesQuery.data ?? []).map((note) => (
+                <div key={note.id} className="rounded-xl bg-white px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-ink-soft">
+                    <span className="font-semibold text-sky">{note.authorName}</span>
+                    <span>{formatNoteTime(note.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-ink">{note.content}</p>
+                </div>
+              ))}
+            </div>
+            <form
+              className="mt-3 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (noteDraft.trim()) addNoteMutation.mutate(noteDraft.trim());
+              }}
+            >
+              <textarea
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                rows={2}
+                placeholder="写下给团队的提醒…"
+                className="min-w-0 flex-1 resize-none rounded-xl border border-white bg-white px-3 py-2 text-sm text-ink outline-none focus:border-sky"
+              />
+              <Button type="submit" disabled={!noteDraft.trim() || addNoteMutation.isPending} className="self-end whitespace-nowrap">
+                {addNoteMutation.isPending ? "发布中…" : "发布"}
+              </Button>
+            </form>
+            {addNoteMutation.isError && <p className="mt-2 text-xs text-coral-deep">备注发布失败，请稍后重试。</p>}
+          </section>
+        </div>
         </div>
       </aside>
     </div>
@@ -293,14 +366,32 @@ function RouteRow({
   );
 }
 
-function RecommendationCard({ place, onClick }: { place: MapPlace; onClick: () => void }) {
-  const clickable = Boolean(place.uid);
+function RecommendationCard({
+  place,
+  onClick,
+  onAdd,
+  added,
+}: {
+  place: MapPlace;
+  onClick: () => void;
+  onAdd: () => void;
+  added: boolean;
+}) {
+  const clickable = Boolean(place.uid || (place.lat !== undefined && place.lng !== undefined));
   return (
-    <button
-      type="button"
-      disabled={!clickable}
-      onClick={onClick}
-      className="rounded-card border border-slate-100 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-coral/30 hover:shadow-soft disabled:cursor-default disabled:opacity-70 motion-reduce:transition-none"
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : -1}
+      onClick={() => {
+        if (place.uid) onClick();
+      }}
+      onKeyDown={(event) => {
+        if (clickable && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          if (place.uid) onClick();
+        }
+      }}
+      className={`rounded-card border border-slate-100 bg-white p-4 text-left transition motion-reduce:transition-none ${clickable ? "hover:-translate-y-0.5 hover:border-coral/30 hover:shadow-soft" : "opacity-70"}`}
     >
       <div className="mb-3 h-24 overflow-hidden rounded-2xl">
         <ImageFallback
@@ -321,7 +412,18 @@ function RecommendationCard({ place, onClick }: { place: MapPlace; onClick: () =
         {place.price !== undefined && <Badge tone="mint">人均 ¥{place.price}</Badge>}
       </div>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-ink-soft">{place.address ?? place.area ?? "百度地图推荐地点"}</p>
-    </button>
+      <button
+        type="button"
+        disabled={!place.lat || !place.lng || added}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAdd();
+        }}
+        className="mt-3 inline-flex items-center gap-1 rounded-full bg-mint/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-mint/20 motion-reduce:transition-none"
+      >
+        {added ? "已加入行程" : <><Plus size={12} />加入行程</>}
+      </button>
+    </div>
   );
 }
 
@@ -376,4 +478,10 @@ function formatDistance(distanceMeters: number) {
   return distanceMeters < 1000
     ? `${Math.round(distanceMeters)} m`
     : `${(distanceMeters / 1000).toFixed(1)} km`;
+}
+
+function formatNoteTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  return date.toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }

@@ -164,7 +164,7 @@ export function BaiduMap({
     nodePoints.forEach((point, index) => {
       const marker = new window.BMap!.Marker(point);
       if (window.BMap!.Label) {
-        const label = new window.BMap!.Label(String(index + 1), { offset: new window.BMap!.Size(-6, -8) });
+        const label = new window.BMap!.Label(String(mapNodes[index].sequenceOrder), { offset: new window.BMap!.Size(-6, -8) });
         label.setStyle?.({
           color: "#ffffff",
           backgroundColor: "#FF6B5F",
@@ -206,6 +206,13 @@ export function BaiduMap({
         strokeColor: "#FF6B5F",
         strokeWeight: 4,
         strokeOpacity: 0.7,
+      });
+      routeLine.addEventListener?.("click", () => {
+        try {
+          map.setViewport?.(nodePoints, { margins: [24, 24, 24, 24] });
+        } catch {
+          map.centerAndZoom(nodePoints[0], 14);
+        }
       });
       overlays.push(routeLine);
       map.addOverlay(routeLine);

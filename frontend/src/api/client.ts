@@ -8,6 +8,7 @@ import type {
   GroupMember,
   ImpactAssessment,
   ItineraryNode,
+  NodeNote,
   TravelGuide,
   TravelGroup,
   Trip,
@@ -277,6 +278,15 @@ export const api = {
   },
   async deleteNode(tripId: number, nodeId: number): Promise<void> {
     await request<void>(`/api/trips/${tripId}/nodes/${nodeId}`, { method: "DELETE" });
+  },
+  async nodeNotes(tripId: number, nodeId: number): Promise<NodeNote[]> {
+    return request<NodeNote[]>(`/api/trips/${tripId}/nodes/${nodeId}/notes`);
+  },
+  async addNodeNote(tripId: number, nodeId: number, content: string): Promise<NodeNote> {
+    return request<NodeNote>(`/api/trips/${tripId}/nodes/${nodeId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
   },
   async previewWeather(lat: number, lon: number): Promise<WeatherPreview> {
     return request<WeatherPreview>(`/api/weather/preview?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
