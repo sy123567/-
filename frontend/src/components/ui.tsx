@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
-import { Check, ChevronRight, CircleAlert, CloudRain, Info, MapPin, Send, Sparkles } from "lucide-react";
+import { Car, Check, ChevronRight, CircleAlert, CloudRain, Footprints, Info, MapPin, Send, Sparkles } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
 import type { ExternalEvent, ItineraryNode, NodeStatus, Severity } from "../types";
 import { getPlaceDetail, getPlaceImage } from "../mocks/places";
 import { ImageFallback } from "./pass2";
@@ -59,11 +61,15 @@ export function RouteTrail({
   compact = false,
   eventsByNode,
   onNodeClick,
+  showSegments = false,
+  showNearby = false,
 }: {
   nodes: ItineraryNode[];
   compact?: boolean;
   eventsByNode?: Record<number, ExternalEvent[]>;
   onNodeClick?: (node: ItineraryNode) => void;
+  showSegments?: boolean;
+  showNearby?: boolean;
 }) {
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
   return (
@@ -104,6 +110,12 @@ export function RouteTrail({
                       ))}
                     </div>
                   )}
+                  {showSegments && index < nodes.length - 1 && (
+                    <RouteSegment from={node} to={nodes[index + 1]} compact={compact} />
+                  )}
+                  {showNearby && (
+                    <NearbyPlay node={node} compact={compact} onNodeClick={onNodeClick ?? setSelectedNode} />
+                  )}
                 </div>
               </div>
             </div>
@@ -113,6 +125,105 @@ export function RouteTrail({
       {selectedNode && <PlaceDetailSheet detail={getPlaceDetail(selectedNode.placeName, selectedNode.nodeType)} node={selectedNode} onClose={() => setSelectedNode(null)} />}
     </>
   );
+}
+
+function RouteSegment({ from, to, compact }: { from: ItineraryNode; to: ItineraryNode; compact: boolean }) {
+  const mode = segmentMode(from, to);
+  const routeQuery = useQuery({
+    queryKey: ["route-trail-segment", from.id, to.id, mode],
+    queryFn: () => api.mapRoute(from.latitude, from.longitude, to.latitude, to.longitude, mode),
+    enabled: hasNodeCoordinates(from) && hasNodeCoordinates(to),
+  });
+  const route = routeQuery.data;
+  if (!route?.available || route.distanceMeters === undefined || route.durationSeconds === undefined) return null;
+  const ModeIcon = mode === "walking" ? Footprints : Car;
+  return (
+    <div className={`mt-3 flex items-center gap-2 rounded-xl border border-dashed border-sky/20 bg-sky/5 px-3 py-2 text-xs text-ink-soft ${compact ? "text-[11px]" : ""}`}>
+      <ModeIcon size={14} className="shrink-0 text-sky" />
+      <span>{mode === "walking" ? "步行" : "驾车"}</span>
+      <span className="text-ink/30">·</span>
+      <span>{formatDuration(route.durationSeconds)}</span>
+      <span className="text-ink/30">·</span>
+      <span>{formatDistance(route.distanceMeters)}</span>
+    </div>
+  );
+}
+
+function NearbyPlay({
+  node,
+  compact,
+  onNodeClick,
+}: {
+  node: ItineraryNode;
+  compact: boolean;
+  onNodeClick: (node: ItineraryNode) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const nearbyQuery = useQuery({
+    queryKey: ["route-trail-nearby", node.id],
+    queryFn: () => api.mapNearby("景点", node.latitude, node.longitude, 2000),
+    enabled: expanded && hasNodeCoordinates(node),
+  });
+  const places = (nearbyQuery.data?.places ?? [])
+    .filter((place) => place.lat !== undefined && place.lng !== undefined)
+    .sort((left, right) => (left.distanceMeters ?? Number.POSITIVE_INFINITY) - (right.distanceMeters ?? Number.POSITIVE_INFINITY))
+    .slice(0, 4);
+  return (
+    <div className={`mt-3 border-t border-dashed border-slate-100 pt-3 ${compact ? "text-[11px]" : ""}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex items-center gap-2 rounded-full bg-mint/10 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-mint/20 motion-reduce:transition-none"
+      >
+        <Sparkles size={13} />
+        周边玩法
+        <ChevronRight size={13} className={`transition-transform motion-reduce:transition-none ${expanded ? "rotate-90" : ""}`} />
+      </button>
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {nearbyQuery.isLoading && <p className="text-xs text-ink-soft">正在寻找附近玩法…</p>}
+          {nearbyQuery.isError && <p className="text-xs text-ink-soft">附近推荐暂不可用，打开节点详情查看更多。</p>}
+          {!nearbyQuery.isLoading && !nearbyQuery.isError && places.length === 0 && <p className="text-xs text-ink-soft">附近暂时没有可展示的推荐。</p>}
+          {places.map((place, index) => (
+            <button
+              type="button"
+              key={`${place.uid ?? place.name ?? "place"}-${index}`}
+              onClick={() => onNodeClick(node)}
+              className="flex w-full items-center justify-between gap-3 rounded-xl bg-paper/70 px-3 py-2 text-left transition hover:bg-sky/10 motion-reduce:transition-none"
+            >
+              <span className="min-w-0 truncate text-xs font-semibold text-ink">{place.name ?? "附近地点"}</span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-soft">{place.distanceMeters === undefined ? "附近" : formatDistance(place.distanceMeters)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function segmentMode(from: ItineraryNode, to: ItineraryNode): "walking" | "driving" {
+  return haversine(from.latitude, from.longitude, to.latitude, to.longitude) <= 2 ? "walking" : "driving";
+}
+
+function hasNodeCoordinates(node: ItineraryNode) {
+  return Number.isFinite(node.latitude) && Number.isFinite(node.longitude) && node.latitude !== 0 && node.longitude !== 0;
+}
+
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const radians = Math.PI / 180;
+  const latitudeDelta = (lat2 - lat1) * radians;
+  const longitudeDelta = (lng2 - lng1) * radians;
+  const value = Math.sin(latitudeDelta / 2) ** 2 + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function formatDistance(meters: number) {
+  return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
+}
+
+function formatDuration(seconds: number) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时${minutes % 60 ? ` ${minutes % 60} 分钟` : ""}`;
 }
 
 function formatTime(value: string) { return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }); }
