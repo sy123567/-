@@ -18,7 +18,18 @@ export function MapNodeDetailSheet({
   onClose: () => void;
 }) {
   const [selectedUid, setSelectedUid] = useState("");
-  const mapNodes = useMemo(() => [node], [node]);
+  const resolveQuery = useQuery({
+    queryKey: ["map-resolve", node.id, node.placeName || node.name, node.latitude, node.longitude],
+    queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude),
+    enabled: hasCoordinates(node) && Boolean(node.placeName || node.name),
+  });
+  const resolvedNode = useMemo(() => {
+    const resolved = resolveQuery.data;
+    if (!resolved?.available || resolved.lat === undefined || resolved.lng === undefined) return node;
+    return { ...node, latitude: resolved.lat, longitude: resolved.lng };
+  }, [node, resolveQuery.data]);
+  const resolvedCoordinatesReady = !resolveQuery.isLoading && hasCoordinates(resolvedNode);
+  const mapNodes = useMemo(() => [resolvedNode], [resolvedNode]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -35,29 +46,29 @@ export function MapNodeDetailSheet({
     (item): item is ItineraryNode => Boolean(item),
   );
   const weatherQuery = useQuery({
-    queryKey: ["weather-preview", node.id, node.latitude, node.longitude],
-    queryFn: () => api.previewWeather(node.latitude, node.longitude),
-    enabled: hasCoordinates(node),
+    queryKey: ["weather-preview", resolvedNode.id, resolvedNode.latitude, resolvedNode.longitude],
+    queryFn: () => api.previewWeather(resolvedNode.latitude, resolvedNode.longitude),
+    enabled: resolvedCoordinatesReady,
   });
   const routeQueries = useQueries({
     queries: adjacentNodes.map((adjacent) => ({
       queryKey: ["map-route", node.id, adjacent.id],
       queryFn: () =>
         api.mapRoute(
-          node.latitude,
-          node.longitude,
+          resolvedNode.latitude,
+          resolvedNode.longitude,
           adjacent.latitude,
           adjacent.longitude,
           "driving",
         ),
-      enabled: hasCoordinates(node) && hasCoordinates(adjacent),
+      enabled: resolvedCoordinatesReady && hasCoordinates(adjacent),
     })),
   });
   const recommendationQueries = useQueries({
     queries: ["美食", "景点", "休闲娱乐"].map((query) => ({
       queryKey: ["map-nearby", query, node.id],
-      queryFn: () => api.mapNearby(query, node.latitude, node.longitude, 3000),
-      enabled: hasCoordinates(node),
+      queryFn: () => api.mapNearby(query, resolvedNode.latitude, resolvedNode.longitude, 3000),
+      enabled: resolvedCoordinatesReady,
     })),
   });
   const detailQuery = useQuery({
@@ -95,15 +106,15 @@ export function MapNodeDetailSheet({
     ],
     queryFn: () =>
       api.mapRoute(
-        node.latitude,
-        node.longitude,
+        resolvedNode.latitude,
+        resolvedNode.longitude,
         selectedPlace?.lat ?? 0,
         selectedPlace?.lng ?? 0,
         "walking",
       ),
     enabled:
       Boolean(selectedUid) &&
-      hasCoordinates(node) &&
+      resolvedCoordinatesReady &&
       selectedPlace !== undefined &&
       selectedPlace.lat !== undefined &&
       selectedPlace.lng !== undefined &&
@@ -115,12 +126,12 @@ export function MapNodeDetailSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-ink/30 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-3 backdrop-blur-sm sm:p-5"
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <aside
-        className="h-full w-full max-w-2xl overflow-y-auto bg-paper p-5 shadow-2xl motion-safe:animate-[slide-in-right_.25s_ease-out] sm:p-7"
+        className="flex h-[92vh] w-[94vw] max-w-6xl flex-col overflow-hidden rounded-card bg-paper p-4 shadow-2xl motion-safe:animate-[slide-in-right_.25s_ease-out] motion-reduce:animate-none sm:p-6 lg:h-[90vh]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="map-node-detail-title"
@@ -146,9 +157,17 @@ export function MapNodeDetailSheet({
           </div>
         </div>
 
-        <div className="space-y-5 py-6">
-          <BaiduMap nodes={mapNodes} className="h-56" />
+        <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto py-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] lg:overflow-hidden">
+          <BaiduMap
+            nodes={mapNodes}
+            places={recommendations}
+            selectedPlace={selectedPlace}
+            routeMode="walking"
+            onPlaceClick={(place) => place.uid && setSelectedUid(place.uid)}
+            className="h-64 min-h-64 lg:h-[45vh] lg:min-h-[420px]"
+          />
 
+          <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <section>
             <SectionHeading icon={<MapPin size={17} />} title="天气上下文" tone="coral" />
             {weatherQuery.isLoading ? (
@@ -244,6 +263,7 @@ export function MapNodeDetailSheet({
               )}
             </section>
           )}
+          </div>
         </div>
       </aside>
     </div>
