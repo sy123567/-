@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, MapPin, MessageCircle, Phone, Plus, Route, Star, X } from "lucide-react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type MapPlace, type MapRoute } from "../api/client";
+import { api, type HotelRecommendation, type MapPlace, type MapRoute } from "../api/client";
 import type { ItineraryNode, Trip } from "../types";
 import { getPlaceImage } from "../mocks/places";
 import { Badge, Button } from "./ui";
@@ -19,6 +19,7 @@ export function MapNodeDetailSheet({
 }) {
   const [selectedUid, setSelectedUid] = useState("");
   const [addedPlaceKeys, setAddedPlaceKeys] = useState<string[]>([]);
+  const [selectedHotelCategory, setSelectedHotelCategory] = useState("value");
   const [noteDraft, setNoteDraft] = useState("");
   const queryClient = useQueryClient();
   const resolveQuery = useQuery({
@@ -73,6 +74,11 @@ export function MapNodeDetailSheet({
       queryFn: () => api.mapNearby(query, resolvedNode.latitude, resolvedNode.longitude, 3000),
       enabled: resolvedCoordinatesReady,
     })),
+  });
+  const hotelsQuery = useQuery({
+    queryKey: ["map-hotels", node.id, resolvedNode.latitude, resolvedNode.longitude],
+    queryFn: () => api.mapHotels(resolvedNode.latitude, resolvedNode.longitude, 2500),
+    enabled: resolvedCoordinatesReady,
   });
   const detailQuery = useQuery({
     queryKey: ["map-place", selectedUid],
@@ -137,7 +143,7 @@ export function MapNodeDetailSheet({
   });
   const weather = weatherQuery.data;
   const detail = detailQuery.data?.place;
-  const addRecommendation = (place: MapPlace) => {
+  const addRecommendation = (place: MapPlace, nodeType: ItineraryNode["nodeType"] = "ATTRACTION") => {
     const key = place.uid ?? `${place.name ?? "place"}:${place.lat ?? ""}:${place.lng ?? ""}`;
     if (!place.lat || !place.lng || addedPlaceKeys.includes(key)) return;
     void api.addNode(trip.id, {
@@ -146,7 +152,7 @@ export function MapNodeDetailSheet({
       latitude: place.lat,
       longitude: place.lng,
       parentId: node.id,
-      nodeType: "ATTRACTION",
+      nodeType,
       plannedStart: node.plannedStart,
       plannedEnd: node.plannedEnd,
       cost: 0,
@@ -157,6 +163,34 @@ export function MapNodeDetailSheet({
       void queryClient.invalidateQueries({ queryKey: ["trip", trip.id] });
     }).catch(() => undefined);
   };
+  const addHotel = (hotel: HotelRecommendation) => {
+    if (hotel.lat === undefined || hotel.lng === undefined) return;
+    const key = hotel.uid ?? `${hotel.name}:${hotel.lat}:${hotel.lng}`;
+    if (addedPlaceKeys.includes(key)) return;
+    void api.addNode(trip.id, {
+      name: hotel.name,
+      placeName: hotel.name,
+      latitude: hotel.lat,
+      longitude: hotel.lng,
+      parentId: node.id,
+      nodeType: "LODGING",
+      plannedStart: node.plannedStart,
+      plannedEnd: node.plannedEnd,
+      cost: hotel.price ?? 0,
+      sequenceOrder: node.sequenceOrder,
+      status: "PLANNED",
+    }).then(() => {
+      setAddedPlaceKeys((current) => [...current, key]);
+      void queryClient.invalidateQueries({ queryKey: ["trip", trip.id] });
+    }).catch(() => undefined);
+  };
+  const hotelCategories = hotelsQuery.data?.categories ?? [];
+  const activeHotelCategory =
+    hotelCategories.find((category) => category.key === selectedHotelCategory)
+      ?? hotelCategories.find((category) => category.hotels.length > 0);
+  const selectedHotels =
+    activeHotelCategory?.hotels
+      ?? [];
 
   return (
     <div
@@ -237,7 +271,7 @@ export function MapNodeDetailSheet({
           <section>
             <div className="flex items-end justify-between gap-3">
               <SectionHeading icon={<Star size={17} />} title="周边推荐" tone="mint" />
-              <span className="text-xs text-ink-soft">附近 3km · 美食 / 景点 / 休闲</span>
+              <span className="text-xs text-ink-soft">附近 3km · 美食 / 景点</span>
             </div>
             {recommendationQueries.some((query) => query.isLoading) ? (
               <InfoPanel>正在寻找附近值得停留的地方…</InfoPanel>
@@ -255,6 +289,52 @@ export function MapNodeDetailSheet({
                   />
                 ))}
               </div>
+            )}
+          </section>
+
+          <section className="rounded-card border border-coral/15 bg-coral/5 p-4">
+            <div className="flex items-end justify-between gap-3">
+              <SectionHeading icon={<Route size={17} />} title="住宿推荐" tone="coral" />
+              <span className="text-xs text-ink-soft">节点周边 2.5km</span>
+            </div>
+            {hotelsQuery.isLoading ? (
+              <InfoPanel>正在寻找适合落脚的酒店…</InfoPanel>
+            ) : hotelsQuery.isError || hotelsQuery.data?.available === false ? (
+              <InfoPanel>{hotelsQuery.data?.message ?? "住宿服务暂不可用，可稍后再试。"}</InfoPanel>
+            ) : hotelCategories.every((category) => category.hotels.length === 0) ? (
+              <InfoPanel>附近暂时没有可用酒店推荐。</InfoPanel>
+            ) : (
+              <>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {hotelCategories.map((category) => (
+                    <button
+                      key={category.key}
+                      type="button"
+                      onClick={() => setSelectedHotelCategory(category.key)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold transition motion-reduce:transition-none ${selectedHotelCategory === category.key ? "bg-coral text-white" : "bg-white text-ink-soft hover:bg-coral/10 hover:text-coral-deep"}`}
+                    >
+                      {category.label}
+                      <span className="ml-1 font-mono text-[10px] opacity-70">{category.hotels.length}</span>
+                    </button>
+                  ))}
+                </div>
+                {selectedHotels.length === 0 ? (
+                  <div className="mt-3">
+                    <InfoPanel>这个分类暂时没有合适的酒店，可以切换其他标签。</InfoPanel>
+                  </div>
+                ) : (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {selectedHotels.map((hotel) => (
+                      <HotelCard
+                        key={hotel.uid ?? `${hotel.name}-${hotel.lat}-${hotel.lng}`}
+                        hotel={hotel}
+                        added={addedPlaceKeys.includes(hotel.uid ?? `${hotel.name}:${hotel.lat}:${hotel.lng}`)}
+                        onAdd={() => addHotel(hotel)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </section>
 
@@ -424,6 +504,48 @@ function RecommendationCard({
         {added ? "已加入行程" : <><Plus size={12} />加入行程</>}
       </button>
     </div>
+  );
+}
+
+function HotelCard({
+  hotel,
+  added,
+  onAdd,
+}: {
+  hotel: HotelRecommendation;
+  added: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <article className="rounded-card border border-white bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none">
+      <div className="h-24 overflow-hidden rounded-2xl">
+        <ImageFallback
+          src={hotel.image || getPlaceImage(hotel.name, "LODGING")}
+          alt={hotel.name}
+          city={hotel.address || "住宿推荐"}
+        />
+      </div>
+      <div className="mt-3 flex items-start justify-between gap-2">
+        <h4 className="line-clamp-2 text-sm font-semibold text-ink">{hotel.name}</h4>
+        {hotel.rating !== undefined && <Badge tone="sun">评分 {hotel.rating}</Badge>}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {hotel.price !== undefined && <Badge tone="mint">人均 ¥{hotel.price}</Badge>}
+        {hotel.distanceMeters !== undefined && <Badge tone="sky">{formatDistance(hotel.distanceMeters)}</Badge>}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {hotel.transitConvenient && <Badge tone="mint">交通便利 · {hotel.transitNote}</Badge>}
+        {hotel.foodNearby && <Badge tone="coral">{hotel.foodNote ?? "楼下小吃街"}</Badge>}
+      </div>
+      <button
+        type="button"
+        disabled={added || hotel.lat === undefined || hotel.lng === undefined}
+        onClick={onAdd}
+        className="mt-3 inline-flex items-center gap-1 rounded-full bg-coral/10 px-3 py-1.5 text-xs font-semibold text-coral-deep transition hover:bg-coral/20 disabled:cursor-default disabled:opacity-60 motion-reduce:transition-none"
+      >
+        <Plus size={13} />{added ? "已加入行程" : "加入住宿分支"}
+      </button>
+    </article>
   );
 }
 

@@ -155,6 +155,36 @@ export type MapResolve = {
   name?: string;
 };
 
+export type HotelRecommendation = {
+  uid?: string;
+  name: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  price?: number;
+  rating?: number;
+  tag?: string;
+  image?: string;
+  distanceMeters?: number;
+  transitConvenient: boolean;
+  transitNote?: string;
+  foodNearby: boolean;
+  foodNote?: string;
+  category: string;
+};
+
+export type HotelCategory = {
+  key: "value" | "business" | "luxury" | "scenic" | string;
+  label: string;
+  hotels: HotelRecommendation[];
+};
+
+export type HotelRecommendations = {
+  available: boolean;
+  categories: HotelCategory[];
+  message?: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const endpoint = `${apiBase}${path}`;
   const token = getToken();
@@ -325,6 +355,14 @@ export const api = {
       lng: String(lng),
     });
     return request<MapResolve>(`/api/map/resolve?${params.toString()}`);
+  },
+  async mapHotels(lat: number, lng: number, radius = 2500): Promise<HotelRecommendations> {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lng),
+      radius: String(radius),
+    });
+    return request<HotelRecommendations>(`/api/map/hotels?${params.toString()}`);
   },
   async mapPlace(uid: string): Promise<MapPlaceResult> {
     return request<MapPlaceResult>(`/api/map/place?uid=${encodeURIComponent(uid)}`);
