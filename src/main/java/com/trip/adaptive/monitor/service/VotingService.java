@@ -28,6 +28,7 @@ public class VotingService {
   private final TripRepository trips;
   private final ChangeLogRepository logs;
   private final NotificationService notification;
+  private final RouteRecalculationService routing;
 
   public VotingService(
       AlternativePlanRepository p,
@@ -35,23 +36,28 @@ public class VotingService {
       PlanVoteRepository v,
       TripRepository t,
       ChangeLogRepository l,
-      NotificationService n) {
+      NotificationService n,
+      RouteRecalculationService routing) {
     plans = p;
     members = m;
     votes = v;
     trips = t;
     logs = l;
     notification = n;
+    this.routing = routing;
   }
 
   @Transactional
   public AlternativePlan start(Long id) {
     AlternativePlan p = get(id);
+    // 同一行程同一时间只允许一个方案处于投票：选中方案置为 VOTING，其余保持/回退到 PROPOSED。
     plans
         .findByTripId(p.getTrip().getId())
         .forEach(
             x -> {
-              if (x.getStatus() == Enums.PlanStatus.PROPOSED) x.setStatus(Enums.PlanStatus.VOTING);
+              if (x.getId().equals(id)) x.setStatus(Enums.PlanStatus.VOTING);
+              else if (x.getStatus() == Enums.PlanStatus.VOTING)
+                x.setStatus(Enums.PlanStatus.PROPOSED);
             });
     return p;
   }
@@ -90,12 +96,15 @@ public class VotingService {
                   n.setStatus(Enums.NodeStatus.CANCELLED);
                 else {
                   n.setPlaceName(c.getNewPlaceName());
+                  if (c.getNewLatitude() != null) n.setLatitude(c.getNewLatitude());
+                  if (c.getNewLongitude() != null) n.setLongitude(c.getNewLongitude());
                   n.setPlannedStart(c.getNewStart());
                   n.setPlannedEnd(c.getNewEnd());
                   n.setCost(c.getNewCost());
                   n.setStatus(Enums.NodeStatus.REPLACED);
                 }
               });
+      routing.recompute(p.getTrip()); // 节点地点/坐标变化后重算受影响路段
       plans.findByTripId(p.getTrip().getId()).stream()
           .filter(x -> !x.getId().equals(id))
           .forEach(x -> x.setStatus(Enums.PlanStatus.REJECTED));
