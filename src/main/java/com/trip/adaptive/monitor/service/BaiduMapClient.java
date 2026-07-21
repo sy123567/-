@@ -221,7 +221,7 @@ public class BaiduMapClient {
                 "output",
                 "json"),
             SEARCH_TTL);
-    if (!ok(root)) return null;
+    if (!ok(root)) return geocodeFallback(name);
     String normalizedName = normalize(name);
     JsonNode best = null;
     double bestDistance = Double.POSITIVE_INFINITY;
@@ -258,10 +258,16 @@ public class BaiduMapClient {
       }
       resultIndex++;
     }
-    if (best == null) return null;
+    if (best == null) return geocodeFallback(name);
     JsonNode location = best.path("location");
     return new ResolvedPlace(
         number(location, "lat"), number(location, "lng"), text(best, "uid"), text(best, "name"));
+  }
+
+  /** 地点检索不可用/无命中时，退回地理编码(/geocoding/v3)以仍能拿到候选坐标。 */
+  private ResolvedPlace geocodeFallback(String name) {
+    Geocode geo = geocode(name);
+    return geo == null ? null : new ResolvedPlace(geo.lat(), geo.lng(), null, name);
   }
 
   public HotelRecommendations hotels(double lat, double lng, int radius) {
@@ -450,7 +456,8 @@ public class BaiduMapClient {
       // Redis 读取失败时跳过缓存，仍然请求百度接口。
     }
     try {
-      String body = http.getForObject(requestUrl, String.class);
+      // requestUrl 已由 url() 完成百分号编码，须以 URI 发送，避免 RestTemplate 二次编码破坏中文参数。
+      String body = http.getForObject(java.net.URI.create(requestUrl), String.class);
       if (body == null || body.isBlank()) return null;
       JsonNode root = mapper.readTree(body);
       if (ok(root)) {
