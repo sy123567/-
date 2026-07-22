@@ -16,22 +16,29 @@ import com.trip.adaptive.repository.TravelGuideRepository;
 public class TravelGuideService {
   private final TravelGuideRepository repo;
   private final GuideCommentRepository comments;
+  private final GuideEngagementService engagement;
 
-  public TravelGuideService(TravelGuideRepository r, GuideCommentRepository c) {
+  public TravelGuideService(
+      TravelGuideRepository r, GuideCommentRepository c, GuideEngagementService engagement) {
     repo = r;
     comments = c;
+    this.engagement = engagement;
   }
 
   public List<TravelGuide> list() {
-    return repo.findAllByOrderByCreatedAtDesc();
+    return repo.findAllByOrderByCreatedAtDesc().stream().peek(engagement::decorate).toList();
   }
 
   public TravelGuide get(Long id) {
-    return repo.findById(id).orElseThrow(() -> new ResourceNotFoundException("攻略不存在"));
+    TravelGuide guide = repo.findById(id).orElseThrow(() -> new ResourceNotFoundException("攻略不存在"));
+    engagement.decorate(guide);
+    return guide;
   }
 
   public List<TravelGuide> byAuthor(Long authorId) {
-    return repo.findByAuthorIdOrderByCreatedAtDesc(authorId);
+    return repo.findByAuthorIdOrderByCreatedAtDesc(authorId).stream()
+        .peek(engagement::decorate)
+        .toList();
   }
 
   public List<GuideComment> listComments(Long guideId) {
@@ -42,9 +49,9 @@ public class TravelGuideService {
   @Transactional
   public GuideComment addComment(Long guideId, User author, String body) {
     TravelGuide guide = get(guideId);
-    guide.setReviews(guide.getReviews() + 1);
-    repo.save(guide);
-    return comments.save(new GuideComment(guide, author, body));
+    GuideComment comment = comments.save(new GuideComment(guide, author, body));
+    engagement.recordReview(guideId, (int) comments.countByGuideId(guideId));
+    return comment;
   }
 
   @Transactional
@@ -57,12 +64,12 @@ public class TravelGuideService {
   @Transactional
   public TravelGuide toggleSave(Long id, User user) {
     TravelGuide guide = get(id);
-    if (guide.getSavedBy().add(user.getId())) {
-      guide.setSaves(guide.getSaves() + 1);
-    } else {
+    boolean added = guide.getSavedBy().add(user.getId());
+    if (!added) {
       guide.getSavedBy().remove(user.getId());
-      guide.setSaves(Math.max(0, guide.getSaves() - 1));
     }
-    return repo.save(guide);
+    repo.save(guide);
+    guide.setSaves(engagement.adjustSaves(guide, added ? 1 : -1));
+    return guide;
   }
 }
