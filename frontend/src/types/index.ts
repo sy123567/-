@@ -29,7 +29,7 @@ export interface GroupMember {
   id: Id;
   user: User;
   role: "OWNER" | "MEMBER";
-  constraint: MemberConstraint;
+  constraint?: MemberConstraint | null;
 }
 
 export interface MemberConstraint {

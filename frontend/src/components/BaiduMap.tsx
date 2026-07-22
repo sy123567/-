@@ -252,7 +252,7 @@ export function BaiduMap({
   if (configQuery.isLoading) return <MapPlaceholder className={className} label="正在准备地图…" />;
   if (mapNodes.length === 0) return <MapPlaceholder className={className} label="节点还没有可用坐标" />;
   if (scriptReady === false || configQuery.isError || !configQuery.data?.available) {
-    return <MapPlaceholder className={className} label="地图暂不可用，仍可查看节点列表" />;
+    return <MapPlaceholder className={className} nodes={mapNodes} label="地图服务暂不可用，已切换演示路线" />;
   }
   return <div ref={mapRef} className={`min-h-[220px] overflow-hidden rounded-card bg-sky/10 ${className}`} aria-label="行程节点地图" />;
 }
@@ -324,10 +324,10 @@ function hasCoordinates(latitude?: number, longitude?: number) {
   );
 }
 
-function MapPlaceholder({ className, label }: { className: string; label: string }) {
+function MapPlaceholder({ className, label, nodes = [] }: { className: string; label: string; nodes?: ItineraryNode[] }) {
   return (
-    <div className={`grid min-h-[220px] place-items-center rounded-card border border-dashed border-sky/25 bg-sky/5 p-6 text-center ${className}`}>
-      <div>
+    <div className={`min-h-[220px] rounded-card border border-dashed border-sky/25 bg-sky/5 p-6 ${className}`}>
+      <div className="flex h-full min-h-[188px] flex-col justify-center text-center">
         <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-white text-sky shadow-sm">
           <MapPin size={20} />
         </div>
@@ -335,6 +335,21 @@ function MapPlaceholder({ className, label }: { className: string; label: string
         <p className="mt-1 flex items-center justify-center gap-1 text-xs text-ink-soft">
           <ShieldAlert size={13} />地图服务异常不会影响行程操作
         </p>
+        {nodes.length > 0 && (
+          <div className="mx-auto mt-4 grid max-w-xl gap-2 text-left sm:grid-cols-2">
+            {nodes.map((node) => (
+              <div key={node.id} className="rounded-xl bg-white/80 px-3 py-2 text-xs shadow-sm">
+                <span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-sky/10 font-mono text-sky">
+                  {node.sequenceOrder}
+                </span>
+                <span className="font-semibold text-ink">{node.placeName || node.name}</span>
+                <span className="ml-2 text-ink-soft">
+                  {node.latitude.toFixed(3)}, {node.longitude.toFixed(3)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

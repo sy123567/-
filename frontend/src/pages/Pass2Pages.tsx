@@ -146,7 +146,15 @@ export function ConstraintPage() {
   const [newPlace, setNewPlace] = useState("");
   const [newDiet, setNewDiet] = useState("");
   const [newAccess, setNewAccess] = useState("");
-  const current: MemberConstraint | null = form ?? member?.constraint ?? null;
+  const current: MemberConstraint | null = form ?? member?.constraint ?? (member ? {
+    availableFrom: "",
+    availableTo: "",
+    maxBudget: 0,
+    mustVisitPlaces: [],
+    fitnessLevel: "MEDIUM",
+    dietaryNeeds: [],
+    accessibilityNeeds: [],
+  } : null);
   const patch = (partial: Partial<MemberConstraint>) => setForm({ ...(current as MemberConstraint), ...partial });
   const save = useMutation({
     mutationFn: () => api.saveConstraint(groupId, memberIdNum, current as MemberConstraint),
