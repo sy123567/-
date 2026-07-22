@@ -17,15 +17,12 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 @Entity
 public class Trip {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  @JsonIgnore
   @ManyToOne(optional = false)
   private TravelGroup group;
 

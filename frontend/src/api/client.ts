@@ -7,6 +7,7 @@ import type {
   DiscussionPost,
   ExternalEvent,
   GroupMember,
+  GuideComment,
   ImpactAssessment,
   ItineraryNode,
   MemberConstraint,
@@ -310,11 +311,26 @@ export const api = {
     }));
     return { user, trips, activeTrip, events, notifications };
   },
+  async trips(): Promise<Trip[]> {
+    return request<Trip[]>("/api/trips");
+  },
   async guides(): Promise<TravelGuide[]> {
     return request<TravelGuide[]>("/api/guides");
   },
   async guide(id: number): Promise<TravelGuide> {
     return request<TravelGuide>(`/api/guides/${id}`);
+  },
+  async guidesByAuthor(authorId: number): Promise<TravelGuide[]> {
+    return request<TravelGuide[]>(`/api/guides/author/${authorId}`);
+  },
+  async guideComments(guideId: number): Promise<GuideComment[]> {
+    return request<GuideComment[]>(`/api/guides/${guideId}/comments`);
+  },
+  async addGuideComment(guideId: number, body: string): Promise<GuideComment> {
+    return request<GuideComment>(`/api/guides/${guideId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
   },
   async toggleGuideSave(id: number): Promise<TravelGuide> {
     return request<TravelGuide>(`/api/guides/${id}/save`, { method: "POST" });

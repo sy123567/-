@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, MapPin, MessageCircle, Phone, Plus, Route, Star, X } from "lucide-react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api, type HotelRecommendation, type MapPlace, type MapRoute } from "../api/client";
 import type { ItineraryNode, Trip } from "../types";
 import { getPlaceImage } from "../mocks/places";
@@ -214,14 +215,19 @@ export function MapNodeDetailSheet({
               </h2>
               <p className="mt-2 text-sm text-white/60">{node.name} · {node.sequenceOrder}号节点</p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="关闭地图节点详情"
-              className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white motion-reduce:transition-none"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <Link to={`/trips/${trip.id}`} onClick={onClose} className="rounded-lg px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white">
+                查看行程详情
+              </Link>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="关闭地图节点详情"
+                className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white motion-reduce:transition-none"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
 

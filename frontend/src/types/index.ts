@@ -199,6 +199,14 @@ export interface DiscussionPost {
   likedByMe: boolean;
 }
 
+export interface GuideComment {
+  id: Id;
+  authorId: Id;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface TripExpenseItem {
   id: Id;
   label: string;
