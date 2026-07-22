@@ -136,7 +136,8 @@ public class EventIngestionService {
   private void refreshWeatherEvents(ItineraryNode node) {
     if (node.getPlaceName() == null) return;
     for (ExternalEvent event :
-        events.findBySourceStartingWithAndPlaceName("weathercn", node.getPlaceName())) {
+        events.findBySourceStartingWithAndPlaceNameAndTripId(
+            "weathercn", node.getPlaceName(), node.getTrip().getId())) {
       assessments.deleteByEvent_Id(event.getId());
       events.delete(event);
     }

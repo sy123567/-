@@ -860,8 +860,9 @@ function eventGroupSeverity(events: ExternalEvent[]): Severity | undefined {
 }
 
 export function EventsPage() {
-  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events", "mine"], queryFn: api.myEvents });
   const scope = useTripScope();
+  const currentUser = getCurrentUser();
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["events", "mine", currentUser?.id], queryFn: api.myEvents });
   const tripId = scope.tripId;
   const impactQueries = useQueries({ queries: scope.trips.map((trip) => ({ queryKey: ["impacts", trip.id], queryFn: () => api.impacts(trip.id), enabled: scope.trips.length > 0 })) });
   const [typeFilter, setTypeFilter] = useState<"ALL" | "TRAFFIC" | EventType>("ALL");
@@ -871,7 +872,7 @@ export function EventsPage() {
   const { toast, show } = useToast();
   const queryClient = useQueryClient();
   const refreshMonitor = () => {
-    void queryClient.invalidateQueries({ queryKey: ["events", "mine"] });
+    void queryClient.invalidateQueries({ queryKey: ["events", "mine", currentUser?.id] });
     void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
     void queryClient.invalidateQueries({ queryKey: ["risk", tripId] });
   };
@@ -907,7 +908,9 @@ export function EventsPage() {
     { value: "ATTRACTION_CLOSURE", label: "景点闭馆" },
     { value: "LARGE_EVENT", label: "大型活动" },
   ];
+  const visibleTripIds = new Set(scope.trips.map((trip) => trip.id));
   const filteredEvents = data.filter((event) => {
+    if (event.tripId === undefined || !visibleTripIds.has(event.tripId)) return false;
     const typeMatches = typeFilter === "ALL" || (typeFilter === "TRAFFIC" ? event.eventType === "ROAD_WORK" || event.eventType === "TRAFFIC_CONTROL" : event.eventType === typeFilter);
     const severityMatches = severityFilter === "ALL" || event.severity === severityFilter;
     const searchText = `${event.title ?? ""} ${event.description ?? ""} ${event.placeName ?? ""}`.toLowerCase();

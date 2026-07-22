@@ -92,7 +92,7 @@ public class ReplanningService {
     if (affected.isEmpty()) return List.of();
     clearProposed(id);
 
-    List<ExternalEvent> activeEvents = events.findByEndTimeAfter(LocalDateTime.now());
+    List<ExternalEvent> activeEvents = events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now());
     ReplanConstraints constraints = constraintsFor(t);
     List<AlternativePlan> out = new ArrayList<>();
     for (Enums.ReplanStrategy strategy : Enums.ReplanStrategy.values()) {

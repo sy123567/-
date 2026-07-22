@@ -45,6 +45,19 @@ public class TripService {
     return trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在: " + id));
   }
 
+  public Trip requireMember(Long id, User user) {
+    Trip trip = get(id);
+    boolean member =
+        members.findByGroupIdAndUserId(trip.getGroup().getId(), user.getId()).isPresent();
+    boolean owner =
+        trip.getGroup().getOwnerUser() != null
+            && trip.getGroup().getOwnerUser().getId().equals(user.getId());
+    if (!member && !owner) {
+      throw new ResourceNotFoundException("行程不存在");
+    }
+    return trip;
+  }
+
   public List<Trip> all() {
     return trips.findAll();
   }
