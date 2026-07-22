@@ -34,7 +34,7 @@ export type GuideDraft = {
   tags: string[];
 };
 
-export const apiBase = import.meta.env.VITE_API_BASE ?? "http://localhost:8080";
+export const apiBase = import.meta.env.VITE_API_BASE ?? "";
 
 export class ApiError extends Error {
   readonly status?: number;
