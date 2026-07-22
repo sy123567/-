@@ -2,6 +2,7 @@ package com.trip.adaptive.domain;
 
 import java.time.LocalDateTime;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,7 +23,10 @@ public class UserNotification {
   private String type;
   private String title;
   private String detail;
+
+  @Column(name = "is_read")
   private boolean read;
+
   private LocalDateTime createdAt;
 
   public UserNotification() {
