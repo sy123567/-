@@ -82,6 +82,9 @@ export type WeatherPreview = {
   phrase?: string;
   hasAlert: boolean;
   hasPrecipitation: boolean;
+  wind?: string;
+  precipitation?: string;
+  source?: "live" | "demo";
   message?: string;
 };
 

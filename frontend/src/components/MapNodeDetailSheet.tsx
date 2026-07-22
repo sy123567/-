@@ -4,7 +4,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { Link } from "react-router-dom";
 import { api, type HotelRecommendation, type MapPlace, type MapRoute } from "../api/client";
 import type { ItineraryNode, Trip } from "../types";
-import { getPlaceImage } from "../mocks/places";
+import { getPlaceImage, suggestPlaces } from "../mocks/places";
 import { Badge, Button } from "./ui";
 import { ImageFallback } from "./pass2";
 import { BaiduMap } from "./BaiduMap";
@@ -105,14 +105,26 @@ export function MapNodeDetailSheet({
         const key = place.uid ?? `${place.name ?? ""}:${place.lat ?? ""}:${place.lng ?? ""}`;
         if (!unique.has(key)) unique.set(key, place);
       });
-    return [...unique.values()]
+    const livePlaces = [...unique.values()]
       .sort(
         (left, right) =>
           (left.distanceMeters ?? Number.POSITIVE_INFINITY) -
           (right.distanceMeters ?? Number.POSITIVE_INFINITY),
       )
       .slice(0, 8);
-  }, [recommendationQueries]);
+    if (livePlaces.length > 0) return livePlaces;
+    return suggestPlaces(node.placeName || node.name).slice(0, 6).map((place, index) => ({
+      name: place.placeName,
+      lat: place.latitude,
+      lng: place.longitude,
+      address: `${place.city} · 演示推荐`,
+      uid: `demo-${node.id}-${index}`,
+      tag: place.nodeType === "MEAL" ? "餐饮" : "景点",
+      distanceMeters: Math.round(
+        distanceMeters(resolvedNode.latitude, resolvedNode.longitude, place.latitude, place.longitude),
+      ),
+    }));
+  }, [node.id, node.name, node.placeName, recommendationQueries, resolvedNode.latitude, resolvedNode.longitude]);
   const selectedPlace = useMemo(
     () => recommendations.find((place) => place.uid === selectedUid),
     [recommendations, selectedUid],
@@ -252,12 +264,26 @@ export function MapNodeDetailSheet({
                   {Math.round(weather.tempMin)}~{Math.round(weather.tempMax)}°C
                   {weather.phrase && <span className="ml-2 font-sans text-sm font-semibold">{weather.phrase}</span>}
                 </p>
+                {(weather.wind || weather.precipitation) && (
+                  <p className="mt-1 text-xs opacity-80">
+                    {[weather.wind, weather.precipitation].filter(Boolean).join(" · ")}
+                  </p>
+                )}
                 {(weather.hasAlert || weather.hasPrecipitation) && (
                   <p className="mt-2 text-sm font-semibold">该地点近期有降水或预警，注意安排室内备选。</p>
                 )}
+                <p className="mt-2 text-xs opacity-70">
+                  数据源：{weather.source === "demo" ? "演示兜底" : "实时天气"}
+                </p>
               </div>
             ) : (
-              <InfoPanel>{weather?.message ?? "天气服务暂不可用，可稍后再查"}</InfoPanel>
+              <div className="rounded-card bg-sky/10 p-4 text-sky-deep">
+                <p className="font-mono text-lg font-bold">
+                  22~29°C <span className="font-sans text-sm">多云</span>
+                </p>
+                <p className="mt-2 text-sm font-semibold">演示天气：适合按原计划出行，建议随身携带雨具。</p>
+                <p className="mt-1 text-xs opacity-75">数据源：演示兜底 · 实时天气服务恢复后自动更新</p>
+              </div>
             )}
           </section>
 
@@ -592,6 +618,18 @@ function InfoPanel({ children }: { children: React.ReactNode }) {
 
 function hasCoordinates(node: ItineraryNode) {
   return Number.isFinite(node.latitude) && Number.isFinite(node.longitude) && node.latitude !== 0 && node.longitude !== 0;
+}
+
+function distanceMeters(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  const earthRadius = 6371000;
+  const latitudeDelta = ((toLat - fromLat) * Math.PI) / 180;
+  const longitudeDelta = ((toLng - fromLng) * Math.PI) / 180;
+  const latitude = (fromLat * Math.PI) / 180;
+  const targetLatitude = (toLat * Math.PI) / 180;
+  const value =
+    Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(latitude) * Math.cos(targetLatitude) * Math.sin(longitudeDelta / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
 function convenienceLabel(distanceMeters: number, durationSeconds: number) {
