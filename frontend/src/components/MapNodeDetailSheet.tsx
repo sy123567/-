@@ -337,6 +337,9 @@ export function MapNodeDetailSheet({
               <InfoPanel>附近暂时没有可用酒店推荐。</InfoPanel>
             ) : (
               <>
+                {hotelsQuery.data?.message && (
+                  <div className="mt-3 rounded-card border border-sun/40 bg-sun/10 px-4 py-3 text-xs leading-5 text-amber-900">{hotelsQuery.data.message}</div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {hotelCategories.map((category) => (
                     <button

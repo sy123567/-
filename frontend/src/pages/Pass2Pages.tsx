@@ -856,8 +856,9 @@ function MapSearchPicker({
 const severityRank: Record<Severity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
 const severityLabel: Record<Severity, string> = { LOW: "低", MEDIUM: "中", HIGH: "高", CRITICAL: "紧急" };
 
-function eventGroupKey(event: ExternalEvent): string {
-  return event.tripTitle?.trim() || (event.tripId ? `行程 #${event.tripId}` : "未关联行程");
+function eventGroupTitle(event: ExternalEvent, tripTitleById: Map<number, string>): string {
+  const scopedTitle = event.tripId !== undefined ? tripTitleById.get(event.tripId) : undefined;
+  return scopedTitle?.trim() || event.tripTitle?.trim() || (event.tripId ? `行程 #${event.tripId}` : "未关联行程");
 }
 
 function eventGroupSeverity(events: ExternalEvent[]): Severity | undefined {
@@ -897,16 +898,14 @@ export function EventsPage() {
   if (scope.isLoading || isLoading) return <LoadingState label="正在同步事件信号…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
   if (!data) return <EmptyState title="暂时没有事件数据" />;
+  const visibleTripIds = new Set(scope.trips.map((trip) => trip.id));
+  const tripTitleById = new Map(scope.trips.map((trip) => [trip.id, trip.title] as const));
+  // 事件—节点匹配只保留归属当前可见行程的影响，避免其它行程（如长春）的节点串到本事件卡片下。
   const eventNodeMatches = impactQueries.flatMap((query) => query.data ?? []).reduce<Record<number, ItineraryNode[]>>((map, impact) => {
-    if (impact.event?.id && impact.affectedNode) {
-      map[impact.event.id] = [...(map[impact.event.id] ?? []), impact.affectedNode];
+    const impactEvent = impact.event;
+    if (impactEvent?.id && impactEvent.tripId !== undefined && visibleTripIds.has(impactEvent.tripId) && impact.affectedNode) {
+      map[impactEvent.id] = [...(map[impactEvent.id] ?? []), impact.affectedNode];
     }
-    return map;
-  }, {});
-  const eventTripTitles = impactQueries.reduce<Record<number, string[]>>((map, query, index) => {
-    (query.data ?? []).forEach((impact) => {
-      if (impact.event?.id) map[impact.event.id] = [...new Set([...(map[impact.event.id] ?? []), scope.trips[index]?.title ?? "对应行程"] )];
-    });
     return map;
   }, {});
   const typeTabs: { value: "ALL" | "TRAFFIC" | EventType; label: string }[] = [
@@ -916,7 +915,6 @@ export function EventsPage() {
     { value: "ATTRACTION_CLOSURE", label: "景点闭馆" },
     { value: "LARGE_EVENT", label: "大型活动" },
   ];
-  const visibleTripIds = new Set(scope.trips.map((trip) => trip.id));
   const filteredEvents = data.filter((event) => {
     if (event.tripId === undefined || !visibleTripIds.has(event.tripId)) return false;
     const typeMatches = typeFilter === "ALL" || (typeFilter === "TRAFFIC" ? event.eventType === "ROAD_WORK" || event.eventType === "TRAFFIC_CONTROL" : event.eventType === typeFilter);
@@ -924,19 +922,21 @@ export function EventsPage() {
     const searchText = `${event.title ?? ""} ${event.description ?? ""} ${event.placeName ?? ""}`.toLowerCase();
     return typeMatches && severityMatches && searchText.includes(keyword.trim().toLowerCase());
   });
+  // 分组以 tripId 作为稳定键：同名行程也不会被合并，事件也不会因为标题相同而串到别的行程分组里。
   const groupedEvents = filteredEvents.reduce<Record<string, { title: string; events: ExternalEvent[]; worstSeverity?: Severity }>>((groups, event) => {
-    const key = eventGroupKey(event);
-    const group = groups[key] ?? { title: key, events: [] };
+    const key = event.tripId !== undefined ? String(event.tripId) : "none";
+    const title = eventGroupTitle(event, tripTitleById);
+    const group = groups[key] ?? { title, events: [] };
     group.events.push(event);
     group.worstSeverity = eventGroupSeverity(group.events);
     groups[key] = group;
     return groups;
   }, {});
-  const activeTripTitle = scope.selectedTrip?.title;
-  const eventGroups = Object.entries(groupedEvents).sort(([left], [right]) => {
-    if (left === activeTripTitle) return -1;
-    if (right === activeTripTitle) return 1;
-    return left.localeCompare(right, "zh-CN");
+  const activeTripKey = scope.tripId !== undefined ? String(scope.tripId) : undefined;
+  const eventGroups = Object.entries(groupedEvents).sort(([left, leftGroup], [right, rightGroup]) => {
+    if (left === activeTripKey) return -1;
+    if (right === activeTripKey) return 1;
+    return leftGroup.title.localeCompare(rightGroup.title, "zh-CN");
   });
   return (
     <>
@@ -953,7 +953,7 @@ export function EventsPage() {
         {eventGroups.length === 0 ? <Card className="py-10 text-center text-sm text-ink-soft">{data.length === 0 ? "当前没有活跃事件。" : "没有符合筛选条件的事件。"}</Card> : eventGroups.map(([key, group]) => {
           const expanded = !collapsedGroups.includes(key);
           const groupTone = group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "risk" : group.worstSeverity === "MEDIUM" ? "sun" : group.worstSeverity === "LOW" ? "mint" : "neutral";
-          return <Card key={key} className="overflow-hidden p-0"><button type="button" aria-expanded={expanded} onClick={() => setCollapsedGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-paper motion-reduce:transition-none"><div className="flex min-w-0 items-center gap-3"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "bg-coral" : group.worstSeverity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} /><div className="min-w-0"><p className="truncate font-display text-lg font-bold text-ink">{group.title}</p><p className="mt-1 text-xs text-ink-soft">{group.events.length} 条事件</p></div></div><div className="flex items-center gap-3"><Badge tone={groupTone}>{group.worstSeverity ? severityLabel[group.worstSeverity] : "未评级"}</Badge><ChevronRight size={18} className={`text-ink-soft transition-transform duration-300 ${expanded ? "rotate-90" : ""} motion-reduce:transition-none`} /></div></button><div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="min-h-0 overflow-hidden"><div className="space-y-3 border-t border-slate-100 p-3">{group.events.map((event) => { const matches = eventNodeMatches[event.id] ?? []; const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint"; return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{severityLabel[event.severity]}</Badge>}{event.tempMin !== undefined && event.tempMax !== undefined && <span className="rounded-full bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-blue-700">{Math.round(event.tempMin)}~{Math.round(event.tempMax)}°C</span>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${eventTripTitles[event.id]?.[0] ?? event.tripTitle ?? "对应行程"}` : "未匹配到对应行程节点"}</span></div></div><Button variant="ghost" onClick={(event) => { event.stopPropagation(); show("事件已加入影响分析队列"); }}>分析影响</Button></div>; })}</div></div></div></Card>;
+          return <Card key={key} className="overflow-hidden p-0"><button type="button" aria-expanded={expanded} onClick={() => setCollapsedGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-paper motion-reduce:transition-none"><div className="flex min-w-0 items-center gap-3"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "bg-coral" : group.worstSeverity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} /><div className="min-w-0"><p className="truncate font-display text-lg font-bold text-ink">{group.title}</p><p className="mt-1 text-xs text-ink-soft">{group.events.length} 条事件</p></div></div><div className="flex items-center gap-3"><Badge tone={groupTone}>{group.worstSeverity ? severityLabel[group.worstSeverity] : "未评级"}</Badge><ChevronRight size={18} className={`text-ink-soft transition-transform duration-300 ${expanded ? "rotate-90" : ""} motion-reduce:transition-none`} /></div></button><div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="min-h-0 overflow-hidden"><div className="space-y-3 border-t border-slate-100 p-3">{group.events.map((event) => { const matches = eventNodeMatches[event.id] ?? []; const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint"; return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{severityLabel[event.severity]}</Badge>}{event.tempMin !== undefined && event.tempMax !== undefined && <span className="rounded-full bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-blue-700">{Math.round(event.tempMin)}~{Math.round(event.tempMax)}°C</span>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${group.title}` : "未匹配到对应行程节点"}</span></div></div><Button variant="ghost" onClick={(event) => { event.stopPropagation(); show("事件已加入影响分析队列"); }}>分析影响</Button></div>; })}</div></div></div></Card>;
         })}
       </div>
       {toast}
@@ -1134,8 +1134,19 @@ export function NotificationsPage() {
     mutationFn: () => api.markAllNotificationsRead(),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); show("已全部标为已读"); },
   });
+  const removeOne = useMutation({
+    mutationFn: (id: number) => api.deleteNotification(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+    onError: (error) => show(error instanceof Error ? error.message : "删除失败"),
+  });
+  const clearRead = useMutation({
+    mutationFn: () => api.clearNotifications(true),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notifications"] }); show("已删除全部已读通知"); },
+    onError: (error) => show(error instanceof Error ? error.message : "清理失败"),
+  });
+  const hasRead = notifications.some((item) => item.read);
   if (notificationsQuery.isLoading) return <LoadingState label="正在读取通知…" />;
-  return <><PageHeader eyebrow="INBOX" title="通知" description="方案生成、采纳与否决的每一个关键节点，都会同步到这里。" action={<Button variant="ghost" disabled={markAll.isPending || notifications.length === 0} onClick={() => markAll.mutate()}>全部标为已读</Button>} />{notifications.length === 0 ? <EmptyState title="暂时没有通知" message="行程出现新方案或投票结果时，这里会第一时间提醒你。" /> : <Card className="divide-y divide-slate-100 p-5">{notifications.map((item) => { const meta = NOTIFICATION_META[item.type] ?? { label: item.type, tone: "sky" as const }; return <div key={item.id} className={`flex gap-4 py-5 first:pt-0 last:pb-0 ${item.read ? "opacity-60" : ""}`}><div className={`mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${meta.tone === "coral" ? "bg-coral/10 text-coral" : meta.tone === "sky" ? "bg-sky/10 text-sky" : "bg-mint/10 text-mint"}`}><BellIcon type={item.type} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge tone={meta.tone}>{meta.label}</Badge>{!item.read && <span className="h-2 w-2 rounded-full bg-coral" />}</div><h2 className="mt-2 font-semibold text-ink">{item.title}</h2><p className="mt-1 text-sm text-ink-soft">{item.detail}</p><p className="mt-2 font-mono text-[10px] text-ink-soft">{relativeTime(item.createdAt)}</p></div>{!item.read && <button onClick={() => markRead.mutate(item.id)} className="self-center text-xs font-semibold text-sky">标为已读</button>}</div>; })}</Card>}{toast}</>;
+  return <><PageHeader eyebrow="INBOX" title="通知" description="方案生成、采纳与否决的每一个关键节点，都会同步到这里。" action={<div className="flex gap-2"><Button variant="ghost" disabled={clearRead.isPending || !hasRead} onClick={() => clearRead.mutate()}>清空已读</Button><Button variant="ghost" disabled={markAll.isPending || notifications.length === 0} onClick={() => markAll.mutate()}>全部标为已读</Button></div>} />{notifications.length === 0 ? <EmptyState title="暂时没有通知" message="行程出现新方案或投票结果时，这里会第一时间提醒你。" /> : <Card className="divide-y divide-slate-100 p-5">{notifications.map((item) => { const meta = NOTIFICATION_META[item.type] ?? { label: item.type, tone: "sky" as const }; return <div key={item.id} className={`flex gap-4 py-5 first:pt-0 last:pb-0 ${item.read ? "opacity-60" : ""}`}><div className={`mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-xl ${meta.tone === "coral" ? "bg-coral/10 text-coral" : meta.tone === "sky" ? "bg-sky/10 text-sky" : "bg-mint/10 text-mint"}`}><BellIcon type={item.type} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge tone={meta.tone}>{meta.label}</Badge>{!item.read && <span className="h-2 w-2 rounded-full bg-coral" />}</div><h2 className="mt-2 font-semibold text-ink">{item.title}</h2><p className="mt-1 text-sm text-ink-soft">{item.detail}</p><p className="mt-2 font-mono text-[10px] text-ink-soft">{relativeTime(item.createdAt)}</p></div><div className="flex shrink-0 flex-col items-end justify-center gap-2">{!item.read && <button onClick={() => markRead.mutate(item.id)} className="text-xs font-semibold text-sky">标为已读</button>}<button onClick={() => removeOne.mutate(item.id)} disabled={removeOne.isPending} aria-label="删除通知" className="text-xs font-semibold text-ink-soft transition hover:text-coral">删除</button></div></div>; })}</Card>}{toast}</>;
 }
 
 function BellIcon({ type }: { type: string }) { return type === "plan-accepted" ? <Check size={18} /> : type === "plan-rejected" ? <CircleAlert size={18} /> : <Sparkles size={18} />; }

@@ -13,32 +13,40 @@ const themeOptions = ["城市漫游", "美食探索", "自然风光", "疗愈放
 
 function GuidePublishModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [city, setCity] = useState("");
-  const [days, setDays] = useState("2");
+  const tripsQuery = useQuery({ queryKey: ["trips"], queryFn: api.trips, enabled: open });
+  const completedTrips = (tripsQuery.data ?? []).filter((trip) => trip.status === "COMPLETED");
+  const [tripId, setTripId] = useState<number | "">("");
+  const [note, setNote] = useState("");
   const [theme, setTheme] = useState(themeOptions[0]);
-  const [price, setPrice] = useState("");
+  const [city, setCity] = useState("");
   const [cover, setCover] = useState("");
-  const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [toast, setToast] = useState("");
-  const reset = () => { setTitle(""); setCity(""); setDays("2"); setTheme(themeOptions[0]); setPrice(""); setCover(""); setDescription(""); setTags(""); };
+  const reset = () => { setTripId(""); setNote(""); setTheme(themeOptions[0]); setCity(""); setCover(""); setTags(""); };
   const publish = useMutation({
-    mutationFn: () => api.createGuide({
-      title: title.trim(),
-      city: city.trim(),
-      days: Number(days) || 1,
+    mutationFn: () => api.publishGuide({
+      tripId: Number(tripId),
+      note: note.trim(),
+      city: city.trim() || undefined,
       theme,
-      price: Number(price) || 0,
       cover: cover.trim() || undefined,
-      description: description.trim(),
       tags: tags.split(/[,，\s]+/).map((t) => t.trim()).filter(Boolean),
     }),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["guides"] }); reset(); onClose(); setToast("攻略已发布"); },
     onError: (error) => setToast(error instanceof Error ? error.message : "发布失败"),
   });
-  const valid = title.trim() && city.trim() && description.trim();
-  return <>{toast && <Toast message={toast} onClose={() => setToast("")} />}<Modal open={open} title="发布攻略" onClose={onClose}><div className="space-y-4"><div><label className="text-xs font-semibold text-ink-soft">标题</label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="给这条路线起个名字" /></div><div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-ink-soft">城市</label><Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="上海" /></div><div><label className="text-xs font-semibold text-ink-soft">天数</label><Input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} /></div></div><div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-ink-soft">主题</label><select value={theme} onChange={(e) => setTheme(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">{themeOptions.map((t) => <option key={t}>{t}</option>)}</select></div><div><label className="text-xs font-semibold text-ink-soft">人均预算 ¥</label><Input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="980" /></div></div><div><label className="text-xs font-semibold text-ink-soft">封面图链接（可选）</label><Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" /></div><div><label className="text-xs font-semibold text-ink-soft">标签（用逗号或空格分隔）</label><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Citywalk 咖啡 拍照" /></div><div><label className="text-xs font-semibold text-ink-soft">简介</label><textarea value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1 min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="这条路线的亮点是…" /></div><div className="flex justify-end gap-2 pt-2"><Button variant="ghost" onClick={onClose}>取消</Button><Button disabled={!valid || publish.isPending} onClick={() => publish.mutate()}>发布</Button></div></div></Modal></>;
+  const valid = tripId !== "" && note.trim();
+  return <>{toast && <Toast message={toast} onClose={() => setToast("")} />}<Modal open={open} title="发布攻略" onClose={onClose}><div className="space-y-4">
+    <p className="rounded-lg bg-paper px-3 py-2 text-xs leading-5 text-ink-soft">攻略基于你「已完成」的行程发布，行程名称、天数与预算会自动带入，你只需补充一段备注说明。</p>
+    {tripsQuery.isLoading ? <p className="text-sm text-ink-soft">正在读取你的行程…</p> : completedTrips.length === 0 ? <p className="rounded-lg bg-sun/15 px-3 py-3 text-sm text-amber-800">你还没有「已完成」的行程。把一段行程标记为已完成后即可在这里发布攻略。</p> : <>
+      <div><label className="text-xs font-semibold text-ink-soft">选择已完成的行程</label><select value={tripId} onChange={(e) => setTripId(e.target.value ? Number(e.target.value) : "")} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">请选择一段已完成的行程</option>{completedTrips.map((trip) => <option key={trip.id} value={trip.id}>{trip.title} · {trip.startDate}~{trip.endDate}</option>)}</select></div>
+      <div><label className="text-xs font-semibold text-ink-soft">备注说明</label><textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="这段行程的亮点、避坑建议、适合谁去…" /></div>
+      <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-ink-soft">主题</label><select value={theme} onChange={(e) => setTheme(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">{themeOptions.map((t) => <option key={t}>{t}</option>)}</select></div><div><label className="text-xs font-semibold text-ink-soft">城市（可选，留空自动识别）</label><Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="上海" /></div></div>
+      <div><label className="text-xs font-semibold text-ink-soft">封面图链接（可选）</label><Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" /></div>
+      <div><label className="text-xs font-semibold text-ink-soft">标签（用逗号或空格分隔）</label><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Citywalk 咖啡 拍照" /></div>
+    </>}
+    <div className="flex justify-end gap-3 border-t border-slate-100 pt-4"><Button variant="ghost" onClick={onClose}>取消</Button><Button disabled={!valid || publish.isPending} onClick={() => publish.mutate()}>{publish.isPending ? "发布中…" : "发布攻略"}</Button></div>
+  </div></Modal></>;
 }
 
 export function GuidesPage() {

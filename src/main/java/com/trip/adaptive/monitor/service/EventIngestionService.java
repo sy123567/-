@@ -218,9 +218,11 @@ public class EventIngestionService {
   }
 
   // 去重后再存库,定时轮询每 100分钟跑一次，同一条暴雨预警不会被重复插入几十遍。
+  // 去重键必须带 tripId：不同行程可能停留在同一地点/同一时间，若省略 tripId 会导致某个行程的天气事件
+  // 被其它行程"抢占"而丢失，进而出现事件跨行程串号、以及监测有事件但影响分析查不到的不一致。
   private void save(java.util.List<ExternalEvent> out, ExternalEvent e) {
-    if (!events.existsBySourceAndPlaceNameAndStartTime(
-        e.getSource(), e.getPlaceName(), e.getStartTime())) {
+    if (!events.existsBySourceAndPlaceNameAndStartTimeAndTripId(
+        e.getSource(), e.getPlaceName(), e.getStartTime(), e.getTripId())) {
       out.add(events.save(e));
     }
   }

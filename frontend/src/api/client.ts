@@ -23,15 +23,13 @@ import type {
 
 export type VoteChoice = "APPROVE" | "REJECT" | "ABSTAIN";
 
-export type GuideDraft = {
-  title: string;
-  city: string;
-  days: number;
-  theme: string;
-  price: number;
+export type GuidePublishDraft = {
+  tripId: number;
+  note: string;
+  city?: string;
+  theme?: string;
   cover?: string;
-  description: string;
-  tags: string[];
+  tags?: string[];
 };
 
 export const apiBase = import.meta.env.VITE_API_BASE ?? "";
@@ -338,7 +336,7 @@ export const api = {
   async toggleGuideSave(id: number): Promise<TravelGuide> {
     return request<TravelGuide>(`/api/guides/${id}/save`, { method: "POST" });
   },
-  async createGuide(draft: GuideDraft): Promise<TravelGuide> {
+  async publishGuide(draft: GuidePublishDraft): Promise<TravelGuide> {
     return request<TravelGuide>("/api/guides", {
       method: "POST",
       body: JSON.stringify(draft),
@@ -368,6 +366,12 @@ export const api = {
   },
   async markAllNotificationsRead(): Promise<void> {
     await request<void>("/api/notifications/read-all", { method: "POST" });
+  },
+  async deleteNotification(id: number): Promise<void> {
+    await request<void>(`/api/notifications/${id}`, { method: "DELETE" });
+  },
+  async clearNotifications(onlyRead = false): Promise<void> {
+    await request<void>(`/api/notifications?onlyRead=${onlyRead}`, { method: "DELETE" });
   },
   async expenses(tripId: number): Promise<TripExpenseItem[]> {
     return request<TripExpenseItem[]>(`/api/trips/${tripId}/expenses`);

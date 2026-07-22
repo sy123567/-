@@ -10,4 +10,8 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
   List<UserNotification> findByRecipientIdOrderByCreatedAtDesc(Long recipientId);
 
   long countByRecipientIdAndReadFalse(Long recipientId);
+
+  void deleteByRecipientId(Long recipientId);
+
+  void deleteByRecipientIdAndReadTrue(Long recipientId);
 }

@@ -4,10 +4,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trip.adaptive.domain.User;
@@ -36,6 +38,18 @@ public class NotificationController {
   @PostMapping("/read-all")
   public void readAll(Authentication authentication) {
     s.markAllRead(currentUser(authentication));
+  }
+
+  @DeleteMapping("/{id}")
+  public void delete(@PathVariable Long id, Authentication authentication) {
+    s.delete(currentUser(authentication), id);
+  }
+
+  @DeleteMapping
+  public void clear(
+      @RequestParam(name = "onlyRead", defaultValue = "false") boolean onlyRead,
+      Authentication authentication) {
+    s.clear(currentUser(authentication), onlyRead);
   }
 
   private static NotificationView view(UserNotification n) {
