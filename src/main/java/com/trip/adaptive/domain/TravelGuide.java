@@ -31,6 +31,9 @@ public class TravelGuide {
   private String cover;
   private String description;
 
+  // 关联的已完成行程 ID：攻略只能由作者"已完成"的行程发布而来，便于溯源与去重。
+  private Long tripId;
+
   @ElementCollection private List<String> tags = new ArrayList<>();
 
   private double rating;
@@ -110,6 +113,14 @@ public class TravelGuide {
 
   public void setDescription(String v) {
     description = v;
+  }
+
+  public Long getTripId() {
+    return tripId;
+  }
+
+  public void setTripId(Long v) {
+    tripId = v;
   }
 
   public List<String> getTags() {

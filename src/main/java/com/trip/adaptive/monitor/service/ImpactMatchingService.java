@@ -47,8 +47,9 @@ public class ImpactMatchingService {
       }
     }
     List<ImpactAssessment> out = new ArrayList<>();
-    for (ExternalEvent e :
-        events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now().minusDays(1))) {
+    // 与事件监测口径保持一致：监测页只展示 endTime 晚于当前时间的"活跃事件"，
+    // 影响分析也必须用同一时间窗，否则会出现"监测看不到、影响分析却算进去"的不一致。
+    for (ExternalEvent e : events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now())) {
       for (ItineraryNode n : t.getItineraryNodes()) {
         if (overlap(e, n)
             && distance(e.getLatitude(), e.getLongitude(), n.getLatitude(), n.getLongitude())

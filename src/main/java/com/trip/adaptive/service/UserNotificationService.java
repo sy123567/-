@@ -40,6 +40,25 @@ public class UserNotificationService {
   }
 
   @Transactional
+  public void delete(User user, Long id) {
+    UserNotification n =
+        repo.findById(id).orElseThrow(() -> new ResourceNotFoundException("通知不存在"));
+    if (!n.getRecipient().getId().equals(user.getId())) {
+      throw new ResourceNotFoundException("通知不存在");
+    }
+    repo.delete(n);
+  }
+
+  @Transactional
+  public void clear(User user, boolean onlyRead) {
+    if (onlyRead) {
+      repo.deleteByRecipientIdAndReadTrue(user.getId());
+    } else {
+      repo.deleteByRecipientId(user.getId());
+    }
+  }
+
+  @Transactional
   public void markAllRead(User user) {
     List<UserNotification> all = repo.findByRecipientIdOrderByCreatedAtDesc(user.getId());
     for (UserNotification n : all) {

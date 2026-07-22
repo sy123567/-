@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { ArrowLeft, CalendarDays, Car, Check, CircleDollarSign, Footprints, Map as MapIcon, MoreHorizontal, Pencil, Share2, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Car, Check, CircleDollarSign, Footprints, Map as MapIcon, MoreHorizontal, Pencil, Plus, Share2, Trash2, Users, X } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -15,6 +15,10 @@ function draftFromNode(node: ItineraryNode): NodeDraft {
   return { name: node.name, placeName: node.placeName, latitude: String(node.latitude), longitude: String(node.longitude), nodeType: node.nodeType, plannedStart: node.plannedStart.slice(0, 16), plannedEnd: node.plannedEnd.slice(0, 16), cost: String(node.cost), sequenceOrder: String(node.sequenceOrder) };
 }
 
+function emptyNodeDraft(sequenceOrder: number, start?: string, end?: string): NodeDraft {
+  return { name: "", placeName: "", latitude: "", longitude: "", nodeType: "ATTRACTION", plannedStart: start ?? "", plannedEnd: end ?? "", cost: "0", sequenceOrder: String(sequenceOrder) };
+}
+
 export function TripDetailPage() {
   const { id = "1" } = useParams();
   const navigate = useNavigate();
@@ -23,6 +27,8 @@ export function TripDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
   const [draft, setDraft] = useState<NodeDraft | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDraft, setAddDraft] = useState<NodeDraft>(emptyNodeDraft(1));
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
   const tripQuery = useQuery({ queryKey: ["trip", id], queryFn: () => api.trip(Number(id)) });
   const expensesQuery = useQuery({ queryKey: ["expenses", Number(id)], queryFn: () => api.expenses(Number(id)), enabled: Boolean(id) });
@@ -62,6 +68,13 @@ export function TripDetailPage() {
     mutationFn: (nodeId: number) => api.deleteNode(Number(id), nodeId),
     onSuccess: () => { setEditingNodeId(null); setDraft(null); setSelectedNode(null); void queryClient.invalidateQueries({ queryKey: ["trip", id] }); },
   });
+  const addNodeMutation = useMutation({
+    mutationFn: (payload: NodeDraft) => api.addNode(Number(id), {
+      name: (payload.name || payload.placeName).trim(), placeName: payload.placeName.trim(), latitude: Number(payload.latitude), longitude: Number(payload.longitude),
+      nodeType: payload.nodeType, plannedStart: payload.plannedStart, plannedEnd: payload.plannedEnd, cost: Number(payload.cost) || 0, sequenceOrder: Number(payload.sequenceOrder) || 1, status: "PLANNED",
+    }),
+    onSuccess: () => { setAddOpen(false); void queryClient.invalidateQueries({ queryKey: ["trip", id] }); },
+  });
   if (tripQuery.isLoading) return <LoadingState label="正在加载路线…" />;
   if (tripQuery.isError) return <ErrorState onRetry={() => void tripQuery.refetch()} message={tripQuery.error instanceof Error ? tripQuery.error.message : undefined} />;
   const trip = tripQuery.data;
@@ -77,7 +90,21 @@ export function TripDetailPage() {
   const startEditing = (node: ItineraryNode) => { setEditingNodeId(node.id); setDraft(draftFromNode(node)); updateNodeMutation.reset(); deleteNodeMutation.reset(); };
   const cancelEditing = () => { setEditingNodeId(null); setDraft(null); updateNodeMutation.reset(); deleteNodeMutation.reset(); };
   const saveEditing = (event: FormEvent) => { event.preventDefault(); if (editingNodeId !== null && draft) updateNodeMutation.mutate({ nodeId: editingNodeId, payload: draft }); };
-  const editingError = updateNodeMutation.error ?? deleteNodeMutation.error;
+  const editingError = updateNodeMutation.error ?? deleteNodeMutation.error ?? addNodeMutation.error;
+  const setAddField = <K extends keyof NodeDraft>(key: K, value: NodeDraft[K]) => setAddDraft((current) => ({ ...current, [key]: value }));
+  const openAdd = () => {
+    cancelEditing();
+    const nextOrder = (tripQuery.data?.itineraryNodes ?? []).reduce((max, node) => Math.max(max, node.sequenceOrder), 0) + 1;
+    const startBase = tripQuery.data?.startDate ? `${tripQuery.data.startDate}T09:00` : "";
+    const endBase = tripQuery.data?.startDate ? `${tripQuery.data.startDate}T11:00` : "";
+    setAddDraft(emptyNodeDraft(nextOrder, startBase, endBase));
+    addNodeMutation.reset();
+    setAddOpen(true);
+  };
+  const submitAdd = (event: FormEvent) => {
+    event.preventDefault();
+    addNodeMutation.mutate(addDraft);
+  };
   const shareTrip = async () => {
     const shareText = `【${trip.title ?? "未命名行程"}】${window.location.origin}/trips/${trip.id}${trip.roomCode ? ` · 房间码 ${trip.roomCode}` : ""}`;
     try {
@@ -99,7 +126,16 @@ export function TripDetailPage() {
         onMarkerClick={setSelectedNode}
       />
       <Card className="p-6 md:p-8"><div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5"><div><div className="flex items-center gap-2"><Badge tone="mint">{trip.status ?? "未知状态"}</Badge>{trip.roomCode && <span className="font-mono text-xs text-ink-soft">{trip.roomCode}</span>}</div><h2 className="mt-3 font-display text-2xl font-bold text-ink">今天的路线</h2></div><div className="flex items-center gap-4 text-xs text-ink-soft">{trip.startDate && trip.endDate && <span className="flex items-center gap-1.5"><CalendarDays size={15} />{trip.startDate} — {trip.endDate}</span>}{trip.group && <span className="flex items-center gap-1.5"><Users size={15} />{trip.group.members?.length ?? trip.group.memberCount ?? 0}人协作</span>}</div></div><RouteTrail nodes={trip.itineraryNodes ?? []} eventsByNode={eventsByNode} onNodeClick={setSelectedNode} showSegments showNearby /></Card>
-      <Card className="mt-5 p-6"><div className="flex items-start justify-between gap-4"><div><p className="eyebrow">NODE EDITOR</p><h2 className="mt-2 font-display text-xl font-bold text-ink">调整路线节点</h2></div><Badge tone="sky">{trip.itineraryNodes?.length ?? 0} 个节点</Badge></div>{editingError && <div className="mt-4 rounded-xl border border-coral/20 bg-coral/5 px-4 py-3 text-sm text-coral-deep">{editingError instanceof Error ? editingError.message : "节点操作失败，请稍后重试。"}</div>}<div className="mt-5 space-y-3">{(trip.itineraryNodes ?? []).map((node) => editingNodeId === node.id && draft ? <form key={node.id} onSubmit={saveEditing} className="rounded-card border border-coral/20 bg-coral/5 p-4 transition motion-reduce:transition-none"><div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-ink">编辑节点</p><p className="mt-1 text-xs text-ink-soft">状态由事件影响流程管理，不在这里修改。</p></div><Badge tone="coral">{node.sequenceOrder}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2">
+      <Card className="mt-5 p-6"><div className="flex items-start justify-between gap-4"><div><p className="eyebrow">NODE EDITOR</p><h2 className="mt-2 font-display text-xl font-bold text-ink">自由增删调整节点</h2></div><div className="flex items-center gap-3"><Badge tone="sky">{trip.itineraryNodes?.length ?? 0} 个节点</Badge><Button type="button" variant="secondary" onClick={() => addOpen ? setAddOpen(false) : openAdd()} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs"><Plus size={14} />{addOpen ? "收起" : "新增节点"}</Button></div></div>{editingError && <div className="mt-4 rounded-xl border border-coral/20 bg-coral/5 px-4 py-3 text-sm text-coral-deep">{editingError instanceof Error ? editingError.message : "节点操作失败，请稍后重试。"}</div>}{addOpen && <form onSubmit={submitAdd} className="mt-5 rounded-card border border-sky/25 bg-sky/5 p-4"><div className="flex items-center justify-between gap-3"><p className="font-semibold text-ink">新增节点</p><Badge tone="sky">#{addDraft.sequenceOrder}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2">
+      <label className="text-xs font-semibold text-ink">地点名称<input required value={addDraft.placeName} onChange={(event) => { setAddField("placeName", event.target.value); setAddField("name", event.target.value); }} placeholder="外滩、故宫…" className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">节点类型<select value={addDraft.nodeType} onChange={(event) => setAddField("nodeType", event.target.value as NodeType)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm"><option value="ATTRACTION">景点</option><option value="MEAL">餐饮</option><option value="LODGING">住宿</option><option value="TRANSPORT">交通</option><option value="OTHER">其他</option></select></label>
+      <label className="text-xs font-semibold text-ink">开始时间<input type="datetime-local" required value={addDraft.plannedStart} onChange={(event) => setAddField("plannedStart", event.target.value)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">结束时间<input type="datetime-local" required value={addDraft.plannedEnd} onChange={(event) => setAddField("plannedEnd", event.target.value)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">纬度<input type="number" step="any" required value={addDraft.latitude} onChange={(event) => setAddField("latitude", event.target.value)} placeholder="31.24" className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">经度<input type="number" step="any" required value={addDraft.longitude} onChange={(event) => setAddField("longitude", event.target.value)} placeholder="121.49" className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">顺序<input type="number" min="1" value={addDraft.sequenceOrder} onChange={(event) => setAddField("sequenceOrder", event.target.value)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+      <label className="text-xs font-semibold text-ink">费用<input type="number" min="0" step="0.01" value={addDraft.cost} onChange={(event) => setAddField("cost", event.target.value)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
+    </div><div className="mt-4 flex flex-wrap gap-2"><Button type="submit" disabled={addNodeMutation.isPending} className="inline-flex items-center gap-2"><Check size={15} />{addNodeMutation.isPending ? "添加中…" : "添加节点"}</Button><Button type="button" variant="ghost" onClick={() => setAddOpen(false)} disabled={addNodeMutation.isPending} className="inline-flex items-center gap-2"><X size={15} />取消</Button></div></form>}<div className="mt-5 space-y-3">{(trip.itineraryNodes ?? []).map((node) => editingNodeId === node.id && draft ? <form key={node.id} onSubmit={saveEditing} className="rounded-card border border-coral/20 bg-coral/5 p-4 transition motion-reduce:transition-none"><div className="flex items-center justify-between gap-3"><div><p className="font-semibold text-ink">编辑节点</p><p className="mt-1 text-xs text-ink-soft">状态由事件影响流程管理，不在这里修改。</p></div><Badge tone="coral">{node.sequenceOrder}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2">
         <label className="text-xs font-semibold text-ink">地点名称<input value={draft.placeName} onChange={(event) => { setDraftField("placeName", event.target.value); setDraftField("name", event.target.value); }} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>
         <label className="text-xs font-semibold text-ink">节点类型<select value={draft.nodeType} onChange={(event) => setDraftField("nodeType", event.target.value as NodeType)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm"><option value="ATTRACTION">景点</option><option value="MEAL">餐饮</option><option value="LODGING">住宿</option><option value="TRANSPORT">交通</option><option value="OTHER">其他</option></select></label>
         <label className="text-xs font-semibold text-ink">开始时间<input type="datetime-local" required value={draft.plannedStart} onChange={(event) => setDraftField("plannedStart", event.target.value)} className="mt-1 w-full rounded-xl border border-white bg-white px-3 py-2.5 text-sm" /></label>

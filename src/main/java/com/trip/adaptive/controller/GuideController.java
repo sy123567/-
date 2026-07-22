@@ -58,10 +58,19 @@ public class GuideController {
   }
 
   @PostMapping
-  public ResponseEntity<TravelGuide> create(
-      @RequestBody TravelGuide payload, Authentication authentication) {
+  public ResponseEntity<TravelGuide> publish(
+      @RequestBody PublishRequest request, Authentication authentication) {
     User me = (User) authentication.getPrincipal();
-    return ResponseEntity.status(201).body(s.create(me, payload));
+    return ResponseEntity.status(201)
+        .body(
+            s.publishFromTrip(
+                me,
+                request.tripId(),
+                request.note(),
+                request.city(),
+                request.theme(),
+                request.cover(),
+                request.tags()));
   }
 
   private static CommentView view(GuideComment comment) {
@@ -78,6 +87,9 @@ public class GuideController {
   }
 
   public record CommentRequest(String body) {}
+
+  public record PublishRequest(
+      Long tripId, String note, String city, String theme, String cover, List<String> tags) {}
 
   public record CommentView(
       Long id, Long authorId, String authorName, String body, LocalDateTime createdAt) {}
