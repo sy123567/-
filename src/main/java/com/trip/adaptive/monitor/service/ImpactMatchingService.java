@@ -47,7 +47,8 @@ public class ImpactMatchingService {
       }
     }
     List<ImpactAssessment> out = new ArrayList<>();
-    for (ExternalEvent e : events.findByEndTimeAfter(LocalDateTime.now().minusDays(1))) {
+    for (ExternalEvent e :
+        events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now().minusDays(1))) {
       for (ItineraryNode n : t.getItineraryNodes()) {
         if (overlap(e, n)
             && distance(e.getLatitude(), e.getLongitude(), n.getLatitude(), n.getLongitude())
