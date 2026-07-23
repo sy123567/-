@@ -561,6 +561,9 @@ export const api = {
   async triggerWeatherEvents(tripId: number): Promise<ExternalEvent[]> {
     return request<ExternalEvent[]>(`/api/trips/${tripId}/events/weather`, { method: "POST" });
   },
+  async scanEvents(tripId: number): Promise<ExternalEvent[]> {
+    return request<ExternalEvent[]>(`/api/trips/${tripId}/events/scan`, { method: "POST" });
+  },
   async removeMember(groupId: number, memberId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });
   },

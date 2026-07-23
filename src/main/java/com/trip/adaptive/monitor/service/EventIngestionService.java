@@ -18,7 +18,6 @@ import com.trip.adaptive.domain.ExternalEvent;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.dto.TripRiskResult;
-import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.ExternalEventRepository;
 import com.trip.adaptive.repository.ImpactAssessmentRepository;
 import com.trip.adaptive.service.TripService;
@@ -28,6 +27,7 @@ public class EventIngestionService {
   private final ExternalEventRepository events;
   private final TripService trips;
   private final WeatherClient weather;
+  private final CityEventProvider cityEvents;
   private final ImpactMatchingService impactMatching;
   private final RiskScoringService riskScoring;
   private final ImpactAssessmentRepository assessments;
@@ -47,6 +47,7 @@ public class EventIngestionService {
       ExternalEventRepository e,
       TripService t,
       WeatherClient w,
+      CityEventProvider c,
       ImpactMatchingService i,
       RiskScoringService rs,
       ImpactAssessmentRepository a,
@@ -54,6 +55,7 @@ public class EventIngestionService {
     events = e;
     trips = t;
     weather = w;
+    cityEvents = c;
     impactMatching = i;
     riskScoring = rs;
     assessments = a;
@@ -79,35 +81,53 @@ public class EventIngestionService {
   }
 
   public List<ExternalEvent> fetchAndIngestForTrip(Long id) {
-    Trip t = trips.get(id);
-    ItineraryNode n =
-        t.getItineraryNodes().stream()
-            .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException("行程没有节点"));
-    List<ExternalEvent> out = new ArrayList<>();
-    for (int i = 0; i < 2; i++) {
-      ExternalEvent e = new ExternalEvent();
-      e.setEventType(i == 0 ? Enums.EventType.WEATHER : Enums.EventType.ATTRACTION_CLOSURE);
-      e.setTitle(i == 0 ? "暴雨预警" : "景点临时闭馆");
-      e.setDescription("模拟外部事件");
-      e.setPlaceName(n.getPlaceName());
-      e.setLatitude(n.getLatitude());
-      e.setLongitude(n.getLongitude());
-      e.setRadiusKm(10.0);
-      e.setSeverity(i == 0 ? Enums.Severity.HIGH : Enums.Severity.MEDIUM);
-      e.setStartTime(n.getPlannedStart().minusHours(1));
-      e.setEndTime(n.getPlannedEnd().plusHours(1));
-      e.setSource("mock-provider");
-      e.setTripId(t.getId());
-      e.setTripTitle(t.getTitle());
-      out.add(events.save(e));
-    }
-    return out;
+    return ingestCityEventsForTrip(id, false);
   }
 
   @Transactional
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId, boolean force) {
     Trip t = trips.get(tripId);
+    List<ExternalEvent> out = generateWeather(t, force);
+    runPipeline(tripId);
+    return out;
+  }
+
+  /** 接入城市路况/公告类事件（施工、交通管制、景区闭馆、大型活动），并跑影响/风险/重规划流程。 */
+  @Transactional
+  public List<ExternalEvent> ingestCityEventsForTrip(Long tripId, boolean force) {
+    Trip t = trips.get(tripId);
+    List<ExternalEvent> out = generateCityEvents(t, force);
+    runPipeline(tripId);
+    return out;
+  }
+
+  /** 一次性接入天气 + 城市路况/公告事件，最后统一跑一遍影响匹配/风险评分/重规划。 */
+  @Transactional
+  public List<ExternalEvent> ingestAllForTrip(Long tripId, boolean force) {
+    Trip t = trips.get(tripId);
+    List<ExternalEvent> out = new ArrayList<>();
+    out.addAll(generateWeather(t, force));
+    out.addAll(generateCityEvents(t, force));
+    runPipeline(tripId);
+    return out;
+  }
+
+  private void runPipeline(Long tripId) {
+    impactMatching.assessTrip(tripId);
+    TripRiskResult result = riskScoring.scoreTrip(tripId);
+    if (rank(result.riskLevel()) >= rank(replanRiskThreshold)) replanning.generate(tripId);
+    else replanning.clearProposed(tripId);
+  }
+
+  private boolean inWindow(
+      ItineraryNode n, boolean force, LocalDateTime now, LocalDateTime cutoff) {
+    if (!force) return true;
+    if (n.getPlannedEnd() != null && n.getPlannedEnd().isBefore(now)) return false;
+    if (n.getPlannedStart() != null && n.getPlannedStart().isAfter(cutoff)) return false;
+    return true;
+  }
+
+  private List<ExternalEvent> generateWeather(Trip t, boolean force) {
     List<ExternalEvent> out = new ArrayList<>();
     if (!weather.enabled()) return out;
     LocalDateTime now = LocalDateTime.now();
@@ -115,10 +135,7 @@ public class EventIngestionService {
     Map<String, List<ItineraryNode>> byCity = new LinkedHashMap<>();
     for (ItineraryNode n : t.getItineraryNodes()) {
       if (n.getLatitude() == null || n.getLongitude() == null) continue;
-      if (force) {
-        if (n.getPlannedEnd() != null && n.getPlannedEnd().isBefore(now)) continue;
-        if (n.getPlannedStart() != null && n.getPlannedStart().isAfter(cutoff)) continue;
-      }
+      if (!inWindow(n, force, now, cutoff)) continue;
       refreshWeatherEvents(n);
       String loc = weather.locationKey(n.getLatitude(), n.getLongitude());
       if (loc == null) continue;
@@ -126,11 +143,30 @@ public class EventIngestionService {
     }
     for (Map.Entry<String, List<ItineraryNode>> entry : byCity.entrySet())
       ingestForCity(entry.getKey(), entry.getValue(), out);
-    impactMatching.assessTrip(tripId);
-    TripRiskResult result = riskScoring.scoreTrip(tripId);
-    if (rank(result.riskLevel()) >= rank(replanRiskThreshold)) replanning.generate(tripId);
-    else replanning.clearProposed(tripId);
     return out;
+  }
+
+  private List<ExternalEvent> generateCityEvents(Trip t, boolean force) {
+    List<ExternalEvent> out = new ArrayList<>();
+    LocalDateTime now = LocalDateTime.now();
+    LocalDateTime cutoff = now.plusDays(forecastWindowDays);
+    for (ItineraryNode n : t.getItineraryNodes()) {
+      if (n.getLatitude() == null || n.getLongitude() == null) continue;
+      if (!inWindow(n, force, now, cutoff)) continue;
+      refreshCityEvents(n);
+      for (ExternalEvent e : cityEvents.eventsForNode(n)) save(out, e);
+    }
+    return out;
+  }
+
+  private void refreshCityEvents(ItineraryNode node) {
+    if (node.getPlaceName() == null) return;
+    for (ExternalEvent event :
+        events.findBySourceStartingWithAndPlaceNameAndTripId(
+            CityEventProvider.SOURCE_PREFIX, node.getPlaceName(), node.getTrip().getId())) {
+      assessments.deleteByEvent_Id(event.getId());
+      events.delete(event);
+    }
   }
 
   private void refreshWeatherEvents(ItineraryNode node) {

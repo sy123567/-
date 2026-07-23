@@ -69,6 +69,12 @@ public class EventController {
     return s.ingestWeatherForTrip(id);
   }
 
+  @PostMapping("/trips/{id}/events/scan")
+  public List<ExternalEvent> scan(@PathVariable Long id, Authentication authentication) {
+    trips.requireMember(id, currentUser(authentication));
+    return s.ingestAllForTrip(id, false);
+  }
+
   private User currentUser(Authentication authentication) {
     return (User) authentication.getPrincipal();
   }

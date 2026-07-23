@@ -12,28 +12,26 @@ import com.trip.adaptive.service.TripService;
 public class WeatherPollingJob {
   private final TripService trips;
   private final EventIngestionService ingestion;
-  private final WeatherClient weather;
 
   @Value("${weather.poll-enabled:false}")
   private boolean pollEnabled;
 
-  public WeatherPollingJob(
-      TripService trips, EventIngestionService ingestion, WeatherClient weather) {
+  public WeatherPollingJob(TripService trips, EventIngestionService ingestion) {
     this.trips = trips;
     this.ingestion = ingestion;
-    this.weather = weather;
   }
 
   @Scheduled(initialDelay = 10_000, fixedDelayString = "${weather.poll-interval-ms:3600000}")
   public void run() {
-    if (!pollEnabled || !weather.enabled()) return; // 开关关 or 没配 key → 不轮询,省额度
+    if (!pollEnabled) return; // 轮询开关关闭
+    // 天气有 key 才产出（内部已判断，省额度）；城市路况/公告事件不依赖外部 key，始终接入。
     for (Trip trip : trips.all()) {
       // 只跳过已结束/已取消的行程；DRAFT、PLANNED、ONGOING 都扫描。
-      // 用户在界面新建的行程默认是 DRAFT，若只扫 ONGOING 会导致这些行程永远扫不到天气。
-      // force=true 已按 [now, now+forecastWindowDays] 窗口过滤节点，不会为过期/远期节点浪费额度。
+      // 用户在界面新建的行程默认是 DRAFT，若只扫 ONGOING 会导致这些行程永远扫不到事件。
+      // force=true 已按 [now, now+forecastWindowDays] 窗口过滤节点，不会为过期/远期节点做无谓处理。
       Enums.TripStatus status = trip.getStatus();
       if (status != Enums.TripStatus.COMPLETED && status != Enums.TripStatus.CANCELLED) {
-        ingestion.ingestWeatherForTrip(trip.getId(), true); // true = 只扫近未来窗口
+        ingestion.ingestAllForTrip(trip.getId(), true); // true = 只扫近未来窗口
       }
     }
   }
