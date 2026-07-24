@@ -79,7 +79,8 @@ export function TripDetailPage() {
   if (tripQuery.isError) return <ErrorState onRetry={() => void tripQuery.refetch()} message={tripQuery.error instanceof Error ? tripQuery.error.message : undefined} />;
   const trip = tripQuery.data;
   if (!trip) return <EmptyState title="找不到这段行程" message="它可能已被删除，或者你还没有加入对应的小组。" />;
-  const totalBudget = trip.totalBudget ?? 0;
+  const nodeCostSum = (trip.itineraryNodes ?? []).reduce((sum, node) => sum + (node.cost ?? 0), 0);
+  const totalBudget = trip.totalBudget && trip.totalBudget > 0 ? trip.totalBudget : nodeCostSum;
   const spentBudget = (expensesQuery.data ?? []).reduce((sum, item) => sum + item.amount, 0);
   const spendPercent = totalBudget > 0 ? Math.min(100, Math.round((spentBudget / totalBudget) * 100)) : 0;
   const eventsByNode = (impactsQuery.data ?? []).reduce<Record<number, ExternalEvent[]>>((map, impact) => {
