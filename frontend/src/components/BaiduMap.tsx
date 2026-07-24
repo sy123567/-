@@ -252,7 +252,7 @@ export function BaiduMap({
   if (configQuery.isLoading) return <MapPlaceholder className={className} label="正在准备地图…" />;
   if (mapNodes.length === 0) return <MapPlaceholder className={className} label="节点还没有可用坐标" />;
   if (scriptReady === false || configQuery.isError || !configQuery.data?.available) {
-    return <MapPlaceholder className={className} nodes={mapNodes} label="地图服务暂不可用，已切换演示路线" />;
+    return <MapPlaceholder className={className} nodes={mapNodes} label="地图服务暂不可用，已切换路线预览" />;
   }
   return <div ref={mapRef} className={`min-h-[220px] overflow-hidden rounded-card bg-sky/10 ${className}`} aria-label="行程节点地图" />;
 }

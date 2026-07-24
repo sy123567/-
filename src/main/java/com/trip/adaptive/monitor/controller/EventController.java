@@ -57,12 +57,6 @@ public class EventController {
     return s.activeForTrips(tripIds);
   }
 
-  @PostMapping("/trips/{id}/events/mock")
-  public List<ExternalEvent> mock(@PathVariable Long id, Authentication authentication) {
-    trips.requireMember(id, currentUser(authentication));
-    return s.fetchAndIngestForTrip(id);
-  }
-
   @PostMapping("/trips/{id}/events/weather")
   public List<ExternalEvent> weather(@PathVariable Long id, Authentication authentication) {
     trips.requireMember(id, currentUser(authentication));

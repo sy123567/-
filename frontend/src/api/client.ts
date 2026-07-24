@@ -82,7 +82,7 @@ export type WeatherPreview = {
   hasPrecipitation: boolean;
   wind?: string;
   precipitation?: string;
-  source?: "live" | "demo";
+  source?: "live" | "offline";
   message?: string;
 };
 
@@ -554,9 +554,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(constraint),
     });
-  },
-  async triggerMockEvent(tripId: number): Promise<ExternalEvent[]> {
-    return request<ExternalEvent[]>(`/api/trips/${tripId}/events/mock`, { method: "POST" });
   },
   async triggerWeatherEvents(tripId: number): Promise<ExternalEvent[]> {
     return request<ExternalEvent[]>(`/api/trips/${tripId}/events/weather`, { method: "POST" });

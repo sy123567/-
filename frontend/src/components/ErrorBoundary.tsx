@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="relative mt-6 font-mono text-[10px] tracking-[0.2em] text-coral">SMART TRAVEL / RECOVERY</p>
           <h1 className="relative mt-3 font-display text-3xl font-bold">页面出错了</h1>
           <p className="relative mx-auto mt-3 max-w-sm text-sm leading-6 text-ink-soft">
-            这条路线暂时偏离了轨道。刷新页面试试；如果问题持续，可以检查后端服务或切换到 Mock 数据。
+            这条路线暂时偏离了轨道。刷新页面试试；如果问题持续，可以检查后端服务。
           </p>
           <Button onClick={this.handleRetry} className="relative mt-7 inline-flex items-center gap-2">
             <RefreshCw size={16} />重试
