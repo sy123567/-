@@ -885,10 +885,10 @@ export function EventsPage() {
     void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
     void queryClient.invalidateQueries({ queryKey: ["risk", tripId] });
   };
-  const fetchWeather = useMutation({
-    mutationFn: () => api.triggerWeatherEvents(tripId as number),
-    onSuccess: () => { refreshMonitor(); show("已拉取当前行程的天气事件"); },
-    onError: (err) => show(err instanceof Error ? err.message : "拉取天气事件失败"),
+  const fetchEvents = useMutation({
+    mutationFn: () => api.scanEvents(tripId as number),
+    onSuccess: () => { refreshMonitor(); show("已拉取当前行程的实时事件"); },
+    onError: (err) => show(err instanceof Error ? err.message : "拉取事件失败"),
   });
   const assess = useMutation({
     mutationFn: () => api.assess(tripId as number),
@@ -940,7 +940,7 @@ export function EventsPage() {
   });
   return (
     <>
-      <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={tripId === undefined || fetchWeather.isPending} onClick={() => fetchWeather.mutate()}>{fetchWeather.isPending ? "拉取中…" : "拉取天气事件"}</Button><Button variant="ghost" disabled={tripId === undefined || assess.isPending} onClick={() => assess.mutate()}>{assess.isPending ? "评估中…" : "评估影响"}</Button><Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button></div>} />
+      <PageHeader eyebrow="LIVE SIGNALS" title="事件监测" description="天气、交通和城市公告会在这里汇合，帮助你提前看见路线中的变化。" action={<div className="flex flex-wrap gap-2"><Button variant="ghost" disabled={tripId === undefined || fetchEvents.isPending} onClick={() => fetchEvents.mutate()}>{fetchEvents.isPending ? "拉取中…" : "拉取实时事件"}</Button><Button variant="ghost" disabled={tripId === undefined || assess.isPending} onClick={() => assess.mutate()}>{assess.isPending ? "评估中…" : "评估影响"}</Button><Button variant="ghost" onClick={() => void refetch()}>刷新事件</Button></div>} />
       <TripSwitcher scope={scope} />
       <Card className="mb-6 p-4">
         <div className="flex flex-wrap items-center gap-2">

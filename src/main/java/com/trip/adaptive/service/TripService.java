@@ -1,9 +1,11 @@
 package com.trip.adaptive.service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.NodeNote;
 import com.trip.adaptive.domain.Route;
@@ -42,7 +44,30 @@ public class TripService {
   }
 
   public Trip get(Long id) {
-    return trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在: " + id));
+    return applyLifecycle(
+        trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在: " + id)));
+  }
+
+  /**
+   * 按当前日期自动流转行程状态：今天落在 [start,end] 内→ ONGOING，超过 end → COMPLETED。
+   *
+   * <p>界面新建的行程默认是 DRAFT，若不自动流转，即使当前时间已在行程期间也会一直停在 DRAFT。 CANCELLED / 已 COMPLETED 为终态，不回改；未开始（今天早于
+   * start）保持原状态。
+   */
+  private Trip applyLifecycle(Trip t) {
+    Enums.TripStatus s = t.getStatus();
+    if (s == Enums.TripStatus.CANCELLED || s == Enums.TripStatus.COMPLETED) return t;
+    if (t.getStartDate() == null || t.getEndDate() == null) return t;
+    LocalDate today = LocalDate.now();
+    Enums.TripStatus target;
+    if (today.isAfter(t.getEndDate())) target = Enums.TripStatus.COMPLETED;
+    else if (!today.isBefore(t.getStartDate())) target = Enums.TripStatus.ONGOING;
+    else return t;
+    if (target != s) {
+      t.setStatus(target);
+      trips.save(t);
+    }
+    return t;
   }
 
   public Trip requireMember(Long id, User user) {
@@ -59,13 +84,14 @@ public class TripService {
   }
 
   public List<Trip> all() {
-    return trips.findAll();
+    return trips.findAll().stream().map(this::applyLifecycle).toList();
   }
 
   public List<Trip> all(User user) {
     return members.findByUserId(user.getId()).stream()
         .flatMap(member -> trips.findByGroupId(member.getGroup().getId()).stream())
         .distinct()
+        .map(this::applyLifecycle)
         .toList();
   }
 
