@@ -80,9 +80,9 @@ public class DataSeeder implements CommandLineRunner {
 
     seedGuides(a);
 
-    if (groups.findByRoomCode("CN-TRAVEL").isEmpty()) {
+    if (groups.findByRoomCode("CNTRVL").isEmpty()) {
       TravelGroup nationwide = new TravelGroup("全国漫游", "全国城市行程", a);
-      nationwide.setRoomCode("CN-TRAVEL");
+      nationwide.setRoomCode("CNTRVL");
       nationwide = groups.save(nationwide);
       members.save(new GroupMember(nationwide, a, Enums.MemberRole.OWNER));
       seedNationwideTrips(nationwide);
