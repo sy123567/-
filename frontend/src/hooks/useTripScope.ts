@@ -5,10 +5,13 @@ import { api } from "../api/client";
 
 const STORAGE_KEY = "selectedTripId";
 
-export function useTripScope() {
+export function useTripScope(options?: { includeCompleted?: boolean }) {
+  const includeCompleted = options?.includeCompleted ?? false;
   const tripsQuery = useQuery({ queryKey: ["trips"], queryFn: api.trips });
   const [searchParams, setSearchParams] = useSearchParams();
-  const trips = tripsQuery.data ?? [];
+  const allTrips = tripsQuery.data ?? [];
+  // 默认在下拉/切换列表中隐藏已过期（已完成）的行程，避免界面冗杂；讨论区等场景可传 includeCompleted 显示全部。
+  const trips = includeCompleted ? allTrips : allTrips.filter((trip) => trip.status !== "COMPLETED");
   const urlTripId = Number(searchParams.get("trip"));
   const storedTripId = Number(localStorage.getItem(STORAGE_KEY));
   const preferredId = Number.isFinite(urlTripId) && urlTripId > 0
@@ -16,7 +19,7 @@ export function useTripScope() {
     : Number.isFinite(storedTripId) && storedTripId > 0
       ? storedTripId
       : trips.find((trip) => trip.status === "ONGOING")?.id ?? trips[0]?.id;
-  const selectedTrip = trips.find((trip) => trip.id === preferredId) ?? trips[0];
+  const selectedTrip = allTrips.find((trip) => trip.id === preferredId) ?? trips[0];
   const tripId = selectedTrip?.id;
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export function useTripScope() {
   }, [tripId, searchParams, setSearchParams]);
 
   const setTripId = (nextTripId: number) => {
-    const next = trips.find((trip) => trip.id === nextTripId);
+    const next = allTrips.find((trip) => trip.id === nextTripId);
     if (!next) return;
     localStorage.setItem(STORAGE_KEY, String(nextTripId));
     const nextParams = new URLSearchParams(searchParams);
