@@ -117,8 +117,8 @@ export function MapNodeDetailSheet({
       name: place.placeName,
       lat: place.latitude,
       lng: place.longitude,
-      address: `${place.city} · 演示推荐`,
-      uid: `demo-${node.id}-${index}`,
+      address: `${place.city} · 附近推荐`,
+      uid: `offline-${node.id}-${index}`,
       tag: place.nodeType === "MEAL" ? "餐饮" : "景点",
       distanceMeters: Math.round(
         distanceMeters(resolvedNode.latitude, resolvedNode.longitude, place.latitude, place.longitude),
@@ -273,7 +273,7 @@ export function MapNodeDetailSheet({
                   <p className="mt-2 text-sm font-semibold">该地点近期有降水或预警，注意安排室内备选。</p>
                 )}
                 <p className="mt-2 text-xs opacity-70">
-                  数据源：{weather.source === "demo" ? "演示兜底" : "实时天气"}
+                  数据源：{weather.source === "offline" ? "本地天气参考" : "实时天气"}
                 </p>
               </div>
             ) : (
@@ -281,8 +281,8 @@ export function MapNodeDetailSheet({
                 <p className="font-mono text-lg font-bold">
                   22~29°C <span className="font-sans text-sm">多云</span>
                 </p>
-                <p className="mt-2 text-sm font-semibold">演示天气：适合按原计划出行，建议随身携带雨具。</p>
-                <p className="mt-1 text-xs opacity-75">数据源：演示兜底 · 实时天气服务恢复后自动更新</p>
+                <p className="mt-2 text-sm font-semibold">当前天气参考：适合按原计划出行，建议随身携带雨具。</p>
+                <p className="mt-1 text-xs opacity-75">数据源：本地天气参考 · 实时天气服务恢复后自动更新</p>
               </div>
             )}
           </section>

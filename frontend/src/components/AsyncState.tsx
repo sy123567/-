@@ -23,7 +23,7 @@ export function ErrorState({ title = "连不上后端服务", message, onRetry }
         </div>
         <h2 className="mt-5 font-display text-xl font-bold text-ink">{title}</h2>
         <p className="mt-2 text-sm leading-6 text-ink-soft">
-          {message ?? `暂时无法访问 ${apiBase}。请确认后端服务已启动，或将 VITE_USE_MOCKS=true 后重启前端。`}
+          {message ?? `暂时无法访问 ${apiBase}。请确认后端服务已启动后重试。`}
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           {onRetry && (

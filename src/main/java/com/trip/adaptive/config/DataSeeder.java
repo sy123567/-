@@ -70,7 +70,7 @@ public class DataSeeder implements CommandLineRunner {
   public void run(String... args) {
     if (!enabled) return;
 
-    // Demo accounts are created only when missing (keyed by email), so an
+    // Seed accounts are created only when missing (keyed by email), so an
     // already-populated database keeps its rows and simply gains the accounts
     // that are still absent. Existing rows are never overwritten or duplicated.
     User a = ensureUser("张三", "zhangsan@example.com", "13800000001");
@@ -80,17 +80,17 @@ public class DataSeeder implements CommandLineRunner {
 
     seedGuides(a);
 
-    if (groups.findByRoomCode("CN-DEMO").isEmpty()) {
-      TravelGroup nationwide = new TravelGroup("全国漫游示例", "全国城市示例行程", a);
-      nationwide.setRoomCode("CN-DEMO");
+    if (groups.findByRoomCode("CN-TRAVEL").isEmpty()) {
+      TravelGroup nationwide = new TravelGroup("全国漫游", "全国城市行程", a);
+      nationwide.setRoomCode("CN-TRAVEL");
       nationwide = groups.save(nationwide);
       members.save(new GroupMember(nationwide, a, Enums.MemberRole.OWNER));
       seedNationwideTrips(nationwide);
-      log.info("seeded nationwide demo bundle: group {} with 34 trips", nationwide.getId());
+      log.info("seeded nationwide travel bundle: group {} with 34 trips", nationwide.getId());
     }
 
     // The social bundle (friendships, group, members, trip, nodes) is seeded once,
-    // anchored on the demo group. Once it exists the bundle is skipped, so
+    // anchored on the travel group. Once it exists the bundle is skipped, so
     // intentional deletes (removing a friend/member, deleting the trip) are not
     // resurrected on the next startup.
     if (groups.findByRoomCode("SH24-7K").isPresent()) return;
@@ -98,7 +98,7 @@ public class DataSeeder implements CommandLineRunner {
     ensureFriendship(a, b, Enums.FriendshipStatus.ACCEPTED);
     ensureFriendship(wangwu, a, Enums.FriendshipStatus.PENDING);
 
-    TravelGroup g = new TravelGroup("上海周末小队", "演示群组", a);
+    TravelGroup g = new TravelGroup("上海周末小队", "城市周末行程", a);
     g.setRoomCode("SH24-7K");
     g = groups.save(g);
     GroupMember ma = members.save(new GroupMember(g, a, Enums.MemberRole.OWNER));

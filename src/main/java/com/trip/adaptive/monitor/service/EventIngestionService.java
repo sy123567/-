@@ -80,10 +80,6 @@ public class EventIngestionService {
         .toList();
   }
 
-  public List<ExternalEvent> fetchAndIngestForTrip(Long id) {
-    return ingestCityEventsForTrip(id, false);
-  }
-
   @Transactional
   public List<ExternalEvent> ingestWeatherForTrip(Long tripId, boolean force) {
     Trip t = trips.get(tripId);
