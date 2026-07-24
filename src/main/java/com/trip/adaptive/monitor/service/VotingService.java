@@ -1,5 +1,6 @@
 package com.trip.adaptive.monitor.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -13,6 +14,7 @@ import com.trip.adaptive.domain.GroupMember;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.PlanVote;
 import com.trip.adaptive.domain.Trip;
+import com.trip.adaptive.exception.BusinessException;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.AlternativePlanRepository;
 import com.trip.adaptive.repository.ChangeLogRepository;
@@ -97,6 +99,16 @@ public class VotingService {
           .forEach(
               c -> {
                 ItineraryNode n = c.getOriginalNode();
+                if (n == null) return;
+                // 记录变更前快照，供后续「回退」恢复。
+                c.setPrevPlaceName(n.getPlaceName());
+                c.setPrevLatitude(n.getLatitude());
+                c.setPrevLongitude(n.getLongitude());
+                c.setPrevStart(n.getPlannedStart());
+                c.setPrevEnd(n.getPlannedEnd());
+                c.setPrevCost(n.getCost());
+                c.setPrevStatus(n.getStatus());
+                c.setApplied(true);
                 if (c.getChangeType() == Enums.ChangeType.REMOVE)
                   n.setStatus(Enums.NodeStatus.CANCELLED);
                 else {
@@ -127,6 +139,42 @@ public class VotingService {
       p.setStatus(Enums.PlanStatus.REJECTED);
       notification.trip(p.getTrip().getId(), "plan-rejected", p);
     }
+    return p.getTrip();
+  }
+
+  @Transactional
+  public Trip revert(Long id) {
+    AlternativePlan p = get(id);
+    if (p.getStatus() != Enums.PlanStatus.ACCEPTED) {
+      throw new BusinessException("只有已应用的方案才能回退");
+    }
+    p.getProposedNodeChanges()
+        .forEach(
+            c -> {
+              if (!c.isApplied()) return;
+              ItineraryNode n = c.getOriginalNode();
+              if (n != null) {
+                n.setPlaceName(c.getPrevPlaceName());
+                n.setLatitude(c.getPrevLatitude());
+                n.setLongitude(c.getPrevLongitude());
+                n.setPlannedStart(c.getPrevStart());
+                n.setPlannedEnd(c.getPrevEnd());
+                n.setCost(c.getPrevCost());
+                n.setStatus(c.getPrevStatus());
+              }
+              c.setApplied(false);
+            });
+    routing.recompute(p.getTrip()); // 节点恢复后重算路段
+    // 回退后方案回到「待决策」，群组可重新发起投票。
+    p.setStatus(Enums.PlanStatus.PROPOSED);
+    ChangeLog l = new ChangeLog();
+    l.setTrip(p.getTrip());
+    l.setRelatedPlan(p);
+    l.setExtraCost(BigDecimal.ZERO);
+    l.setDescription("已回退替代方案：" + p.getTitle() + "，行程已恢复到变更前");
+    logs.save(l);
+    trips.save(p.getTrip());
+    notification.trip(p.getTrip().getId(), "plan-reverted", p);
     return p.getTrip();
   }
 
