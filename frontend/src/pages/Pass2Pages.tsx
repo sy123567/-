@@ -552,6 +552,7 @@ export function NewTripPage() {
   const [city, setCity] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [budget, setBudget] = useState("");
   const [days, setDays] = useState("2");
   const [interests, setInterests] = useState("");
   const [plannerPlaces, setPlannerPlaces] = useState<PlannerPlace[]>([]);
@@ -671,7 +672,7 @@ export function NewTripPage() {
         status: "DRAFT",
         startDate,
         endDate: tripEndDate,
-        totalBudget: withNodes.reduce((sum, node) => sum + node.cost, 0),
+        totalBudget: budget.trim() !== "" ? Number(budget) : withNodes.reduce((sum, node) => sum + node.cost, 0),
       });
       const savedNodes: ItineraryNode[] = [];
       for (const node of withNodes) {
@@ -707,6 +708,7 @@ export function NewTripPage() {
       setActiveTrip(result.trip);
       setNodes([]);
       setNodeDraft(emptyNodeDraft(startDate));
+      setBudget("");
     }
   };
 
@@ -768,6 +770,7 @@ export function NewTripPage() {
             <label className="block text-sm font-semibold text-ink">行程名称<Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：杭州春茶之旅" /></label>
             <label className="block text-sm font-semibold text-ink">目的地城市<Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="例如：杭州" /></label>
             <div className="grid gap-3 sm:grid-cols-2"><label className="block text-sm font-semibold text-ink">开始日期<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label><label className="block text-sm font-semibold text-ink">结束日期<input required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /></label></div>
+            <label className="block text-sm font-semibold text-ink">总预算 (¥)<span className="ml-2 text-xs font-normal text-ink-soft">可选，留空则按节点费用自动汇总</span><Input type="number" min="0" step="0.01" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="例如：3000" /></label>
             <Button type="submit" disabled={busy} className="w-full">{busy ? "正在创建…" : "创建行程并添加节点"}<ArrowRight size={16} className="ml-2 inline" /></Button>
           </form> : <>
             <label className="block text-sm font-semibold text-ink">目的地城市<input list="trip-cities" value={city} onChange={(event) => setCity(event.target.value)} placeholder="输入上海、北京、成都…" className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm" /><datalist id="trip-cities">{cityOptions.map((option) => <option key={option} value={option} />)}</datalist></label>
@@ -1508,7 +1511,8 @@ export function BudgetPage() {
   if (scope.isLoading) return <LoadingState label="正在加载预算…" />;
   if (!trip) return <EmptyState title="还没有行程" message="先创建一段行程，再记录费用。" />;
   const expenses = expensesQuery.data ?? [];
-  const totalBudget = trip.totalBudget ?? 0;
+  const nodeCostSum = (trip.itineraryNodes ?? []).reduce((sum, node) => sum + (node.cost ?? 0), 0);
+  const totalBudget = trip.totalBudget && trip.totalBudget > 0 ? trip.totalBudget : nodeCostSum;
   const spent = expenses.reduce((sum, item) => sum + item.amount, 0);
   const percent = totalBudget > 0 ? Math.round((spent / totalBudget) * 100) : 0;
   const submit = () => {
