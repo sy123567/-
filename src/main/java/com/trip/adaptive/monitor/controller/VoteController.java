@@ -45,4 +45,9 @@ public class VoteController {
   public Trip tally(@PathVariable Long id) {
     return s.tally(id);
   }
+
+  @PostMapping("/{id}/revert")
+  public Trip revert(@PathVariable Long id) {
+    return s.revert(id);
+  }
 }

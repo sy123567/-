@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronDown, ChevronRight, CircleAlert, Copy, Footprints, Heart, Plus, Search, Send, Shield, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronDown, ChevronRight, CircleAlert, Copy, Footprints, Heart, Plus, RotateCcw, Search, Send, Shield, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type AiPlace, type MapPlace, type VoteChoice, type WeatherPreview } from "../api/client";
@@ -1091,13 +1091,30 @@ export function VotesPage() {
 }
 
 export function ChangelogPage() {
+  const queryClient = useQueryClient();
+  const { toast, show } = useToast();
   const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
   const tripId = dashboardQuery.data?.activeTrip?.id;
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["changelogs", tripId], queryFn: () => api.changelogs(tripId as number), enabled: tripId !== undefined });
+  const revert = useMutation({
+    mutationFn: (planId: number) => api.revertPlan(planId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["changelogs", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["plans", tripId] });
+      show("已回退，行程已恢复到变更前");
+    },
+    onError: (err) => show(err instanceof Error ? err.message : "回退失败"),
+  });
   if (dashboardQuery.isLoading || isLoading) return <LoadingState label="正在读取变更记录…" />;
   if (dashboardQuery.isError || isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void refetch(); }} message={(dashboardQuery.error ?? error) instanceof Error ? (dashboardQuery.error ?? error)?.message : undefined} />;
   if (!data || data.length === 0) return <EmptyState title="还没有变更记录" message="当替代方案被采纳后，相关变更会显示在这里。" />;
-  return <><PageHeader eyebrow="TRIP HISTORY" title="变更记录" description="每一次应变都有迹可循，费用、截止时间和关联方案都在这里。" /><Card className="divide-y divide-slate-100 p-6">{data.map((log) => <div key={log.id} className="flex flex-wrap items-start justify-between gap-5 py-5 first:pt-0 last:pb-0"><div><div className="flex items-center gap-2"><Badge tone="mint">已应用</Badge>{log.createdAt && <span className="font-mono text-xs text-ink-soft">{log.createdAt.replace("T", " ")}</span>}</div><h2 className="mt-3 font-semibold text-ink">{log.description ?? "未命名变更"}</h2><p className="mt-2 text-sm text-ink-soft">关联方案：{log.relatedPlan?.title ?? "暂无关联方案"}</p></div><div className="text-right"><p className="font-mono text-lg font-bold text-coral">{log.extraCost !== undefined ? `+¥${log.extraCost}` : "费用待定"}</p>{log.refundDeadline && <p className="mt-1 text-xs text-ink-soft">退款截止 {log.refundDeadline.replace("T", " ")}</p>}</div></div>)}</Card></>;
+  return <>{toast}<PageHeader eyebrow="TRIP HISTORY" title="变更记录" description="每一次应变都有迹可循，费用、截止时间和关联方案都在这里。已应用的变更可随时一键回退。" /><Card className="divide-y divide-slate-100 p-6">{data.map((log) => {
+    const reverted = (log.description ?? "").includes("已回退");
+    const canRevert = !reverted && log.relatedPlan?.status === "ACCEPTED";
+    return <div key={log.id} className="flex flex-wrap items-start justify-between gap-5 py-5 first:pt-0 last:pb-0"><div><div className="flex items-center gap-2"><Badge tone={reverted ? "neutral" : "mint"}>{reverted ? "已回退" : "已应用"}</Badge>{log.createdAt && <span className="font-mono text-xs text-ink-soft">{log.createdAt.replace("T", " ")}</span>}</div><h2 className="mt-3 font-semibold text-ink">{log.description ?? "未命名变更"}</h2><p className="mt-2 text-sm text-ink-soft">关联方案：{log.relatedPlan?.title ?? "暂无关联方案"}</p>{canRevert && <Button variant="ghost" className="mt-3 flex items-center gap-2 text-sm" disabled={revert.isPending && revert.variables === log.relatedPlan?.id} onClick={() => { if (log.relatedPlan?.id && window.confirm("确定回退此变更吗？行程将恢复到该方案应用前的状态。")) revert.mutate(Number(log.relatedPlan.id)); }}><RotateCcw size={15} />{revert.isPending && revert.variables === log.relatedPlan?.id ? "回退中…" : "回退此变更"}</Button>}</div><div className="text-right"><p className="font-mono text-lg font-bold text-coral">{log.extraCost !== undefined ? `+¥${log.extraCost}` : "费用待定"}</p>{log.refundDeadline && <p className="mt-1 text-xs text-ink-soft">退款截止 {log.refundDeadline.replace("T", " ")}</p>}</div></div>;
+  })}</Card></>;
 }
 
 function relativeTime(iso: string): string {

@@ -69,7 +69,8 @@ public class TravelGuideService {
   @Transactional
   public TravelGuide create(User author, TravelGuide payload) {
     payload.setAuthor(author);
-    if (payload.getRating() <= 0) payload.setRating(5.0);
+    // 不预置虚假评分：评分、收藏、评论均由真实互动累积。
+    if (payload.getRating() < 0) payload.setRating(0);
     return repo.save(payload);
   }
 
@@ -100,7 +101,8 @@ public class TravelGuideService {
     guide.setDescription(note.trim());
     guide.setCover(cover != null && !cover.isBlank() ? cover.trim() : null);
     guide.setTags(tags != null ? tags : new ArrayList<>());
-    guide.setRating(5.0);
+    // 新发布攻略无虚假评分，收藏/评论从 0 起步，由真实互动累积。
+    guide.setRating(0);
     return repo.save(guide);
   }
 

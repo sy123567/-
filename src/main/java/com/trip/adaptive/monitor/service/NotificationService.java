@@ -38,6 +38,7 @@ public class NotificationService {
       case "new-plans" -> "有新的替代方案待比较";
       case "plan-accepted" -> "行程变更已应用";
       case "plan-rejected" -> "一个替代方案被否决";
+      case "plan-reverted" -> "行程变更已回退";
       default -> null;
     };
   }
@@ -47,6 +48,7 @@ public class NotificationService {
       case "new-plans" -> "系统已根据最新影响生成替代方案，前往方案页查看。";
       case "plan-accepted" -> "被采纳的方案已应用到行程节点与路线。";
       case "plan-rejected" -> "群组可另选方案重新发起投票。";
+      case "plan-reverted" -> "行程已恢复到该方案应用前的状态。";
       default -> "";
     };
   }

@@ -549,6 +549,9 @@ export const api = {
   async tally(planId: number): Promise<Trip> {
     return request<Trip>(`/api/plans/${planId}/tally`, { method: "POST" });
   },
+  async revertPlan(planId: number): Promise<Trip> {
+    return request<Trip>(`/api/plans/${planId}/revert`, { method: "POST" });
+  },
   async saveConstraint(groupId: number, memberId: number, constraint: MemberConstraint): Promise<GroupMember> {
     return request<GroupMember>(`/api/groups/${groupId}/members/${memberId}/constraint`, {
       method: "PUT",

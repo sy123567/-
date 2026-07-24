@@ -34,6 +34,16 @@ public class NodeChange {
   private BigDecimal newCost;
   private String note;
 
+  // 变更前快照：方案被采纳应用到节点时记录，用于「回退」恢复到变更前的行程状态。
+  private boolean applied;
+  private String prevPlaceName;
+  private Double prevLatitude, prevLongitude;
+  private LocalDateTime prevStart, prevEnd;
+  private BigDecimal prevCost;
+
+  @Enumerated(EnumType.STRING)
+  private Enums.NodeStatus prevStatus;
+
   public NodeChange() {}
 
   public Long getId() {
@@ -118,5 +128,69 @@ public class NodeChange {
 
   public void setNote(String v) {
     note = v;
+  }
+
+  public boolean isApplied() {
+    return applied;
+  }
+
+  public void setApplied(boolean v) {
+    applied = v;
+  }
+
+  public String getPrevPlaceName() {
+    return prevPlaceName;
+  }
+
+  public void setPrevPlaceName(String v) {
+    prevPlaceName = v;
+  }
+
+  public Double getPrevLatitude() {
+    return prevLatitude;
+  }
+
+  public void setPrevLatitude(Double v) {
+    prevLatitude = v;
+  }
+
+  public Double getPrevLongitude() {
+    return prevLongitude;
+  }
+
+  public void setPrevLongitude(Double v) {
+    prevLongitude = v;
+  }
+
+  public LocalDateTime getPrevStart() {
+    return prevStart;
+  }
+
+  public void setPrevStart(LocalDateTime v) {
+    prevStart = v;
+  }
+
+  public LocalDateTime getPrevEnd() {
+    return prevEnd;
+  }
+
+  public void setPrevEnd(LocalDateTime v) {
+    prevEnd = v;
+  }
+
+  public BigDecimal getPrevCost() {
+    return prevCost;
+  }
+
+  public void setPrevCost(BigDecimal v) {
+    prevCost = v;
+  }
+
+  public Enums.NodeStatus getPrevStatus() {
+    return prevStatus;
+  }
+
+  public void setPrevStatus(Enums.NodeStatus v) {
+    prevStatus = v;
   }
 }
