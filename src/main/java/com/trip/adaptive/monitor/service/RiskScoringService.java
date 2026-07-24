@@ -35,7 +35,14 @@ public class RiskScoringService {
       repo.save(x);
       if (score > max) max = score;
     }
-    int affected = a.size();
+    int affected =
+        (int)
+            a.stream()
+                .map(ImpactAssessment::getAffectedNode)
+                .filter(n -> n != null && n.getId() != null)
+                .map(ItineraryNode::getId)
+                .distinct()
+                .count();
     int totalNodes = t.getItineraryNodes().size();
     double breadth = totalNodes == 0 ? 0 : (double) affected / totalNodes; // 受影响节点占比
     int overall = affected == 0 ? 0 : (int) Math.min(100, max + breadth * 20);
