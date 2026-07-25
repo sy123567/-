@@ -31,6 +31,7 @@ public class VotingService {
   private final ChangeLogRepository logs;
   private final NotificationService notification;
   private final RouteRecalculationService routing;
+  private final ImpactMatchingService impactMatching;
 
   public VotingService(
       AlternativePlanRepository p,
@@ -39,7 +40,8 @@ public class VotingService {
       TripRepository t,
       ChangeLogRepository l,
       NotificationService n,
-      RouteRecalculationService routing) {
+      RouteRecalculationService routing,
+      ImpactMatchingService impactMatching) {
     plans = p;
     members = m;
     votes = v;
@@ -47,6 +49,7 @@ public class VotingService {
     logs = l;
     notification = n;
     this.routing = routing;
+    this.impactMatching = impactMatching;
   }
 
   @Transactional
@@ -133,6 +136,8 @@ public class VotingService {
       l.setDescription("集体投票通过替代方案：" + p.getTitle());
       logs.save(l);
       trips.save(p.getTrip());
+      // 变更应用后按新节点重新监测：清除旧影响数据，影响改为指向变更后的时间/节点。
+      impactMatching.assessTrip(p.getTrip().getId());
       notification.trip(p.getTrip().getId(), "plan-accepted", p);
     } else {
       // 已达法定人数但未获通过：否决该方案，群组可另选方案重新发起投票。
@@ -174,6 +179,8 @@ public class VotingService {
     l.setDescription("已回退替代方案：" + p.getTitle() + "，行程已恢复到变更前");
     logs.save(l);
     trips.save(p.getTrip());
+    // 节点恢复后同步重算监测，影响回到恢复后的节点状态。
+    impactMatching.assessTrip(p.getTrip().getId());
     notification.trip(p.getTrip().getId(), "plan-reverted", p);
     return p.getTrip();
   }
