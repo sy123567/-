@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bell, Compass, LayoutDashboard, Map, Menu, Search, Settings, Users, X } from "lucide-react";
+import { Bell, Compass, LayoutDashboard, Map, Menu, MessageSquare, Search, Settings, Users, X } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, getToken } from "../auth";
@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import { useTripRealtime, type TripEvent } from "../api/realtime";
 
 const groups = [
-  { label: "社交", items: [{ label: "我的小组", to: "/groups", icon: Users }, { label: "好友与邀请", to: "/friends", icon: Users }] },
+  { label: "社交", items: [{ label: "我的小组", to: "/groups", icon: Users }, { label: "好友与邀请", to: "/friends", icon: Users }, { label: "聊天", to: "/chat", icon: MessageSquare }] },
   { label: "规划", items: [{ label: "行程总览", to: "/trips", icon: Compass }, { label: "地图路线", to: "/routes", icon: Compass }, { label: "预算与费用", to: "/budget", icon: Compass }, { label: "攻略社区", to: "/guides", icon: Compass }] },
   { label: "行程中", items: [{ label: "事件监测", to: "/events", icon: Bell }, { label: "影响与风险", to: "/impacts", icon: LayoutDashboard }] },
   { label: "决策", items: [{ label: "替代方案", to: "/plans", icon: Compass }, { label: "投票中心", to: "/votes", icon: Users }] },

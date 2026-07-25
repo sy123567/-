@@ -3,6 +3,8 @@ import type {
   AdminStats,
   AlternativePlan,
   ChangeLog,
+  ChatMessage,
+  Conversation,
   DashboardData,
   DiscussionPost,
   ExternalEvent,
@@ -572,5 +574,32 @@ export const api = {
       `/api/groups/${groupId}/transfer?newOwnerId=${newOwnerId}`,
       { method: "PUT" },
     );
+  },
+  async conversations(): Promise<Conversation[]> {
+    return request<Conversation[]>("/api/chat/conversations");
+  },
+  async conversation(id: number): Promise<Conversation> {
+    return request<Conversation>(`/api/chat/conversations/${id}`);
+  },
+  async chatMessages(conversationId: number): Promise<ChatMessage[]> {
+    return request<ChatMessage[]>(`/api/chat/conversations/${conversationId}/messages`);
+  },
+  async sendChatMessage(conversationId: number, content: string): Promise<ChatMessage> {
+    return request<ChatMessage>(`/api/chat/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+  },
+  async openDirectChat(userId: number): Promise<Conversation> {
+    return request<Conversation>(`/api/chat/direct/${userId}`, { method: "POST" });
+  },
+  async openGroupChat(groupId: number): Promise<Conversation> {
+    return request<Conversation>(`/api/chat/groups/${groupId}`, { method: "POST" });
+  },
+  async shareGuideToGroup(groupId: number, guideId: number, note?: string): Promise<ChatMessage> {
+    return request<ChatMessage>(`/api/chat/groups/${groupId}/share-guide/${guideId}`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
   },
 };

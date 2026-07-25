@@ -99,4 +99,14 @@ public final class Enums {
     ACCEPTED,
     REJECTED
   }
+
+  public enum ConversationType {
+    DIRECT,
+    GROUP
+  }
+
+  public enum MessageKind {
+    TEXT,
+    GUIDE
+  }
 }

@@ -10,6 +10,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { GuidesPage } from "./pages/GuidesPage";
 import { TripDetailPage } from "./pages/TripDetailPage";
+import { ChatPage } from "./pages/ChatPage";
 import {
   AdminPage,
   ChangelogPage,
@@ -58,6 +59,8 @@ function App() {
           <Route path="/groups/:id" element={<RequireAuth><AppLayout><GroupDetailPage /></AppLayout></RequireAuth>} />
           <Route path="/groups/:id/constraints/:memberId" element={<RequireAuth><AppLayout><ConstraintPage /></AppLayout></RequireAuth>} />
           <Route path="/friends" element={<RequireAuth><AppLayout><FriendsPage /></AppLayout></RequireAuth>} />
+          <Route path="/chat" element={<RequireAuth><AppLayout><ChatPage /></AppLayout></RequireAuth>} />
+          <Route path="/chat/:id" element={<RequireAuth><AppLayout><ChatPage /></AppLayout></RequireAuth>} />
           <Route path="/events" element={<RequireAuth><AppLayout><EventsPage /></AppLayout></RequireAuth>} />
           <Route path="/impacts" element={<RequireAuth><AppLayout><ImpactsPage /></AppLayout></RequireAuth>} />
           <Route path="/plans" element={<RequireAuth><AppLayout><PlansPage /></AppLayout></RequireAuth>} />

@@ -236,6 +236,33 @@ export interface AdminStats {
   budgetBuckets: { label: string; count: number }[];
 }
 
+export type ConversationType = "DIRECT" | "GROUP";
+export type MessageKind = "TEXT" | "GUIDE";
+
+export interface Conversation {
+  id: Id;
+  type: ConversationType;
+  title: string;
+  peerId?: Id | null;
+  groupId?: Id | null;
+  lastMessage?: string | null;
+  lastMessageAt: string;
+}
+
+export interface ChatMessage {
+  id: Id;
+  conversationId: Id;
+  senderId: Id;
+  senderName: string;
+  kind: MessageKind;
+  content: string;
+  sharedGuideId?: Id | null;
+  sharedGuideTitle?: string | null;
+  sharedGuideCity?: string | null;
+  sharedGuideCover?: string | null;
+  createdAt: string;
+}
+
 export interface NotificationItem {
   id: Id;
   type: string;
