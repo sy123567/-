@@ -58,13 +58,23 @@ public class ChatController {
   }
 
   @PostMapping("/groups/{groupId}/share-guide/{guideId}")
-  public MessageView shareGuide(
+  public MessageView shareGuideToGroup(
       @PathVariable Long groupId,
       @PathVariable Long guideId,
       @RequestBody(required = false) ShareRequest request,
       Authentication authentication) {
     return s.shareGuideToGroup(
         groupId, currentUser(authentication), guideId, request != null ? request.note() : null);
+  }
+
+  @PostMapping("/direct/{userId}/share-guide/{guideId}")
+  public MessageView shareGuideToFriend(
+      @PathVariable Long userId,
+      @PathVariable Long guideId,
+      @RequestBody(required = false) ShareRequest request,
+      Authentication authentication) {
+    return s.shareGuideToFriend(
+        userId, currentUser(authentication), guideId, request != null ? request.note() : null);
   }
 
   private User currentUser(Authentication authentication) {

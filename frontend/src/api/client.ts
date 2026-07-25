@@ -602,4 +602,10 @@ export const api = {
       body: JSON.stringify({ note }),
     });
   },
+  async shareGuideToFriend(userId: number, guideId: number, note?: string): Promise<ChatMessage> {
+    return request<ChatMessage>(`/api/chat/direct/${userId}/share-guide/${guideId}`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+  },
 };
