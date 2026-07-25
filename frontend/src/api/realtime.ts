@@ -31,3 +31,32 @@ export function useTripRealtime(tripId: number | undefined, onEvent: (event: Tri
     };
   }, [tripId, onEvent]);
 }
+
+/**
+ * 订阅某个会话的实时聊天消息（后端 /topic/conversations/{id}）。
+ */
+export function useConversationRealtime(
+  conversationId: number | undefined,
+  onMessage: (message: unknown) => void,
+): void {
+  useEffect(() => {
+    if (conversationId === undefined) return;
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${apiBase}/ws`),
+      reconnectDelay: 4000,
+      onConnect: () => {
+        client.subscribe(`/topic/conversations/${conversationId}`, (message: IMessage) => {
+          try {
+            onMessage(JSON.parse(message.body));
+          } catch {
+            // 忽略无法解析的推送消息。
+          }
+        });
+      },
+    });
+    client.activate();
+    return () => {
+      void client.deactivate();
+    };
+  }, [conversationId, onMessage]);
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Bus, Car, Check, ChevronDown, ChevronRight, CircleAlert, Copy, Footprints, Heart, Plus, RotateCcw, Search, Send, Shield, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Bus, Car, Check, ChevronDown, ChevronRight, CircleAlert, Copy, Footprints, Heart, MessageSquare, Plus, RotateCcw, Search, Send, Shield, Sparkles, ThumbsUp, Trash2, UserMinus, UserPlus, Users } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type AiPlace, type MapPlace, type VoteChoice, type WeatherPreview } from "../api/client";
@@ -90,7 +90,13 @@ export function GroupDetailPage() {
   const { toast, show } = useToast();
   const [transferOpen, setTransferOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const openGroupChat = useMutation({
+    mutationFn: () => api.openGroupChat(groupId),
+    onSuccess: (conversation) => navigate(`/chat/${conversation.id}`),
+    onError: (error) => show(error instanceof Error ? error.message : "无法开启群聊"),
+  });
   const groupQuery = useQuery({ queryKey: ["group", groupId], queryFn: () => api.group(groupId), enabled: Number.isFinite(groupId) });
   const membersQuery = useQuery({ queryKey: ["group", groupId, "members"], queryFn: () => api.members(groupId), enabled: Number.isFinite(groupId) });
   const members = membersQuery.data ?? [];
@@ -119,7 +125,7 @@ export function GroupDetailPage() {
         eyebrow={`GROUP / ${group.roomCode}`}
         title={group.name}
         description={`${members.length} 位成员 · 房间码 ${group.roomCode}`}
-        action={<div className="flex gap-2"><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
+        action={<div className="flex gap-2"><Button onClick={() => openGroupChat.mutate()} disabled={openGroupChat.isPending}><MessageSquare size={16} className="mr-2 inline" />群聊</Button><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
       />
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="p-6">
@@ -173,7 +179,13 @@ export function FriendsPage() {
   const [keyword, setKeyword] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const { toast, show } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const openChat = useMutation({
+    mutationFn: (userId: number) => api.openDirectChat(userId),
+    onSuccess: (conversation) => navigate(`/chat/${conversation.id}`),
+    onError: (error) => show(error instanceof Error ? error.message : "无法开启私聊"),
+  });
   const friendsQuery = useQuery({ queryKey: ["friends"], queryFn: api.friends });
   const incomingQuery = useQuery({ queryKey: ["friend-requests", "incoming"], queryFn: api.incomingFriendRequests });
   const outgoingQuery = useQuery({ queryKey: ["friend-requests", "outgoing"], queryFn: api.outgoingFriendRequests });
@@ -302,7 +314,7 @@ export function FriendsPage() {
                 name={friend.name}
                 detail={friend.email}
                 initial={avatar(friend.name)}
-                actions={<Button variant="ghost" onClick={() => action.mutate({ type: "delete", id: friend.id })}>删除好友</Button>}
+                actions={<div className="flex gap-2"><Button onClick={() => openChat.mutate(friend.id)} disabled={openChat.isPending}><MessageSquare size={15} className="mr-1.5 inline" />私聊</Button><Button variant="ghost" onClick={() => action.mutate({ type: "delete", id: friend.id })}>删除好友</Button></div>}
               />
             ))}
           {((tab === "收到的申请" && incoming.length === 0) ||
@@ -1322,6 +1334,7 @@ export function GuideDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const { toast, show } = useToast();
   const guideId = Number(id);
@@ -1339,7 +1352,7 @@ export function GuideDetailPage() {
   const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), "2025-05-03", guide.days);
   const otherGuides = (authorQuery.data ?? []).filter((item) => item.id !== guide.id);
   const comments = commentsQuery.data ?? [];
-  return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card><Card className="mt-5 p-6 md:p-8"><div className="flex items-end justify-between gap-3"><div><p className="eyebrow">COMMENTS</p><h2 className="mt-2 font-display text-2xl font-bold">评论区</h2></div><Badge tone="neutral">{comments.length} 条</Badge></div><div className="mt-6 space-y-4">{commentsQuery.isLoading ? <LoadingState label="正在读取评论…" /> : comments.length === 0 ? <p className="rounded-card bg-paper p-5 text-sm text-ink-soft">还没有评论，来留下第一句建议吧。</p> : comments.map((comment) => <div key={comment.id} className="flex gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{comment.authorName.slice(0, 1)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-ink">{comment.authorName}</p><span className="text-[11px] text-ink-soft">{relativeTime(comment.createdAt)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-soft">{comment.body}</p></div></div>)}</div><div className="mt-6 border-t border-slate-100 pt-5"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={500} className="min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="分享你的体验或给作者一点建议…" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-ink-soft">{commentBody.length}/500</span><Button disabled={!commentBody.trim() || addComment.isPending} onClick={() => addComment.mutate()}><Send size={15} className="mr-2 inline" />{addComment.isPending ? "发布中…" : "发表评论"}</Button></div></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{guide.author.name.slice(0, 1)}</div><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">{guide.rating.toFixed(1)} 分 · {guide.reviews} 条评价</p></div></div><h3 className="mt-6 border-t border-slate-100 pt-5 font-display text-lg font-bold">作者的其他攻略 / 笔记</h3><div className="mt-4 space-y-3">{authorQuery.isLoading ? <p className="text-sm text-ink-soft">正在读取作者笔记…</p> : otherGuides.length === 0 ? <p className="text-sm text-ink-soft">作者暂时还没有其他已发布攻略。</p> : otherGuides.map((other) => <Link key={other.id} to={`/guides/${other.id}`} className="block rounded-xl bg-paper p-3 transition hover:-translate-y-0.5 hover:bg-sky/5"><p className="text-sm font-semibold text-ink">{other.title}</p><p className="mt-1 text-xs text-ink-soft">{other.city} · {other.days} 天 · {other.rating.toFixed(1)} 分</p></Link>)}</div></Card></div></div><ApplyGuideModal guide={guide} open={open} onClose={() => setOpen(false)} onDone={(tripId) => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate(`/trips/${tripId}`); }} />{toast}</>;
+  return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card><Card className="mt-5 p-6 md:p-8"><div className="flex items-end justify-between gap-3"><div><p className="eyebrow">COMMENTS</p><h2 className="mt-2 font-display text-2xl font-bold">评论区</h2></div><Badge tone="neutral">{comments.length} 条</Badge></div><div className="mt-6 space-y-4">{commentsQuery.isLoading ? <LoadingState label="正在读取评论…" /> : comments.length === 0 ? <p className="rounded-card bg-paper p-5 text-sm text-ink-soft">还没有评论，来留下第一句建议吧。</p> : comments.map((comment) => <div key={comment.id} className="flex gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{comment.authorName.slice(0, 1)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-ink">{comment.authorName}</p><span className="text-[11px] text-ink-soft">{relativeTime(comment.createdAt)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-soft">{comment.body}</p></div></div>)}</div><div className="mt-6 border-t border-slate-100 pt-5"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={500} className="min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="分享你的体验或给作者一点建议…" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-ink-soft">{commentBody.length}/500</span><Button disabled={!commentBody.trim() || addComment.isPending} onClick={() => addComment.mutate()}><Send size={15} className="mr-2 inline" />{addComment.isPending ? "发布中…" : "发表评论"}</Button></div></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button><Button variant="ghost" className="mt-2 w-full" onClick={() => setShareOpen(true)}><MessageSquare size={15} className="mr-2 inline" />分享到群聊</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{guide.author.name.slice(0, 1)}</div><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">{guide.rating.toFixed(1)} 分 · {guide.reviews} 条评价</p></div></div><h3 className="mt-6 border-t border-slate-100 pt-5 font-display text-lg font-bold">作者的其他攻略 / 笔记</h3><div className="mt-4 space-y-3">{authorQuery.isLoading ? <p className="text-sm text-ink-soft">正在读取作者笔记…</p> : otherGuides.length === 0 ? <p className="text-sm text-ink-soft">作者暂时还没有其他已发布攻略。</p> : otherGuides.map((other) => <Link key={other.id} to={`/guides/${other.id}`} className="block rounded-xl bg-paper p-3 transition hover:-translate-y-0.5 hover:bg-sky/5"><p className="text-sm font-semibold text-ink">{other.title}</p><p className="mt-1 text-xs text-ink-soft">{other.city} · {other.days} 天 · {other.rating.toFixed(1)} 分</p></Link>)}</div></Card></div></div><ApplyGuideModal guide={guide} open={open} onClose={() => setOpen(false)} onDone={(tripId) => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate(`/trips/${tripId}`); }} /><ShareGuideModal guide={guide} open={shareOpen} onClose={() => setShareOpen(false)} onDone={(groupName) => { setShareOpen(false); show(`已分享到「${groupName}」群聊`); }} />{toast}</>;
 }
 
 function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide; open: boolean; onClose: () => void; onDone: (tripId: number) => void }) {
@@ -1394,6 +1407,33 @@ function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide;
     <div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold">相对 → 绝对时间</p><div className="mt-3 space-y-2 text-xs text-ink-soft">{previewNodes.length === 0 ? <p>本地地点库暂时没有 {guide.city} 的模板地点。</p> : previewNodes.map((node) => <p key={node.sequenceOrder}><span className="font-mono">{node.placeName}</span><span className="mx-2">→</span>{node.plannedStart.replace("T", " ").slice(0, 16)}</p>)}{templateNodes.length > previewNodes.length && <p>… 共 {templateNodes.length} 个节点</p>}</div></div>
     {error && <div className="flex items-start gap-3 rounded-xl bg-coral/10 p-4 text-sm leading-6 text-coral-deep"><CircleAlert size={18} className="mt-0.5 shrink-0" />{error}</div>}
     <Button className="w-full" disabled={applyMutation.isPending || groups.length === 0} onClick={() => { setError(""); applyMutation.mutate(); }}>{applyMutation.isPending ? "正在创建行程…" : "确认纳用并创建行程"}</Button>
+  </div></Modal>;
+}
+
+function ShareGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide; open: boolean; onClose: () => void; onDone: (groupName: string) => void }) {
+  const groupsQuery = useQuery({ queryKey: ["groups"], queryFn: api.groups, enabled: open });
+  const [groupId, setGroupId] = useState<number | "">("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const groups = groupsQuery.data ?? [];
+  const selectedGroupId = groupId === "" ? groups[0]?.id : groupId;
+  const shareMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedGroupId === undefined) throw new Error("请先创建或加入一个小组");
+      await api.shareGuideToGroup(selectedGroupId, guide.id, note.trim() || undefined);
+      return groups.find((group) => group.id === selectedGroupId)?.name ?? "群聊";
+    },
+    onSuccess: (groupName) => { setNote(""); onDone(groupName); },
+    onError: (mutationError) => setError(mutationError instanceof Error ? mutationError.message : "分享失败，请稍后再试"),
+  });
+  return <Modal open={open} title="分享攻略到群聊" onClose={onClose}><div className="space-y-5">
+    <div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold text-ink">{guide.title}</p><p className="mt-1 text-xs text-ink-soft">{guide.city} · {guide.days} 天</p></div>
+    <label className="block text-sm font-semibold">选择群聊
+      {groupsQuery.isLoading ? <p className="mt-2 text-sm text-ink-soft">正在读取小组…</p> : groups.length === 0 ? <p className="mt-2 text-sm text-coral-deep">还没有小组，先去创建或加入一个小组。</p> : <select value={selectedGroupId ?? ""} onChange={(event) => setGroupId(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm">{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select>}
+    </label>
+    <label className="block text-sm font-semibold">附言（可选）<Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="推荐给大家看看这条路线～" /></label>
+    {error && <div className="flex items-start gap-3 rounded-xl bg-coral/10 p-4 text-sm leading-6 text-coral-deep"><CircleAlert size={18} className="mt-0.5 shrink-0" />{error}</div>}
+    <Button className="w-full" disabled={shareMutation.isPending || groups.length === 0} onClick={() => { setError(""); shareMutation.mutate(); }}>{shareMutation.isPending ? "分享中…" : "分享到群聊"}</Button>
   </div></Modal>;
 }
 
