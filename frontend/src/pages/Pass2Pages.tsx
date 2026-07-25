@@ -69,12 +69,16 @@ export function GroupsPage() {
   );
 }
 
-function CreateGroupForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.createGroup>>) => void }) {
+function CreateGroupForm({ onDone, presetMemberIds }: { onDone: (group: Awaited<ReturnType<typeof api.createGroup>>) => void; presetMemberIds?: number[] }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selected, setSelected] = useState<number[]>(presetMemberIds ?? []);
   const [error, setError] = useState("");
-  const mutation = useMutation({ mutationFn: () => api.createGroup(name.trim(), description.trim()), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "创建小组失败") });
-  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" value={description} onChange={(event) => setDescription(event.target.value)} />{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!name.trim() || mutation.isPending}>{mutation.isPending ? "创建中…" : "生成房间码"}</Button></form>;
+  const friendsQuery = useQuery({ queryKey: ["friends"], queryFn: api.friends });
+  const friends = friendsQuery.data ?? [];
+  const toggle = (id: number) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const mutation = useMutation({ mutationFn: () => api.createGroup(name.trim(), description.trim(), selected.filter((id) => friends.some((f) => f.id === id))), onSuccess: onDone, onError: (e) => setError(e instanceof Error ? e.message : "创建小组失败") });
+  return <form onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }} className="space-y-4"><Input placeholder="小组名称，例如：西湖边慢慢走" value={name} onChange={(event) => setName(event.target.value)} required /><Input placeholder="一句话描述（可选）" value={description} onChange={(event) => setDescription(event.target.value)} /><div><p className="mb-2 text-sm font-semibold text-ink">拉好友进群（可选，已选 {selected.length} 人）</p>{friendsQuery.isLoading ? <p className="text-sm text-ink-soft">正在读取好友…</p> : friends.length === 0 ? <p className="rounded-card bg-paper p-3 text-sm text-ink-soft">还没有好友，先去好友页添加。</p> : <div className="max-h-48 space-y-1 overflow-y-auto rounded-card bg-paper p-2">{friends.map((friend) => <label key={friend.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-white"><input type="checkbox" className="h-4 w-4 accent-coral" checked={selected.includes(friend.id)} onChange={() => toggle(friend.id)} /><span className="grid h-8 w-8 place-items-center rounded-full bg-coral/10 text-sm font-semibold text-coral">{friend.name.slice(0, 1)}</span><span className="text-sm text-ink">{friend.name}</span></label>)}</div>}</div>{error && <p className="text-sm text-coral" role="alert">{error}</p>}<Button className="w-full" disabled={!name.trim() || mutation.isPending}>{mutation.isPending ? "创建中…" : "生成房间码"}</Button></form>;
 }
 
 function JoinForm({ onDone }: { onDone: (group: Awaited<ReturnType<typeof api.joinGroup>>) => void }) {
@@ -89,8 +93,10 @@ export function GroupDetailPage() {
   const groupId = Number(id);
   const { toast, show } = useToast();
   const [transferOpen, setTransferOpen] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
   const navigate = useNavigate();
+  const me = getCurrentUser();
   const queryClient = useQueryClient();
   const openGroupChat = useMutation({
     mutationFn: () => api.openGroupChat(groupId),
@@ -125,7 +131,7 @@ export function GroupDetailPage() {
         eyebrow={`GROUP / ${group.roomCode}`}
         title={group.name}
         description={`${members.length} 位成员 · 房间码 ${group.roomCode}`}
-        action={<div className="flex gap-2"><Button onClick={() => openGroupChat.mutate()} disabled={openGroupChat.isPending}><MessageSquare size={16} className="mr-2 inline" />群聊</Button><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
+        action={<div className="flex gap-2"><Button onClick={() => openGroupChat.mutate()} disabled={openGroupChat.isPending}><MessageSquare size={16} className="mr-2 inline" />群聊</Button><Button variant="ghost" onClick={() => setQuickCreateOpen(true)}><Plus size={16} className="mr-2 inline" />快速建群</Button><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
       />
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="p-6">
@@ -135,6 +141,7 @@ export function GroupDetailPage() {
         <Card className="p-6"><p className="eyebrow">GROUP SETTINGS</p><h2 className="mt-2 font-display text-xl font-bold">小组协作规则</h2><p className="mt-3 text-sm leading-6 text-ink-soft">{group.description || "和旅伴一起规划下一段路。"}</p><div className="mt-6 flex items-start gap-3 rounded-xl bg-paper p-4"><Shield size={18} className="mt-0.5 text-mint" /><div><p className="text-sm font-semibold text-ink">房间码</p><p className="mt-1 font-mono text-xs text-ink-soft">{group.roomCode} · 仅分享给你的旅伴</p></div></div></Card>
       </div>
       {toast}
+      <Modal open={quickCreateOpen} title="从本组成员快速建群" onClose={() => setQuickCreateOpen(false)}><div className="space-y-3"><p className="text-sm text-ink-soft">已预选本组内你的好友，可再调整后生成新群。</p><CreateGroupForm presetMemberIds={members.map((member) => member.user.id).filter((uid) => uid !== me?.id)} onDone={(created) => { setQuickCreateOpen(false); show(`小组已创建，房间码 ${created.roomCode}`); navigate(`/groups/${created.id}`); }} /></div></Modal>
       <Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((member) => <option key={member.id} value={member.id}>{member.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || mutation.isPending} onClick={() => newOwnerId && mutation.mutate({ type: "transfer", memberId: newOwnerId })}>确认转移</Button></div></Modal>
     </>
   );
@@ -1209,16 +1216,15 @@ export function NotificationsPage() {
 function BellIcon({ type }: { type: string }) { return type === "plan-accepted" ? <Check size={18} /> : type === "plan-rejected" ? <CircleAlert size={18} /> : <Sparkles size={18} />; }
 
 export function SettingsPage() {
-  const navigate = useNavigate();
   const userQuery = useQuery({ queryKey: ["auth", "me"], queryFn: api.me });
   if (userQuery.isLoading) return <LoadingState label="正在读取个人资料…" />;
   if (userQuery.isError || !userQuery.data) {
     return <ErrorState message={userQuery.error instanceof Error ? userQuery.error.message : "无法读取个人资料"} onRetry={() => void userQuery.refetch()} />;
   }
-  return <SettingsContent user={userQuery.data} navigate={navigate} />;
+  return <SettingsContent user={userQuery.data} />;
 }
 
-function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser; navigate: ReturnType<typeof useNavigate> }) {
+function SettingsContent({ user }: { user: import("../auth").AuthUser }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
@@ -1261,7 +1267,7 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
     mutationFn: api.deleteAccount,
     onSuccess: () => {
       signOut();
-      navigate("/login");
+      window.location.replace("/login");
     },
     onError: (error) => {
       setDeleteError(error instanceof Error ? error.message : "注销账号失败");
@@ -1277,7 +1283,7 @@ function SettingsContent({ user, navigate }: { user: import("../auth").AuthUser;
           <h2 className="mt-4 font-display text-xl font-bold">{user.name}</h2>
           <p className="mt-1 text-sm text-ink-soft">{user.email}</p>
           <p className="mt-2 text-xs text-ink-soft">{user.phone || "尚未填写手机号"}</p>
-          <button className="mt-6 text-sm font-semibold text-coral" onClick={() => { signOut(); navigate("/login"); }}>退出登录</button>
+          <button className="mt-6 text-sm font-semibold text-coral" onClick={() => { signOut(); window.location.replace("/login"); }}>退出登录</button>
         </Card>
         <div className="space-y-6">
           <Card className="p-6">

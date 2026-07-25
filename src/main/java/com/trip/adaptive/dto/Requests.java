@@ -25,7 +25,8 @@ public final class Requests {
   public record ChangePasswordRequest(
       @NotBlank String currentPassword, @NotBlank @Size(min = 6) String newPassword) {}
 
-  public record GroupRequest(@NotBlank String name, String description, Long ownerUserId) {}
+  public record GroupRequest(
+      @NotBlank String name, String description, Long ownerUserId, List<Long> memberIds) {}
 
   public record JoinGroupRequest(@NotBlank String roomCode) {}
 

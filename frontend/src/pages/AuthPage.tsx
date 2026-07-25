@@ -1,6 +1,6 @@
 import { ArrowRight, Check, Mail, MapPin, ShieldCheck, Sparkles } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { Button, Input } from "../components/ui";
 import { signIn } from "../auth";
@@ -18,7 +18,6 @@ function RouteArtwork() {
 }
 
 export function AuthPage({ register = false }: { register?: boolean }) {
-  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -51,7 +50,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         email: response.email,
         phone: response.phone,
       });
-      navigate("/");
+      window.location.replace("/");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "登录失败，请稍后重试。");
     } finally {

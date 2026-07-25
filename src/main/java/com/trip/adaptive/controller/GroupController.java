@@ -39,7 +39,7 @@ public class GroupController {
   public ResponseEntity<TravelGroup> create(
       Authentication authentication, @Valid @RequestBody GroupRequest r) {
     return ResponseEntity.status(201)
-        .body(s.create(r.name(), r.description(), currentUser(authentication)));
+        .body(s.create(r.name(), r.description(), currentUser(authentication), r.memberIds()));
   }
 
   @PostMapping("/join")
