@@ -151,7 +151,16 @@ public class ChatService {
   /** 把一篇攻略分享到某个小组群聊。 */
   @Transactional
   public MessageView shareGuideToGroup(Long groupId, User me, Long guideId, String note) {
-    Conversation c = groupConversation(groupId, me);
+    return shareGuide(groupConversation(groupId, me), me, guideId, note);
+  }
+
+  /** 把一篇攻略分享给某位好友（私聊）。 */
+  @Transactional
+  public MessageView shareGuideToFriend(Long friendUserId, User me, Long guideId, String note) {
+    return shareGuide(directConversation(me, friendUserId), me, guideId, note);
+  }
+
+  private MessageView shareGuide(Conversation c, User me, Long guideId, String note) {
     TravelGuide guide =
         guides.findById(guideId).orElseThrow(() -> new ResourceNotFoundException("攻略不存在"));
     ChatMessage m = new ChatMessage();
