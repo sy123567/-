@@ -205,7 +205,7 @@ public class AssistantService {
     return prompt.toString();
   }
 
-  /** 大模型不可用时的兜底：把检索到的站内素材直接组织成回答。 */
+  /** 直接用检索到的站内素材组织回答。 */
   private String offlineAnswer(List<GuideHint> matched, List<NavEntry> links) {
     List<String> parts = new ArrayList<>();
     if (!matched.isEmpty()) {
@@ -223,7 +223,7 @@ public class AssistantService {
                   .collect(Collectors.joining("、")));
     }
     if (parts.isEmpty()) {
-      return "智能问答暂时不可用。你可以先去攻略社区看看同伴写的真实行程，或者告诉我城市和天数，我再帮你找站内攻略。";
+      return "告诉我城市和天数，我就能帮你找到对应的攻略和行程建议；也可以先去“攻略社区”看同伴写过的真实行程。";
     }
     return String.join("；", parts) + "。";
   }

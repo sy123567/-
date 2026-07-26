@@ -11,7 +11,7 @@ const SOURCE_LABEL: Record<string, string> = { ai: "AI 生成", local: "来自�
 
 /**
  * 全局旅行助手：右下角常驻的悬浮入口，任意页面都能唤起。
- * 回答优先来自 AI，AI 不可用时退回攻略社区检索与站内目录导航。
+ * 回答结合攻略社区检索、站内功能目录与模型生成三条来源。
  */
 export function AssistantDock() {
   const navigate = useNavigate();

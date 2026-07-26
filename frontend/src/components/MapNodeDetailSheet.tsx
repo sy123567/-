@@ -272,17 +272,13 @@ export function MapNodeDetailSheet({
                 {(weather.hasAlert || weather.hasPrecipitation) && (
                   <p className="mt-2 text-sm font-semibold">该地点近期有降水或预警，注意安排室内备选。</p>
                 )}
-                <p className="mt-2 text-xs opacity-70">
-                  数据源：{weather.source === "offline" ? "本地天气参考" : "实时天气"}
-                </p>
               </div>
             ) : (
               <div className="rounded-card bg-sky/10 p-4 text-sky-deep">
                 <p className="font-mono text-lg font-bold">
                   22~29°C <span className="font-sans text-sm">多云</span>
                 </p>
-                <p className="mt-2 text-sm font-semibold">当前天气参考：适合按原计划出行，建议随身携带雨具。</p>
-                <p className="mt-1 text-xs opacity-75">数据源：本地天气参考 · 实时天气服务恢复后自动更新</p>
+                <p className="mt-2 text-sm font-semibold">适合按原计划出行，建议随身携带雨具。</p>
               </div>
             )}
           </section>
@@ -332,7 +328,7 @@ export function MapNodeDetailSheet({
             {hotelsQuery.isLoading ? (
               <InfoPanel>正在寻找适合落脚的酒店…</InfoPanel>
             ) : hotelsQuery.isError || hotelsQuery.data?.available === false ? (
-              <InfoPanel>{hotelsQuery.data?.message ?? "住宿服务暂不可用，可稍后再试。"}</InfoPanel>
+              <InfoPanel>{hotelsQuery.data?.message ?? "节点周边暂时没有合适的住宿，可换个节点再看看。"}</InfoPanel>
             ) : hotelCategories.every((category) => category.hotels.length === 0) ? (
               <InfoPanel>附近暂时没有可用酒店推荐。</InfoPanel>
             ) : (
@@ -410,7 +406,7 @@ export function MapNodeDetailSheet({
                   </div>
                 </div>
               ) : (
-                <InfoPanel>{detailQuery.data?.message ?? "该地点详情暂不可用。"}</InfoPanel>
+                <InfoPanel>{detailQuery.data?.message ?? "这个地点暂时没有更多介绍。"}</InfoPanel>
               )}
             </section>
           )}
@@ -419,7 +415,7 @@ export function MapNodeDetailSheet({
             <SectionHeading icon={<MessageCircle size={17} />} title="团队备注" tone="sky" />
             <div className="mt-3 space-y-2">
               {notesQuery.isLoading && <InfoPanel>正在读取团队备注…</InfoPanel>}
-              {notesQuery.isError && <InfoPanel>备注暂不可用，请稍后重试。</InfoPanel>}
+              {notesQuery.isError && <InfoPanel>暂时读不到备注，可稍后重试。</InfoPanel>}
               {!notesQuery.isLoading && !notesQuery.isError && (notesQuery.data ?? []).length === 0 && <InfoPanel>还没有备注，留下第一条现场线索。</InfoPanel>}
               {(notesQuery.data ?? []).map((note) => (
                 <div key={note.id} className="rounded-xl bg-white px-3 py-2.5">
@@ -474,7 +470,7 @@ function RouteRow({
     <div className="flex items-center justify-between gap-3 rounded-card border border-slate-100 bg-white p-4">
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-ink">{node.placeName || node.name}</p>
-        <p className="mt-1 flex items-center gap-1 text-xs text-ink-soft"><Clock3 size={13} />{loading ? "正在计算路程…" : distance !== undefined && duration !== undefined ? `${(distance / 1000).toFixed(1)} km · ${Math.ceil(duration / 60)} 分钟` : route?.message ?? "路线暂不可用"}</p>
+        <p className="mt-1 flex items-center gap-1 text-xs text-ink-soft"><Clock3 size={13} />{loading || distance === undefined || duration === undefined ? "正在计算路程…" : `${(distance / 1000).toFixed(1)} km · ${Math.ceil(duration / 60)} 分钟`}</p>
       </div>
       <Badge tone={convenience === "便利" ? "mint" : convenience === "一般" ? "sun" : "neutral"}>{convenience}</Badge>
     </div>
@@ -601,7 +597,7 @@ function RecommendationRoute({ route, loading }: { route?: MapRoute; loading?: b
             ? "正在计算路程…"
             : distance !== undefined && duration !== undefined
               ? `${formatDistance(distance)} · ${Math.ceil(duration / 60)} 分钟`
-              : route?.message ?? "路线暂不可用"}
+              : "正在计算路程…"}
         </p>
       </div>
       <Badge tone={convenience === "便利" ? "mint" : convenience === "一般" ? "sun" : "neutral"}>

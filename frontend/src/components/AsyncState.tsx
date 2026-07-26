@@ -1,4 +1,5 @@
 import { AlertCircle, ArrowLeft, Inbox, LoaderCircle, RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { apiBase } from "../api/client";
 import { Button, Card } from "./ui";
@@ -42,13 +43,22 @@ export function ErrorState({ title = "连不上后端服务", message, onRetry }
   );
 }
 
-export function EmptyState({ title = "这里还没有内容", message = "换个筛选条件，或者稍后再来看看。" }: { title?: string; message?: string }) {
+export function EmptyState({
+  title = "这里还没有内容",
+  message = "换个筛选条件，或者稍后再来看看。",
+  action,
+}: {
+  title?: string;
+  message?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex min-h-[220px] items-center justify-center rounded-card border border-dashed border-slate-200 bg-white/70 p-8 text-center">
       <div>
         <Inbox className="mx-auto text-ink-soft" size={28} aria-hidden="true" />
         <h2 className="mt-4 font-display text-lg font-bold text-ink">{title}</h2>
         <p className="mt-2 text-sm text-ink-soft">{message}</p>
+        {action && <div className="mt-5 flex justify-center">{action}</div>}
       </div>
     </div>
   );

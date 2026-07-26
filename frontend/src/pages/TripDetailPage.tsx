@@ -216,7 +216,7 @@ function TripMapSegment({ from, to, index }: { from: ItineraryNode; to: Itinerar
         <span className="mt-0.5 block text-[10px] text-ink-soft">{from.placeName} → {to.placeName}</span>
       </span>
       <span className="shrink-0 text-right font-mono text-[10px] text-ink-soft">
-        {route?.available && route.durationSeconds !== undefined && route.distanceMeters !== undefined ? `${formatMapDuration(route.durationSeconds)} · ${formatMapDistance(route.distanceMeters)}` : "暂不可用"}
+        {route?.available && route.durationSeconds !== undefined && route.distanceMeters !== undefined ? `${formatMapDuration(route.durationSeconds)} · ${formatMapDistance(route.distanceMeters)}` : "正在计算…"}
       </span>
     </div>
   );

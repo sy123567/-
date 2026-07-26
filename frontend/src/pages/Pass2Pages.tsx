@@ -591,7 +591,7 @@ function offlinePlannerPlace(place: SuggestedPlace): PlannerPlace {
     placeName: place.placeName,
     category: categoryForNodeType(place.nodeType),
     nodeType: place.nodeType,
-    description: `${place.city}本地规则推荐地点，适合纳入行程。`,
+    description: `${place.city}热门推荐地点，适合纳入行程。`,
     latitude: place.latitude,
     longitude: place.longitude,
     durationMinutes: place.durationMinutes,
@@ -680,7 +680,7 @@ export function NewTripPage() {
     setWeatherLoading(true);
     void api.previewWeather(latitude, longitude)
       .then(setWeatherPreview)
-      .catch(() => setWeatherPreview({ available: false, hasAlert: false, hasPrecipitation: false, message: "天气服务暂不可用，可稍后再查" }))
+      .catch(() => setWeatherPreview({ available: false, hasAlert: false, hasPrecipitation: false, message: "稍后会自动补上这个地点的天气" }))
       .finally(() => setWeatherLoading(false));
   };
   const searchMapPlaces = async (event: React.FormEvent) => {
@@ -692,11 +692,10 @@ export function NewTripPage() {
     try {
       const result = await api.mapSearch(query, city.trim() || nodeDraft.placeName.trim());
       setMapPlaces(result.places);
-      if (!result.available) setMapSearchMessage(result.message ?? "地图暂不可用，可继续使用本地地点补全。");
-      else if (result.places.length === 0) setMapSearchMessage("没有找到匹配地点，可以换个关键词试试。");
+      if (!result.available || result.places.length === 0) setMapSearchMessage(result.message ?? "没有匹配到地点，可以换个关键词，或从下方推荐地点中选择。");
     } catch {
       setMapPlaces([]);
-      setMapSearchMessage("地图暂不可用，可继续使用本地地点补全。");
+      setMapSearchMessage("没有匹配到地点，可以换个关键词，或从下方推荐地点中选择。");
     } finally {
       setMapSearchLoading(false);
     }
@@ -733,13 +732,13 @@ export function NewTripPage() {
         const fallback = fallbackPlannerPlaces(cityPlaces, count * 4, selectedGroup);
         setPlannerSource("offline");
         setPlannerPlaces(fallback);
-        if (fallback.length === 0) setErrorMessage("本地地点库暂时没有这个城市的建议，请换一个热门城市试试。");
+        if (fallback.length === 0) setErrorMessage("暂时没有这个城市的地点建议，请换一个热门城市试试。");
       }
     } catch {
       const fallback = fallbackPlannerPlaces(cityPlaces, count * 4, selectedGroup);
       setPlannerSource("offline");
       setPlannerPlaces(fallback);
-      if (fallback.length === 0) setErrorMessage("AI 和本地地点库暂时都没有这个城市的建议。");
+      if (fallback.length === 0) setErrorMessage("暂时没有这个城市的地点建议，请换一个热门城市试试。");
     } finally {
       setPlanning(false);
     }
@@ -869,7 +868,7 @@ export function NewTripPage() {
         </div>
       </Card>
       <Card className="min-h-[420px] p-6">
-        {planning ? <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 animate-pulse place-items-center rounded-2xl bg-coral/10 text-coral"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">AI 正在规划路线…</h2><p className="mt-2 text-sm text-ink-soft">正在整理 {city || "目的地"} 的吃喝玩乐清单。</p></div></div> : plannerPlaces.length > 0 ? <><div className="flex flex-wrap items-center gap-2"><Badge tone={plannerSource === "ai" ? "coral" : "mint"}>{plannerSource === "ai" ? "AI 推荐" : "本地推荐"}</Badge><span className="font-mono text-xs text-ink-soft">{city} · {days} 天</span><span className="ml-auto text-sm font-semibold text-ink">{selectedPlaces.size} / {plannerPlaces.length} 已选</span></div><h2 className="mt-3 font-display text-2xl font-bold text-ink">勾选想去的地点</h2><p className="mt-2 text-sm leading-6 text-ink-soft">先挑选你真正想去的地方，确认后才会创建行程和节点。</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{plannerPlaces.map((place) => { const selected = selectedPlaces.has(place.placeName); return <button type="button" key={place.placeName} onClick={() => setSelectedPlaces((current) => { const next = new Set(current); if (next.has(place.placeName)) next.delete(place.placeName); else next.add(place.placeName); return next; })} className={`rounded-card border p-4 text-left transition hover:-translate-y-0.5 ${selected ? "border-coral bg-coral/5 shadow-soft" : "border-slate-100 bg-white hover:border-coral/30"}`}><div className="flex items-start gap-3"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border text-xs ${selected ? "border-coral bg-coral text-white" : "border-slate-300 text-transparent"}`}>✓</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="font-semibold text-ink">{place.placeName}</span><Badge tone={place.category === "吃" ? "sun" : place.category === "住" ? "sky" : "mint"}>{place.category}</Badge></span><span className="mt-2 block text-xs text-ink-soft">{place.nodeType} · {place.durationMinutes} 分钟</span><span className="mt-2 block text-sm leading-5 text-ink-soft">{place.description}</span></span></div></button>; })}</div><label className="mt-6 block text-sm font-semibold text-ink">总预算 (¥)<span className="ml-2 text-xs font-normal text-ink-soft">可选，留空则按所选地点费用汇总</span><Input type="number" min="0" step="0.01" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="例如：3000" /></label><Button type="button" disabled={busy || selectedPlaces.size === 0} className="mt-4 w-full" onClick={() => void handleGeneratedCreate()}>{busy ? "正在创建行程…" : `确认创建行程（${selectedPlaces.size} 个地点）`}<ArrowRight size={16} className="ml-2 inline" /></Button></> : <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">输入城市，开始一份智能清单</h2><p className="mt-2 max-w-sm text-sm leading-6 text-ink-soft">AI 不可用时会自动切换到已有的本地地点推荐。</p></div></div>}
+        {planning ? <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 animate-pulse place-items-center rounded-2xl bg-coral/10 text-coral"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">AI 正在规划路线…</h2><p className="mt-2 text-sm text-ink-soft">正在整理 {city || "目的地"} 的吃喝玩乐清单。</p></div></div> : plannerPlaces.length > 0 ? <><div className="flex flex-wrap items-center gap-2"><Badge tone={plannerSource === "ai" ? "coral" : "mint"}>{plannerSource === "ai" ? "AI 推荐" : "站内精选推荐"}</Badge><span className="font-mono text-xs text-ink-soft">{city} · {days} 天</span><span className="ml-auto text-sm font-semibold text-ink">{selectedPlaces.size} / {plannerPlaces.length} 已选</span></div><h2 className="mt-3 font-display text-2xl font-bold text-ink">勾选想去的地点</h2><p className="mt-2 text-sm leading-6 text-ink-soft">先挑选你真正想去的地方，确认后才会创建行程和节点。</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{plannerPlaces.map((place) => { const selected = selectedPlaces.has(place.placeName); return <button type="button" key={place.placeName} onClick={() => setSelectedPlaces((current) => { const next = new Set(current); if (next.has(place.placeName)) next.delete(place.placeName); else next.add(place.placeName); return next; })} className={`rounded-card border p-4 text-left transition hover:-translate-y-0.5 ${selected ? "border-coral bg-coral/5 shadow-soft" : "border-slate-100 bg-white hover:border-coral/30"}`}><div className="flex items-start gap-3"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border text-xs ${selected ? "border-coral bg-coral text-white" : "border-slate-300 text-transparent"}`}>✓</span><span className="min-w-0 flex-1"><span className="flex items-center gap-2"><span className="font-semibold text-ink">{place.placeName}</span><Badge tone={place.category === "吃" ? "sun" : place.category === "住" ? "sky" : "mint"}>{place.category}</Badge></span><span className="mt-2 block text-xs text-ink-soft">{place.nodeType} · {place.durationMinutes} 分钟</span><span className="mt-2 block text-sm leading-5 text-ink-soft">{place.description}</span></span></div></button>; })}</div><label className="mt-6 block text-sm font-semibold text-ink">总预算 (¥)<span className="ml-2 text-xs font-normal text-ink-soft">可选，留空则按所选地点费用汇总</span><Input type="number" min="0" step="0.01" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="例如：3000" /></label><Button type="button" disabled={busy || selectedPlaces.size === 0} className="mt-4 w-full" onClick={() => void handleGeneratedCreate()}>{busy ? "正在创建行程…" : `确认创建行程（${selectedPlaces.size} 个地点）`}<ArrowRight size={16} className="ml-2 inline" /></Button></> : <div className="flex h-full min-h-[360px] items-center justify-center text-center"><div><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sky/10 text-sky"><Sparkles /></div><h2 className="mt-4 font-display text-xl font-bold text-ink">输入城市，开始一份智能清单</h2><p className="mt-2 max-w-sm text-sm leading-6 text-ink-soft">系统会结合站内精选地点与 AI 推荐生成清单。</p></div></div>}
       </Card>
     </div>}
     {activeTrip && <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -1008,7 +1007,9 @@ export function EventsPage() {
     { value: "LARGE_EVENT", label: "大型活动" },
   ];
   const filteredEvents = data.filter((event) => {
-    if (event.tripId === undefined || !visibleTripIds.has(event.tripId)) return false;
+    // 只看当前选中的行程：切换行程后不再把其它行程的事件混进列表。
+    if (event.tripId === undefined) return false;
+    if (tripId !== undefined ? event.tripId !== tripId : !visibleTripIds.has(event.tripId)) return false;
     const typeMatches = typeFilter === "ALL" || (typeFilter === "TRAFFIC" ? event.eventType === "ROAD_WORK" || event.eventType === "TRAFFIC_CONTROL" : event.eventType === typeFilter);
     const severityMatches = severityFilter === "ALL" || event.severity === severityFilter;
     const searchText = `${event.title ?? ""} ${event.description ?? ""} ${event.placeName ?? ""}`.toLowerCase();
@@ -1045,7 +1046,7 @@ export function EventsPage() {
         {eventGroups.length === 0 ? <Card className="py-10 text-center text-sm text-ink-soft">{data.length === 0 ? "当前没有活跃事件。" : "没有符合筛选条件的事件。"}</Card> : eventGroups.map(([key, group]) => {
           const expanded = !collapsedGroups.includes(key);
           const groupTone = group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "risk" : group.worstSeverity === "MEDIUM" ? "sun" : group.worstSeverity === "LOW" ? "mint" : "neutral";
-          return <Card key={key} className="overflow-hidden p-0"><button type="button" aria-expanded={expanded} onClick={() => setCollapsedGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-paper motion-reduce:transition-none"><div className="flex min-w-0 items-center gap-3"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "bg-coral" : group.worstSeverity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} /><div className="min-w-0"><p className="truncate font-display text-lg font-bold text-ink">{group.title}</p><p className="mt-1 text-xs text-ink-soft">{group.events.length} 条事件</p></div></div><div className="flex items-center gap-3"><Badge tone={groupTone}>{group.worstSeverity ? severityLabel[group.worstSeverity] : "未评级"}</Badge><ChevronRight size={18} className={`text-ink-soft transition-transform duration-300 ${expanded ? "rotate-90" : ""} motion-reduce:transition-none`} /></div></button><div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="min-h-0 overflow-hidden"><div className="space-y-3 border-t border-slate-100 p-3">{group.events.map((event) => { const matches = eventNodeMatches[event.id] ?? []; const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint"; return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{severityLabel[event.severity]}</Badge>}{event.tempMin !== undefined && event.tempMax !== undefined && <span className="rounded-full bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-blue-700">{Math.round(event.tempMin)}~{Math.round(event.tempMax)}°C</span>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${group.title}` : "未匹配到对应行程节点"}</span></div></div><Button variant="ghost" onClick={(event) => { event.stopPropagation(); show("事件已加入影响分析队列"); }}>分析影响</Button></div>; })}</div></div></div></Card>;
+          return <Card key={key} className="overflow-hidden p-0"><button type="button" aria-expanded={expanded} onClick={() => setCollapsedGroups((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])} className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-paper motion-reduce:transition-none"><div className="flex min-w-0 items-center gap-3"><span className={`h-2.5 w-2.5 shrink-0 rounded-full ${group.worstSeverity === "CRITICAL" || group.worstSeverity === "HIGH" ? "bg-coral" : group.worstSeverity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} /><div className="min-w-0"><p className="truncate font-display text-lg font-bold text-ink">{group.title}</p><p className="mt-1 text-xs text-ink-soft">{group.events.length} 条事件</p></div></div><div className="flex items-center gap-3"><Badge tone={groupTone}>{group.worstSeverity ? severityLabel[group.worstSeverity] : "未评级"}</Badge><ChevronRight size={18} className={`text-ink-soft transition-transform duration-300 ${expanded ? "rotate-90" : ""} motion-reduce:transition-none`} /></div></button><div className={`grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}><div className="min-h-0 overflow-hidden"><div className="space-y-3 border-t border-slate-100 p-3">{group.events.map((event) => { const matches = eventNodeMatches[event.id] ?? []; const accent = event.severity === "CRITICAL" ? "border-risk-critical" : event.severity === "HIGH" ? "border-coral" : event.severity === "MEDIUM" ? "border-sun" : "border-mint"; return <div key={event.id} className={`group flex flex-wrap items-start gap-4 rounded-card border-l-4 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft motion-reduce:transition-none md:p-5 ${accent}`}><div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl"><ImageFallback src={getPlaceImage(event.placeName ?? "", "OTHER")} alt={event.placeName ?? "事件地点"} city={event.placeName ?? "事件"} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`grid h-9 w-9 place-items-center rounded-xl ${event.severity === "HIGH" || event.severity === "CRITICAL" ? "bg-coral/10 text-coral" : "bg-sun/20 text-amber-700"}`}><EventIcon type={event.eventType ?? "OTHER"} /></span><h2 className="font-semibold text-ink">{event.title ?? "未命名事件"}</h2>{event.severity && <Badge tone={event.severity === "HIGH" || event.severity === "CRITICAL" ? "risk" : event.severity === "LOW" ? "mint" : "sun"}>{severityLabel[event.severity]}</Badge>}{event.eventType === "WEATHER" && Number.isFinite(event.tempMin) && Number.isFinite(event.tempMax) && !(event.tempMin === 0 && event.tempMax === 0) && <span className="rounded-full bg-sky/10 px-2.5 py-1 font-mono text-[11px] font-semibold text-blue-700">{Math.round(event.tempMin as number)}~{Math.round(event.tempMax as number)}°C</span>}</div><p className="mt-2 text-sm leading-6 text-ink-soft">{event.description ?? "暂无详细描述"}</p><div className="mt-3 flex flex-wrap items-center gap-2">{event.placeName && <span className="font-mono text-[11px] text-ink-soft">{event.placeName}{event.startTime ? ` · ${event.startTime.replace("T", " ")}` : ""}{event.endTime ? ` — ${event.endTime.slice(11)}` : ""}</span>}<span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${matches.length > 0 ? "bg-coral/10 text-coral-deep" : "bg-slate-100 text-ink-soft"}`}>{matches.length > 0 ? `影响：${matches[0].name} · ${group.title}` : "未匹配到对应行程节点"}</span></div></div><Button variant="ghost" onClick={(event) => { event.stopPropagation(); show("事件已加入影响分析队列"); }}>分析影响</Button></div>; })}</div></div></div></Card>;
         })}
       </div>
       {toast}
@@ -1125,13 +1126,13 @@ export function PlansPage() {
       note: change.note ?? "暂无变更说明",
     })),
   }));
-  // 本轮监测生成的方案全部列出（含被否决的），已采纳的另外单独展示结果，往轮方案收进历史。
-  const roundPlans = plans;
+  // 本轮只展示仍然可选或已采纳的方案；被否决的不再出现，往轮方案收进历史。
+  const roundPlans = plans.filter((plan) => plan.status !== "REJECTED");
   const selectablePlans = plans.filter((plan) => plan.status === "PROPOSED" || plan.status === "VOTING");
   const acceptedPlan = plans.find((plan) => plan.status === "ACCEPTED");
   const archivedPlans = historyQuery.data ?? [];
   const [selectedId, setSelectedId] = useState<number>();
-  const selected = plans.find((plan) => plan.id === selectedId) ?? selectablePlans[0] ?? acceptedPlan ?? plans[0];
+  const selected = roundPlans.find((plan) => plan.id === selectedId) ?? selectablePlans[0] ?? acceptedPlan;
   const canVote = selected?.status === "PROPOSED" || selected?.status === "VOTING";
   const { toast, show } = useToast();
   const navigate = useNavigate();
@@ -1519,7 +1520,7 @@ function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide;
   const applyMutation = useMutation({
     mutationFn: async () => {
       if (selectedGroupId === undefined) throw new Error("请先创建或加入一个小组");
-      if (templateNodes.length === 0) throw new Error(`本地地点库暂时没有 ${guide.city} 的模板地点`);
+      if (templateNodes.length === 0) throw new Error(`暂时没有 ${guide.city} 的模板地点`);
       const trip = await api.createTrip(selectedGroupId, {
         title: guide.title,
         status: "DRAFT",
@@ -1556,7 +1557,7 @@ function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide;
       {groupsQuery.isLoading ? <p className="mt-2 text-sm text-ink-soft">正在读取小组…</p> : groups.length === 0 ? <p className="mt-2 text-sm text-coral-deep">还没有小组，先去创建或加入一个小组。</p> : <select value={selectedGroupId ?? ""} onChange={(event) => setGroupId(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm">{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.members?.length ?? group.memberCount ?? 0} 位成员</option>)}</select>}
     </label>
     <label className="block text-sm font-semibold">实际出发日期<input type="date" value={departDate} onChange={(event) => setDepartDate(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label>
-    <div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold">相对 → 绝对时间</p><div className="mt-3 space-y-2 text-xs text-ink-soft">{previewNodes.length === 0 ? <p>本地地点库暂时没有 {guide.city} 的模板地点。</p> : previewNodes.map((node) => <p key={node.sequenceOrder}><span className="font-mono">{node.placeName}</span><span className="mx-2">→</span>{node.plannedStart.replace("T", " ").slice(0, 16)}</p>)}{templateNodes.length > previewNodes.length && <p>… 共 {templateNodes.length} 个节点</p>}</div></div>
+    <div className="rounded-xl bg-paper p-4"><p className="text-sm font-semibold">相对 → 绝对时间</p><div className="mt-3 space-y-2 text-xs text-ink-soft">{previewNodes.length === 0 ? <p>暂时没有 {guide.city} 的模板地点。</p> : previewNodes.map((node) => <p key={node.sequenceOrder}><span className="font-mono">{node.placeName}</span><span className="mx-2">→</span>{node.plannedStart.replace("T", " ").slice(0, 16)}</p>)}{templateNodes.length > previewNodes.length && <p>… 共 {templateNodes.length} 个节点</p>}</div></div>
     {error && <div className="flex items-start gap-3 rounded-xl bg-coral/10 p-4 text-sm leading-6 text-coral-deep"><CircleAlert size={18} className="mt-0.5 shrink-0" />{error}</div>}
     <Button className="w-full" disabled={applyMutation.isPending || groups.length === 0} onClick={() => { setError(""); applyMutation.mutate(); }}>{applyMutation.isPending ? "正在创建行程…" : "确认纳用并创建行程"}</Button>
   </div></Modal>;
@@ -1653,7 +1654,7 @@ export function RouteMapPage() {
   });
   const totalDistance = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").distance, 0);
   const totalMinutes = segments.reduce((sum, item) => sum + estimateSegment(item.baseDistance, modes[item.from.id] ?? "DRIVE").minutes, 0);
-  return <><PageHeader eyebrow="TRIP · TODAY'S LEGS" title={trip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段`} action={<Link to={`/plans?trip=${trip.id}`}><Button>重新规划路线</Button></Link>} /><TripSwitcher scope={scope} /><div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]"><div><BaiduMap nodes={nodes} onMarkerClick={setSelectedNode} className="h-[480px]" /><p className="mt-3 text-xs text-ink-soft">路线距离优先使用百度地图查询，服务不可用时自动回退到坐标估算。</p></div><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id] ?? "DRIVE"} onModeChange={(mode) => setModes((current) => ({ ...current, [segment.from.id]: mode }))} onPlaceClick={setSelectedNode} />)}</div></div>{selectedNode && <MapNodeDetailSheet node={selectedNode} trip={trip} onClose={() => setSelectedNode(null)} />}</>;
+  return <><PageHeader eyebrow="TRIP · TODAY'S LEGS" title={trip.title} description={`${totalDistance.toFixed(1)} km · 约 ${totalMinutes} 分钟 · ${segments.length} 段`} action={<Link to={`/plans?trip=${trip.id}`}><Button>重新规划路线</Button></Link>} /><TripSwitcher scope={scope} /><div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]"><div><BaiduMap nodes={nodes} onMarkerClick={setSelectedNode} className="h-[480px]" /><p className="mt-3 text-xs text-ink-soft">路段距离与耗时按实际道路计算，并随出行方式自动换算。</p></div><div className="space-y-4">{segments.map((segment, index) => <RouteLeg key={segment.from.id} index={index} from={segment.from} to={segment.to} distance={segment.baseDistance} mode={modes[segment.from.id] ?? "DRIVE"} onModeChange={(mode) => setModes((current) => ({ ...current, [segment.from.id]: mode }))} onPlaceClick={setSelectedNode} />)}</div></div>{selectedNode && <MapNodeDetailSheet node={selectedNode} trip={trip} onClose={() => setSelectedNode(null)} />}</>;
 }
 
 type RouteModeType = "WALK" | "DRIVE" | "TRANSIT";

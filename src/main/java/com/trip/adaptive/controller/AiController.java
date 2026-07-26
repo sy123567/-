@@ -26,7 +26,7 @@ import com.trip.adaptive.service.AiConstraintService.ConstraintContext;
 @RestController
 @RequestMapping("/api/ai")
 public class AiController {
-  private static final String FALLBACK_MESSAGE = "AI 规划暂不可用，已切换本地推荐";
+  private static final String FALLBACK_MESSAGE = "已按站内精选地点给出推荐";
   private static final Set<String> CATEGORIES = Set.of("吃", "喝", "玩", "乐", "住");
   private static final Set<String> NODE_TYPES =
       Set.of("ATTRACTION", "MEAL", "LODGING", "TRANSPORT", "OTHER");

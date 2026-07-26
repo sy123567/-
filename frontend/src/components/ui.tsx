@@ -112,7 +112,7 @@ export function RouteTrail({
                       {(uniqueEvents.length > 0 ? uniqueEvents : [undefined]).map((event, eventIndex) => (
                         <span key={event?.id ?? `affected-${eventIndex}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${event?.severity ? severityStyle[event.severity] : "bg-slate-100 text-ink-soft"}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${event?.severity === "CRITICAL" || event?.severity === "HIGH" ? "bg-coral" : event?.severity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} />
-                          {event?.title ?? "受事件影响"}{Number.isFinite(event?.tempMin) && Number.isFinite(event?.tempMax) ? ` · ${Math.round(event!.tempMin as number)}~${Math.round(event!.tempMax as number)}°C` : ""}
+                          {event?.title ?? "受事件影响"}{Number.isFinite(event?.tempMin) && Number.isFinite(event?.tempMax) && !(event?.tempMin === 0 && event?.tempMax === 0) ? ` · ${Math.round(event!.tempMin as number)}~${Math.round(event!.tempMax as number)}°C` : ""}
                         </span>
                       ))}
                     </div>
@@ -199,7 +199,7 @@ function NearbyPlay({
       {expanded && (
         <div className="mt-2 space-y-2">
           {nearbyQuery.isLoading && <p className="text-xs text-ink-soft">正在寻找附近玩法…</p>}
-          {nearbyQuery.isError && <p className="text-xs text-ink-soft">附近推荐暂不可用，打开节点详情查看更多。</p>}
+          {nearbyQuery.isError && <p className="text-xs text-ink-soft">打开节点详情可以查看更多周边推荐。</p>}
           {!nearbyQuery.isLoading && !nearbyQuery.isError && places.length === 0 && <p className="text-xs text-ink-soft">附近暂时没有可展示的推荐。</p>}
           {places.map((place, index) => (
             <button
