@@ -4,11 +4,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.trip.adaptive.domain.User;
 import com.trip.adaptive.monitor.service.BaiduMapClient;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Geocode;
 import com.trip.adaptive.monitor.service.BaiduMapClient.Hotel;
@@ -18,6 +20,8 @@ import com.trip.adaptive.monitor.service.BaiduMapClient.Place;
 import com.trip.adaptive.monitor.service.BaiduMapClient.PlaceDetail;
 import com.trip.adaptive.monitor.service.BaiduMapClient.ResolvedPlace;
 import com.trip.adaptive.monitor.service.BaiduMapClient.RouteSummary;
+import com.trip.adaptive.service.TripCityService;
+import com.trip.adaptive.service.TripService;
 
 @RestController
 @RequestMapping("/api/map")
@@ -34,9 +38,13 @@ public class MapController {
   private static final double ROAD_FACTOR = 1.28;
 
   private final BaiduMapClient maps;
+  private final TripService trips;
+  private final TripCityService tripCities;
 
-  public MapController(BaiduMapClient maps) {
+  public MapController(BaiduMapClient maps, TripService trips, TripCityService tripCities) {
     this.maps = maps;
+    this.trips = trips;
+    this.tripCities = tripCities;
   }
 
   @GetMapping("/config")
@@ -78,17 +86,34 @@ public class MapController {
   public ResolveResult resolve(
       @RequestParam(defaultValue = "") String name,
       @RequestParam(defaultValue = "") String lat,
-      @RequestParam(defaultValue = "") String lng) {
+      @RequestParam(defaultValue = "") String lng,
+      @RequestParam(defaultValue = "") String city,
+      @RequestParam(required = false) Long tripId,
+      Authentication authentication) {
     if (!maps.enabled()) return new ResolveResult(false, null, null, null, null);
     Double parsedLat = number(lat);
     Double parsedLng = number(lng);
     if (parsedLat == null || parsedLng == null || name.isBlank()) {
       return new ResolveResult(false, null, null, null, null);
     }
-    ResolvedPlace place = maps.resolve(name, parsedLat, parsedLng);
+    ResolvedPlace place =
+        maps.resolve(name, parsedLat, parsedLng, scopeCity(city, tripId, authentication));
     return place == null
         ? new ResolveResult(false, null, null, null, null)
         : new ResolveResult(true, place.lat(), place.lng(), place.uid(), place.name());
+  }
+
+  /** 定位范围：优先用调用方传入的城市，否则取该行程所在城市，避开同名的异地地点。 */
+  private String scopeCity(String city, Long tripId, Authentication authentication) {
+    if (!city.isBlank()) return city;
+    if (tripId == null || authentication == null) return "";
+    try {
+      User user = (User) authentication.getPrincipal();
+      String tripCity = tripCities.cityOf(trips.requireMember(tripId, user));
+      return tripCity == null ? "" : tripCity;
+    } catch (Exception ignored) {
+      return "";
+    }
   }
 
   @GetMapping("/hotels")
@@ -218,8 +243,10 @@ public class MapController {
   }
 
   @GetMapping("/geocode")
-  public GeocodeResult geocode(@RequestParam(defaultValue = "") String address) {
-    Geocode geocode = maps.enabled() ? maps.geocode(address) : null;
+  public GeocodeResult geocode(
+      @RequestParam(defaultValue = "") String address,
+      @RequestParam(defaultValue = "") String city) {
+    Geocode geocode = maps.enabled() ? maps.geocode(address, city) : null;
     return geocode == null
         ? new GeocodeResult(false, null, null, NO_RESULT)
         : new GeocodeResult(true, geocode.lat(), geocode.lng(), null);

@@ -15,15 +15,18 @@ import com.trip.adaptive.domain.AlternativePlan;
 import com.trip.adaptive.domain.PlanVote;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.dto.Requests.VoteRequest;
+import com.trip.adaptive.monitor.service.TripMonitorGuard;
 import com.trip.adaptive.monitor.service.VotingService;
 
 @RestController
 @RequestMapping("/api/plans")
 public class VoteController {
   private final VotingService s;
+  private final TripMonitorGuard guard;
 
-  public VoteController(VotingService s) {
+  public VoteController(VotingService s, TripMonitorGuard guard) {
     this.s = s;
+    this.guard = guard;
   }
 
   @PostMapping("/{id}/start-voting")
@@ -43,11 +46,11 @@ public class VoteController {
 
   @PostMapping("/{id}/tally")
   public Trip tally(@PathVariable Long id) {
-    return s.tally(id);
+    return guard.runExclusively(s.tripIdOf(id), () -> s.tally(id));
   }
 
   @PostMapping("/{id}/revert")
   public Trip revert(@PathVariable Long id) {
-    return s.revert(id);
+    return guard.runExclusively(s.tripIdOf(id), () -> s.revert(id));
   }
 }

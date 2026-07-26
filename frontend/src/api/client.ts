@@ -459,12 +459,13 @@ export const api = {
     });
     return request<MapSearchResult>(`/api/map/nearby?${params.toString()}`);
   },
-  async mapResolve(name: string, lat: number, lng: number): Promise<MapResolve> {
+  async mapResolve(name: string, lat: number, lng: number, tripId?: number): Promise<MapResolve> {
     const params = new URLSearchParams({
       name,
       lat: String(lat),
       lng: String(lng),
     });
+    if (tripId !== undefined) params.set("tripId", String(tripId));
     return request<MapResolve>(`/api/map/resolve?${params.toString()}`);
   },
   async mapHotels(lat: number, lng: number, radius = 2500): Promise<HotelRecommendations> {

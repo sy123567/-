@@ -12,13 +12,16 @@ import com.trip.adaptive.service.TripService;
 public class WeatherPollingJob {
   private final TripService trips;
   private final EventIngestionService ingestion;
+  private final TripMonitorGuard guard;
 
   @Value("${weather.poll-enabled:false}")
   private boolean pollEnabled;
 
-  public WeatherPollingJob(TripService trips, EventIngestionService ingestion) {
+  public WeatherPollingJob(
+      TripService trips, EventIngestionService ingestion, TripMonitorGuard guard) {
     this.trips = trips;
     this.ingestion = ingestion;
+    this.guard = guard;
   }
 
   @Scheduled(initialDelay = 10_000, fixedDelayString = "${weather.poll-interval-ms:3600000}")
@@ -31,7 +34,9 @@ public class WeatherPollingJob {
       // force=true 已按 [now, now+forecastWindowDays] 窗口过滤节点，不会为过期/远期节点做无谓处理。
       Enums.TripStatus status = trip.getStatus();
       if (status != Enums.TripStatus.COMPLETED && status != Enums.TripStatus.CANCELLED) {
-        ingestion.ingestAllForTrip(trip.getId(), true); // true = 只扫近未来窗口
+        // 与页面发起的监测互斥，避开轮询与手动扫描同时重建事件
+        guard.runExclusively(
+            trip.getId(), () -> ingestion.ingestAllForTrip(trip.getId(), true)); // 只扫近未来窗口
       }
     }
   }

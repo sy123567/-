@@ -20,6 +20,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.ai.AiClient;
 import com.trip.adaptive.ai.AssistantService;
 import com.trip.adaptive.ai.AssistantService.AssistantAnswer;
+import com.trip.adaptive.monitor.service.BaiduMapClient;
+import com.trip.adaptive.monitor.service.BaiduMapClient.Geocode;
 import com.trip.adaptive.service.AiConstraintService;
 import com.trip.adaptive.service.AiConstraintService.ConstraintContext;
 
@@ -34,11 +36,17 @@ public class AiController {
   private final AiClient ai;
   private final AiConstraintService constraints;
   private final AssistantService assistant;
+  private final BaiduMapClient maps;
 
-  public AiController(AiClient ai, AiConstraintService constraints, AssistantService assistant) {
+  public AiController(
+      AiClient ai,
+      AiConstraintService constraints,
+      AssistantService assistant,
+      BaiduMapClient maps) {
     this.ai = ai;
     this.constraints = constraints;
     this.assistant = assistant;
+    this.maps = maps;
   }
 
   /** 首页智能体：旅行推荐、攻略社区检索与站内目录导航。 */
@@ -75,10 +83,41 @@ public class AiController {
                 interests.isBlank() ? "" : "，偏好：" + interests.trim(),
                 constraints.promptText(context));
     JsonNode root = ai.chatJson(systemPrompt, userPrompt);
-    List<AiPlace> places = parsePlaces(root);
+    List<AiPlace> places = constrainToCity(parsePlaces(root), city.trim());
     return places.isEmpty() || !containsRequiredPlaces(places, context.mustVisitPlaces())
         ? fallback(city)
         : new AiPlanResult(true, "ai", city.trim(), places, null);
+  }
+
+  /** 模型给出的经纬度可能落在同名的其它城市，逐个与目的地城市中心比对：偏出城市范围的先按城市重新定位， 定位不到则丢弃，保证生成的节点都在这座城市里。 */
+  private List<AiPlace> constrainToCity(List<AiPlace> places, String city) {
+    Geocode center = maps.cityCenter(city);
+    if (center == null || center.lat() == null || center.lng() == null) return places;
+    List<AiPlace> inCity = new ArrayList<>();
+    for (AiPlace place : places) {
+      if (withinCity(center, place.latitude(), place.longitude())) {
+        inCity.add(place);
+        continue;
+      }
+      Geocode located = maps.locateInCity(place.placeName(), city);
+      if (located == null || !withinCity(center, located.lat(), located.lng())) continue;
+      inCity.add(
+          new AiPlace(
+              place.placeName(),
+              place.category(),
+              place.nodeType(),
+              place.description(),
+              located.lat(),
+              located.lng(),
+              place.suggestedDurationMinutes()));
+    }
+    return inCity;
+  }
+
+  private static boolean withinCity(Geocode center, Double lat, Double lng) {
+    if (lat == null || lng == null) return false;
+    return BaiduMapClient.distanceMeters(center.lat(), center.lng(), lat, lng)
+        <= BaiduMapClient.CITY_RADIUS_METERS;
   }
 
   private boolean containsRequiredPlaces(List<AiPlace> places, List<String> required) {

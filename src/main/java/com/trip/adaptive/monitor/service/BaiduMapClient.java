@@ -22,6 +22,12 @@ public class BaiduMapClient {
   private static final Duration ROUTE_TTL = Duration.ofHours(6);
   private static final Duration GEOCODE_TTL = Duration.ofDays(30);
 
+  /** 节点定位允许偏离原坐标的上限：超过这个距离说明命中了同名的异地地点。 */
+  private static final long MAX_RESOLVE_METERS = 30_000;
+
+  /** 判定一个坐标是否仍在目的地城市范围内的半径。 */
+  public static final long CITY_RADIUS_METERS = 80_000;
+
   private final RestTemplate http = buildHttp();
   private final ObjectMapper mapper = new ObjectMapper();
   private final StringRedisTemplate redis;
@@ -199,10 +205,25 @@ public class BaiduMapClient {
   }
 
   public ResolvedPlace resolve(String name, double lat, double lng) {
+    return resolve(name, lat, lng, null);
+  }
+
+  /** 按名称定位到节点周边的真实坐标；city 非空时只接受该城市内的结果，避免定位到同名异地地点。 */
+  public ResolvedPlace resolve(String name, double lat, double lng, String city) {
     if (!enabled() || name == null || name.isBlank()) return null;
+    ResolvedPlace snapped = snapIntoCity(name, lat, lng, city);
+    if (snapped != null) return snapped;
     String roundedLat = String.format(Locale.ROOT, "%.4f", lat);
     String roundedLng = String.format(Locale.ROOT, "%.4f", lng);
-    String cacheKey = "baidu:resolve:" + normalize(name) + ":" + roundedLat + ":" + roundedLng;
+    String cacheKey =
+        "baidu:resolve:"
+            + normalize(name)
+            + ":"
+            + roundedLat
+            + ":"
+            + roundedLng
+            + ":"
+            + cityToken(city);
     JsonNode root =
         getCached(
             cacheKey,
@@ -221,8 +242,9 @@ public class BaiduMapClient {
                 "output",
                 "json"),
             SEARCH_TTL);
-    if (!ok(root)) return geocodeFallback(name);
+    if (!ok(root)) return geocodeFallback(name, city, lat, lng);
     String normalizedName = normalize(name);
+    String normalizedCity = cityToken(city);
     JsonNode best = null;
     double bestDistance = Double.POSITIVE_INFINITY;
     int bestMatchTier = -1;
@@ -234,6 +256,11 @@ public class BaiduMapClient {
       Double candidateLng = number(location, "lng");
       String candidateName = text(item, "name");
       if (candidateLat == null || candidateLng == null || candidateName == null) {
+        resultIndex++;
+        continue;
+      }
+      if (!withinCity(normalizedCity, text(item, "city"))
+          || placeDistanceMeters(lat, lng, candidateLat, candidateLng) > MAX_RESOLVE_METERS) {
         resultIndex++;
         continue;
       }
@@ -258,16 +285,88 @@ public class BaiduMapClient {
       }
       resultIndex++;
     }
-    if (best == null) return geocodeFallback(name);
+    if (best == null) return geocodeFallback(name, city, lat, lng);
     JsonNode location = best.path("location");
     return new ResolvedPlace(
         number(location, "lat"), number(location, "lng"), text(best, "uid"), text(best, "name"));
   }
 
-  /** 地点检索不可用/无命中时，退回地理编码(/geocoding/v3)以仍能拿到候选坐标。 */
-  private ResolvedPlace geocodeFallback(String name) {
-    Geocode geo = geocode(name);
-    return geo == null ? null : new ResolvedPlace(geo.lat(), geo.lng(), null, name);
+  /** 坐标已经落到城市之外时（例如同名异地地点），按城市重新定位这个地点，把它拉回城市内。 */
+  private ResolvedPlace snapIntoCity(String name, double lat, double lng, String city) {
+    Geocode center = cityCenter(city);
+    if (center == null || center.lat() == null || center.lng() == null) return null;
+    if (placeDistanceMeters(center.lat(), center.lng(), lat, lng) <= CITY_RADIUS_METERS)
+      return null;
+    Geocode located = locateInCity(name, city);
+    if (located == null || located.lat() == null || located.lng() == null) return null;
+    return placeDistanceMeters(center.lat(), center.lng(), located.lat(), located.lng())
+            > CITY_RADIUS_METERS
+        ? null
+        : new ResolvedPlace(located.lat(), located.lng(), null, name);
+  }
+
+  /** 地点检索无命中时退回地理编码，仍限定在同一城市且不能偏离节点太远。 */
+  private ResolvedPlace geocodeFallback(String name, String city, double lat, double lng) {
+    Geocode geo = geocode(name, city);
+    if (geo == null || geo.lat() == null || geo.lng() == null) return null;
+    return placeDistanceMeters(lat, lng, geo.lat(), geo.lng()) > MAX_RESOLVE_METERS
+        ? null
+        : new ResolvedPlace(geo.lat(), geo.lng(), null, name);
+  }
+
+  /** 把候选地点限定在指定城市内：百度返回的 city 带“市”后缀，取前缀比对。 */
+  private static boolean withinCity(String normalizedCity, String candidateCity) {
+    if (normalizedCity.isBlank()) return true;
+    String candidate = cityToken(candidateCity);
+    return candidate.isBlank()
+        || candidate.contains(normalizedCity)
+        || normalizedCity.contains(candidate);
+  }
+
+  /** 去掉“市/市区/自治州”等后缀，使“北京”与“北京市”能匹配。 */
+  private static String cityToken(String city) {
+    String normalized = normalize(city);
+    for (String suffix : List.of("自治州", "市辖区", "地区", "市")) {
+      if (normalized.endsWith(suffix) && normalized.length() > suffix.length()) {
+        return normalized.substring(0, normalized.length() - suffix.length());
+      }
+    }
+    return normalized;
+  }
+
+  /** 反向地理编码取城市名，用于判断一段行程落在哪座城市。 */
+  public String reverseCity(double lat, double lng) {
+    if (!enabled()) return null;
+    String location = coordinate(lat, lng);
+    JsonNode root =
+        getCached(
+            "baidu:reverse-city:" + location,
+            url("/reverse_geocoding/v3/", "location", location, "output", "json"),
+            GEOCODE_TTL);
+    if (!ok(root)) return null;
+    String city = text(root.path("result").path("addressComponent"), "city");
+    return city.isBlank() ? null : city;
+  }
+
+  /** 城市中心坐标，用于判断某个地点是否落在目的地城市内。 */
+  public Geocode cityCenter(String city) {
+    return city == null || city.isBlank() ? null : geocode(city.trim(), city.trim());
+  }
+
+  /** 在指定城市内按名称定位地点，命中不了返回 null。 */
+  public Geocode locateInCity(String name, String city) {
+    List<Place> places = search(name, city);
+    if (places == null) return null;
+    return places.stream()
+        .filter(place -> place.lat() != null && place.lng() != null)
+        .findFirst()
+        .map(place -> new Geocode(place.lat(), place.lng()))
+        .orElseGet(() -> geocode(name, city));
+  }
+
+  /** 两点间的球面距离（米）。 */
+  public static long distanceMeters(double lat1, double lng1, double lat2, double lng2) {
+    return placeDistanceMeters(lat1, lng1, lat2, lng2);
   }
 
   public HotelRecommendations hotels(double lat, double lng, int radius) {
@@ -428,11 +527,17 @@ public class BaiduMapClient {
   }
 
   public Geocode geocode(String address) {
+    return geocode(address, null);
+  }
+
+  /** city 非空时限定在该城市内做地理编码，同名地点不会落到其它城市。 */
+  public Geocode geocode(String address, String city) {
     if (!enabled() || address == null || address.isBlank()) return null;
+    String scope = city == null ? "" : city.trim();
     JsonNode root =
         getCached(
-            "baidu:geocode:" + normalize(address),
-            url("/geocoding/v3/", "address", address, "output", "json"),
+            "baidu:geocode:" + normalize(scope) + ":" + normalize(address),
+            url("/geocoding/v3/", "address", address, "city", scope, "output", "json"),
             GEOCODE_TTL);
     if (!ok(root)) return null;
     JsonNode location = root.path("result").path("location");
