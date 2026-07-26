@@ -24,7 +24,7 @@ export function PlaceDetailSheet({ detail, node, onClose }: { detail: PlaceDetai
             <div>
               <p className="font-mono text-[10px] tracking-[0.2em] text-coral">PLACE DETAIL / {detail.code ?? "ROUTE"}</p>
               <h2 id="place-sheet-title" className="mt-3 font-display text-2xl font-bold">{detail.placeName}</h2>
-              <div className="mt-3 flex flex-wrap items-center gap-2"><span className="inline-flex items-center rounded-full bg-coral/10 px-2.5 py-1 text-xs font-semibold text-coral">{detail.category}</span>{node && <span className="font-mono text-xs text-white/55">{formatTime(node.plannedStart)} · ¥{node.cost}</span>}</div>
+              <div className="mt-3 flex flex-wrap items-center gap-2"><span className="inline-flex items-center rounded-full bg-coral/10 px-2.5 py-1 text-xs font-semibold text-coral">{detail.category}</span>{node && hasRealTime(node.plannedStart) && <span className="font-mono text-xs text-white/55">{formatTime(node.plannedStart)}</span>}{node && node.cost > 0 && <span className="font-mono text-xs text-white/55">¥{node.cost}</span>}</div>
             </div>
             <button ref={closeRef} type="button" onClick={onClose} aria-label="关闭地点详情" className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white focus-visible:outline-offset-2"><X size={20} /></button>
           </div>
@@ -47,4 +47,10 @@ function Info({ icon, label, value }: { icon: ReactNode; label: string; value: s
 
 function formatTime(value: string) {
   return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function hasRealTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getHours() !== 0 || date.getMinutes() !== 0;
 }

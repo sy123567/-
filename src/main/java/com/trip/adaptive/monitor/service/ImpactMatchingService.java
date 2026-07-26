@@ -51,6 +51,9 @@ public class ImpactMatchingService {
     // 影响分析也必须用同一时间窗，否则会出现"监测看不到、影响分析却算进去"的不一致。
     for (ExternalEvent e : events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now())) {
       for (ItineraryNode n : t.getItineraryNodes()) {
+        if (n.getStatus() == Enums.NodeStatus.CANCELLED) {
+          continue; // 已移除的节点不再监测
+        }
         if (overlap(e, n)
             && distance(e.getLatitude(), e.getLongitude(), n.getLatitude(), n.getLongitude())
                 <= e.getRadiusKm()) {
