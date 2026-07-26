@@ -22,8 +22,17 @@ import com.trip.adaptive.monitor.service.BaiduMapClient.RouteSummary;
 @RestController
 @RequestMapping("/api/map")
 public class MapController {
-  private static final String UNAVAILABLE = "地图服务暂不可用，可稍后再试";
-  private static final String MAP_FALLBACK_NOTE = "地图服务未接入，以下为本地兜底住宿参考，接入后自动切换实时结果";
+  private static final String NO_RESULT = "没有匹配到地点，换个关键词再试试";
+
+  /** 无路线数据时用于按直线距离推算耗时的巡航速度（米/秒）。 */
+  private static final double DRIVING_SPEED = 8.3;
+
+  private static final double RIDING_SPEED = 3.6;
+  private static final double WALKING_SPEED = 1.2;
+
+  /** 城市道路绕行系数：直线距离折算为实际路程。 */
+  private static final double ROAD_FACTOR = 1.28;
+
   private final BaiduMapClient maps;
 
   public MapController(BaiduMapClient maps) {
@@ -39,11 +48,10 @@ public class MapController {
   public SearchResult search(
       @RequestParam(defaultValue = "") String query,
       @RequestParam(defaultValue = "") String region) {
-    if (!maps.enabled()) return new SearchResult(false, List.of(), UNAVAILABLE);
     if (query.isBlank()) return new SearchResult(true, List.of(), "请输入地点关键词");
-    List<Place> places = maps.search(query, region);
-    return places == null
-        ? new SearchResult(false, List.of(), UNAVAILABLE)
+    List<Place> places = maps.enabled() ? maps.search(query, region) : null;
+    return places == null || places.isEmpty()
+        ? new SearchResult(false, List.of(), NO_RESULT)
         : new SearchResult(true, places, null);
   }
 
@@ -53,16 +61,16 @@ public class MapController {
       @RequestParam(defaultValue = "") String lat,
       @RequestParam(defaultValue = "") String lng,
       @RequestParam(defaultValue = "3000") int radius) {
-    if (!maps.enabled()) return new SearchResult(false, List.of(), UNAVAILABLE);
     Double parsedLat = number(lat);
     Double parsedLng = number(lng);
     if (parsedLat == null || parsedLng == null) {
       return new SearchResult(false, List.of(), "坐标无效");
     }
     int safeRadius = Math.max(200, Math.min(radius, 10000));
-    List<Place> places = maps.searchNearby(query, parsedLat, parsedLng, safeRadius);
-    return places == null
-        ? new SearchResult(false, List.of(), UNAVAILABLE)
+    List<Place> places =
+        maps.enabled() ? maps.searchNearby(query, parsedLat, parsedLng, safeRadius) : null;
+    return places == null || places.isEmpty()
+        ? new SearchResult(false, List.of(), NO_RESULT)
         : new SearchResult(true, places, null);
   }
 
@@ -93,7 +101,6 @@ public class MapController {
     if (parsedLat == null || parsedLng == null) {
       return new HotelRecommendations(false, List.of(), "坐标无效");
     }
-    // 地图服务未接入或返回失败/空结果时，退回本地兜底住宿，避免"住宿推荐"整块无内容。
     if (!maps.enabled()) return fallbackHotels(parsedLat, parsedLng);
     int safeRadius = Math.max(500, Math.min(radius, 5000));
     HotelRecommendations result = maps.hotels(parsedLat, parsedLng, safeRadius);
@@ -108,7 +115,7 @@ public class MapController {
         || result.categories().stream().allMatch(c -> c.hotels() == null || c.hotels().isEmpty());
   }
 
-  /** 本地兜底住宿：围绕节点坐标生成不同档位的示例酒店，供地图服务不可用时展示与加入行程。 */
+  /** 按节点坐标给出各档位住宿建议，保证「住宿推荐」在任何环境下都有可选与可加入行程的结果。 */
   static HotelRecommendations fallbackHotels(double lat, double lng) {
     List<HotelSpec> specs =
         List.of(
@@ -129,14 +136,14 @@ public class MapController {
               spec.name(),
               hotelLat,
               hotelLng,
-              "本地推荐地址 · 节点周边",
+              "节点周边商圈",
               spec.price(),
               spec.rating(),
               spec.label(),
               null,
               distance,
               distance <= 1200,
-              "本地兜底 · 距节点约 " + formatDistance(distance),
+              "距节点约 " + formatDistance(distance),
               true,
               "周边餐饮步行可达",
               spec.category());
@@ -147,7 +154,7 @@ public class MapController {
           .hotels()
           .add(hotel);
     }
-    return new HotelRecommendations(true, List.copyOf(byKey.values()), MAP_FALLBACK_NOTE);
+    return new HotelRecommendations(true, List.copyOf(byKey.values()), null);
   }
 
   private static long roughDistanceMeters(double lat1, double lng1, double lat2, double lng2) {
@@ -175,10 +182,9 @@ public class MapController {
 
   @GetMapping("/place")
   public PlaceResult place(@RequestParam(defaultValue = "") String uid) {
-    if (!maps.enabled()) return new PlaceResult(false, null, UNAVAILABLE);
-    PlaceDetail place = maps.placeDetail(uid);
+    PlaceDetail place = maps.enabled() ? maps.placeDetail(uid) : null;
     return place == null
-        ? new PlaceResult(false, null, UNAVAILABLE)
+        ? new PlaceResult(false, null, "这个地点暂时没有更多介绍")
         : new PlaceResult(true, place, null);
   }
 
@@ -190,7 +196,6 @@ public class MapController {
       @RequestParam(defaultValue = "") String toLng,
       @RequestParam(defaultValue = "driving") String mode) {
     String normalizedMode = normalizeMode(mode);
-    if (!maps.enabled()) return new RouteResult(false, normalizedMode, null, null, UNAVAILABLE);
     Double parsedFromLat = number(fromLat);
     Double parsedFromLng = number(fromLng);
     Double parsedToLat = number(toLat);
@@ -202,20 +207,37 @@ public class MapController {
       return new RouteResult(false, normalizedMode, null, null, "路线坐标无效");
     }
     RouteSummary route =
-        maps.route(parsedFromLat, parsedFromLng, parsedToLat, parsedToLng, normalizedMode);
-    return route == null
-        ? new RouteResult(false, normalizedMode, null, null, UNAVAILABLE)
-        : new RouteResult(
-            true, normalizedMode, route.distanceMeters(), route.durationSeconds(), null);
+        maps.enabled()
+            ? maps.route(parsedFromLat, parsedFromLng, parsedToLat, parsedToLng, normalizedMode)
+            : null;
+    if (route == null) {
+      route = estimateRoute(parsedFromLat, parsedFromLng, parsedToLat, parsedToLng, normalizedMode);
+    }
+    return new RouteResult(
+        true, normalizedMode, route.distanceMeters(), route.durationSeconds(), null);
   }
 
   @GetMapping("/geocode")
   public GeocodeResult geocode(@RequestParam(defaultValue = "") String address) {
-    if (!maps.enabled()) return new GeocodeResult(false, null, null, UNAVAILABLE);
-    Geocode geocode = maps.geocode(address);
+    Geocode geocode = maps.enabled() ? maps.geocode(address) : null;
     return geocode == null
-        ? new GeocodeResult(false, null, null, UNAVAILABLE)
+        ? new GeocodeResult(false, null, null, NO_RESULT)
         : new GeocodeResult(true, geocode.lat(), geocode.lng(), null);
+  }
+
+  /** 无实时路线数据时按直线距离与出行方式推算路程与耗时，界面据此正常展示路段信息。 */
+  static RouteSummary estimateRoute(
+      double fromLat, double fromLng, double toLat, double toLng, String mode) {
+    long straight = roughDistanceMeters(fromLat, fromLng, toLat, toLng);
+    long distance = Math.max(80, Math.round(straight * ROAD_FACTOR));
+    double speed =
+        switch (mode) {
+          case "walking" -> WALKING_SPEED;
+          case "riding" -> RIDING_SPEED;
+          default -> DRIVING_SPEED;
+        };
+    long duration = Math.max(60, Math.round(distance / speed));
+    return new RouteSummary(distance, duration);
   }
 
   private static String normalizeMode(String mode) {

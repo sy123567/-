@@ -198,6 +198,7 @@ public class EventIngestionService {
           ev.setTitle(text(a, "Description", "预警"));
           ev.setDescription(a.path("Description").path("Localized").asText("天气预警"));
           ev.setSeverity(Enums.Severity.HIGH);
+          applyTemperature(ev, n);
           fill(ev, n, "weathercn-alert");
           save(out, ev);
         }
@@ -227,6 +228,7 @@ public class EventIngestionService {
                     : (headline.isBlank() ? "天气预报" : headline));
             ev.setTempMin(tempMin);
             ev.setTempMax(tempMax);
+            if (tempMin == null || tempMax == null) applyTemperature(ev, n);
             ev.setSeverity(Enums.Severity.MEDIUM);
             fill(ev, n, "weathercn-forecast");
             save(out, ev);
@@ -234,6 +236,13 @@ public class EventIngestionService {
         }
       }
     }
+  }
+
+  /** 天气类事件补上该节点的温度区间，避免列表里出现缺值。 */
+  private void applyTemperature(ExternalEvent e, ItineraryNode n) {
+    WeatherClient.WeatherSummary summary = weather.summary(n.getLatitude(), n.getLongitude());
+    if (summary.tempMin() != null) e.setTempMin(summary.tempMin());
+    if (summary.tempMax() != null) e.setTempMax(summary.tempMax());
   }
 
   // 一条 ExternalEvent 除了标题/类型/严重度不同，其余字段（地点、经纬度、影响半径、起止时间、来源）都来自那个行程节点 n，两个分支都要设一遍。与其写两遍，就抽成 fill：

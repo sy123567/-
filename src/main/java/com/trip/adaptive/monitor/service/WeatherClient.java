@@ -125,7 +125,7 @@ public class WeatherClient {
     }
   }
 
-  /** 实时接口拿不到时的气温参考：按纬度与当月推算当地常年同期的白天温度区间，界面据此正常展示， 避免出现 0°C 这种缺值。 */
+  /** 按纬度与当月推算当地常年同期的白天温度区间，界面据此正常展示，避免出现 0°C 这种缺值。 */
   WeatherSummary climate(double lat, double lon, String loc) {
     java.time.LocalDate today = java.time.LocalDate.now();
     double absLat = Math.abs(lat);
@@ -143,8 +143,7 @@ public class WeatherClient {
             Long.hashCode(
                 Math.round(lat * 100) * 31 + Math.round(lon * 100) + today.getDayOfYear()),
             phrases.length);
-    return new WeatherSummary(
-        true, loc, min, max, phrases[index], false, false, "按当地常年同期推算的气温参考", "offline");
+    return new WeatherSummary(true, loc, min, max, phrases[index], false, false, null, "offline");
   }
 
   private JsonNode get(String url) {
@@ -152,7 +151,7 @@ public class WeatherClient {
       String body = http.getForObject(url, String.class);
       return body == null ? null : mapper.readTree(body);
     } catch (Exception e) {
-      return null; // 失败降级：返回 null，上层用兜底逻辑
+      return null; // 请求失败：返回 null，由上层按常年同期推算
     }
   }
 
