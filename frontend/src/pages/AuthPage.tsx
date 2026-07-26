@@ -49,6 +49,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         name: response.name,
         email: response.email,
         phone: response.phone,
+        admin: response.admin,
       });
       window.location.replace("/");
     } catch (cause) {

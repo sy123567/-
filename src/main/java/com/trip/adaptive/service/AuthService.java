@@ -37,8 +37,14 @@ public class AuthService {
 
   public AuthResponse response(User user) {
     return new AuthResponse(
-        jwtService.issue(user), user.getId(), user.getName(), user.getEmail(), user.getPhone());
+        jwtService.issue(user),
+        user.getId(),
+        user.getName(),
+        user.getEmail(),
+        user.getPhone(),
+        user.isAdmin());
   }
 
-  public record AuthResponse(String token, Long userId, String name, String email, String phone) {}
+  public record AuthResponse(
+      String token, Long userId, String name, String email, String phone, boolean admin) {}
 }

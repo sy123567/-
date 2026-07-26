@@ -10,13 +10,18 @@ import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.GroupMember;
 import com.trip.adaptive.domain.MemberConstraint;
 import com.trip.adaptive.domain.TravelGroup;
+import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.exception.BusinessException;
 import com.trip.adaptive.exception.ResourceNotFoundException;
+import com.trip.adaptive.repository.ChatMessageRepository;
+import com.trip.adaptive.repository.ConversationRepository;
 import com.trip.adaptive.repository.FriendshipRepository;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.MemberConstraintRepository;
+import com.trip.adaptive.repository.PlanVoteRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
+import com.trip.adaptive.repository.TripRepository;
 import com.trip.adaptive.repository.UserRepository;
 
 @Service
@@ -26,6 +31,11 @@ public class GroupService {
   private final GroupMemberRepository members;
   private final MemberConstraintRepository constraints;
   private final FriendshipRepository friendships;
+  private final PlanVoteRepository votes;
+  private final TripRepository trips;
+  private final TripDeletionService tripDeletion;
+  private final ConversationRepository conversations;
+  private final ChatMessageRepository chatMessages;
   private static final String ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   private static final SecureRandom ROOM_CODE_RANDOM = new SecureRandom();
 
@@ -34,12 +44,22 @@ public class GroupService {
       UserRepository u,
       GroupMemberRepository m,
       MemberConstraintRepository c,
-      FriendshipRepository f) {
+      FriendshipRepository f,
+      PlanVoteRepository v,
+      TripRepository t,
+      TripDeletionService tripDeletion,
+      ConversationRepository conversations,
+      ChatMessageRepository chatMessages) {
     groups = g;
     users = u;
     members = m;
     constraints = c;
     friendships = f;
+    votes = v;
+    trips = t;
+    this.tripDeletion = tripDeletion;
+    this.conversations = conversations;
+    this.chatMessages = chatMessages;
   }
 
   @Transactional
@@ -137,6 +157,49 @@ public class GroupService {
     if (member.getRole() == Enums.MemberRole.OWNER) {
       throw new BusinessException("不能删除群主，请先转移群主");
     }
+    deleteMember(member);
+  }
+
+  /** 成员主动退出小组。群主需先转移身份或直接解散，避免小组失去负责人。 */
+  @Transactional
+  public void leave(Long groupId, User operator) {
+    get(groupId);
+    GroupMember member = operatorMember(groupId, operator);
+    if (member.getRole() == Enums.MemberRole.OWNER) {
+      throw new BusinessException("群主不能直接退出，请先转移群主或解散小组");
+    }
+    deleteMember(member);
+  }
+
+  /** 解散小组：仅群主可操作，小组下的行程、群聊与成员约束一并清理。 */
+  @Transactional
+  public void disband(Long groupId, User operator) {
+    TravelGroup group = get(groupId);
+    if (operatorMember(groupId, operator).getRole() != Enums.MemberRole.OWNER) {
+      throw new BusinessException("只有群主可以解散小组");
+    }
+    for (Trip trip : trips.findByGroupId(groupId)) {
+      tripDeletion.delete(trip);
+    }
+    conversations
+        .findByTypeAndGroupId(Enums.ConversationType.GROUP, groupId)
+        .ifPresent(
+            conversation -> {
+              chatMessages.deleteAll(
+                  chatMessages.findByConversationIdOrderByCreatedAtAsc(conversation.getId()));
+              conversations.delete(conversation);
+            });
+    for (GroupMember member : members.findByGroupId(groupId)) {
+      votes.deleteAll(votes.findByMemberId(member.getId()));
+      constraints.deleteByMemberId(member.getId());
+    }
+    groups.delete(group); // 成员由 TravelGroup 的级联关系一并删除
+  }
+
+  /** 成员被投票记录引用，需先清理投票与个人约束再删除成员本身。 */
+  private void deleteMember(GroupMember member) {
+    votes.deleteAll(votes.findByMemberId(member.getId()));
+    constraints.deleteByMemberId(member.getId());
     members.delete(member);
   }
 

@@ -6,11 +6,13 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.trip.adaptive.domain.Enums;
+import com.trip.adaptive.domain.GroupMember;
 import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.NodeNote;
 import com.trip.adaptive.domain.Route;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.domain.User;
+import com.trip.adaptive.exception.BusinessException;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.ItineraryNodeRepository;
@@ -27,6 +29,7 @@ public class TripService {
   private final ItineraryNodeRepository nodes;
   private final NodeNoteRepository notes;
   private final RouteRepository routes;
+  private final TripDeletionService deletion;
 
   public TripService(
       TripRepository t,
@@ -34,13 +37,15 @@ public class TripService {
       GroupMemberRepository m,
       ItineraryNodeRepository n,
       NodeNoteRepository nn,
-      RouteRepository r) {
+      RouteRepository r,
+      TripDeletionService deletion) {
     trips = t;
     groups = g;
     members = m;
     nodes = n;
     notes = nn;
     routes = r;
+    this.deletion = deletion;
   }
 
   public Trip get(Long id) {
@@ -166,7 +171,18 @@ public class TripService {
     return routes.findByTripId(id);
   }
 
-  public void delete(Long id) {
-    trips.delete(get(id));
+  /** 删除行程：仅小组群主可操作，行程关联的监测/决策/费用数据会一并清理。 */
+  public void delete(Long id, User operator) {
+    Trip trip = requireMember(id, operator);
+    boolean owner =
+        members
+            .findByGroupIdAndUserId(trip.getGroup().getId(), operator.getId())
+            .map(GroupMember::getRole)
+            .filter(role -> role == Enums.MemberRole.OWNER)
+            .isPresent();
+    if (!owner) {
+      throw new BusinessException("只有小组群主可以删除行程");
+    }
+    deletion.delete(trip);
   }
 }

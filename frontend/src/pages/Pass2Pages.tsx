@@ -94,6 +94,7 @@ export function GroupDetailPage() {
   const { toast, show } = useToast();
   const [transferOpen, setTransferOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [exitOpen, setExitOpen] = useState(false);
   const [newOwnerId, setNewOwnerId] = useState<number | null>(null);
   const navigate = useNavigate();
   const me = getCurrentUser();
@@ -120,18 +121,30 @@ export function GroupDetailPage() {
     },
     onError: (error) => show(error instanceof Error ? error.message : "操作失败"),
   });
+  const exitGroup = useMutation({
+    mutationFn: (mode: "leave" | "disband") =>
+      mode === "leave" ? api.leaveGroup(groupId) : api.disbandGroup(groupId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["groups"] });
+      void queryClient.invalidateQueries({ queryKey: ["trips"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      navigate("/groups", { replace: true });
+    },
+    onError: (error) => { setExitOpen(false); show(error instanceof Error ? error.message : "操作失败"); },
+  });
   if (!Number.isFinite(groupId)) return <ErrorState message="无效的小组地址" onRetry={() => undefined} />;
   if (groupQuery.isLoading || membersQuery.isLoading) return <LoadingState label="正在加载小组…" />;
   if (groupQuery.isError || membersQuery.isError || !groupQuery.data) return <ErrorState message="无法读取小组信息" onRetry={() => { void groupQuery.refetch(); void membersQuery.refetch(); }} />;
   const group = groupQuery.data;
   const transferableMembers = members.filter((member) => member.role !== "OWNER");
+  const isOwner = members.some((member) => member.user.id === me?.id && member.role === "OWNER");
   return (
     <>
       <PageHeader
         eyebrow={`GROUP / ${group.roomCode}`}
         title={group.name}
         description={`${members.length} 位成员 · 房间码 ${group.roomCode}`}
-        action={<div className="flex gap-2"><Button onClick={() => openGroupChat.mutate()} disabled={openGroupChat.isPending}><MessageSquare size={16} className="mr-2 inline" />群聊</Button><Button variant="ghost" onClick={() => setQuickCreateOpen(true)}><Plus size={16} className="mr-2 inline" />快速建群</Button><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button></div>}
+        action={<div className="flex gap-2"><Button onClick={() => openGroupChat.mutate()} disabled={openGroupChat.isPending}><MessageSquare size={16} className="mr-2 inline" />群聊</Button><Button variant="ghost" onClick={() => setQuickCreateOpen(true)}><Plus size={16} className="mr-2 inline" />快速建群</Button><Button variant="ghost" onClick={() => setTransferOpen(true)}><Users size={16} className="mr-2 inline" />转移群主</Button><Button variant="ghost" onClick={() => { void navigator.clipboard?.writeText(group.roomCode); show("房间码已复制"); }}><Copy size={16} className="mr-2 inline" />复制房间码</Button><Button variant="ghost" className="text-coral" onClick={() => setExitOpen(true)}>{isOwner ? <><Trash2 size={16} className="mr-2 inline" />解散小组</> : <><UserMinus size={16} className="mr-2 inline" />退出小组</>}</Button></div>}
       />
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="p-6">
@@ -142,6 +155,15 @@ export function GroupDetailPage() {
       </div>
       {toast}
       <Modal open={quickCreateOpen} title="从本组成员快速建群" onClose={() => setQuickCreateOpen(false)}><div className="space-y-3"><p className="text-sm text-ink-soft">已预选本组内你的好友，可再调整后生成新群。</p><CreateGroupForm presetMemberIds={members.map((member) => member.user.id).filter((uid) => uid !== me?.id)} onDone={(created) => { setQuickCreateOpen(false); show(`小组已创建，房间码 ${created.roomCode}`); navigate(`/groups/${created.id}`); }} /></div></Modal>
+      <Modal open={exitOpen} title={isOwner ? "解散小组" : "退出小组"} onClose={() => setExitOpen(false)}>
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-ink-soft">{isOwner ? `解散后，「${group.name}」的行程、群聊与投票记录会一并删除，所有成员都会失去访问。只想自己离开可以先转移群主。` : `退出后你不再参与「${group.name}」的行程安排和投票，已填写的成员约束会被清除。`}</p>
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={() => setExitOpen(false)}>再想想</Button>
+            <Button className="flex-1" disabled={exitGroup.isPending} onClick={() => exitGroup.mutate(isOwner ? "disband" : "leave")}>{exitGroup.isPending ? "处理中…" : isOwner ? "确认解散" : "确认退出"}</Button>
+          </div>
+        </div>
+      </Modal>
       <Modal open={transferOpen} title="转移群主" onClose={() => { setTransferOpen(false); setNewOwnerId(null); }}><div className="space-y-4"><p className="text-sm text-ink-soft">选择一位成员成为新的群主，当前群主将转为普通成员。</p><select value={newOwnerId ?? ""} onChange={(event) => setNewOwnerId(event.target.value ? Number(event.target.value) : null)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="">请选择新群主</option>{transferableMembers.map((member) => <option key={member.id} value={member.id}>{member.user.name}</option>)}</select><Button className="w-full" disabled={!newOwnerId || mutation.isPending} onClick={() => newOwnerId && mutation.mutate({ type: "transfer", memberId: newOwnerId })}>确认转移</Button></div></Modal>
     </>
   );
@@ -363,7 +385,22 @@ function FriendRow({
 
 export function TripsPage() {
   const [status, setStatus] = useState("全部");
+  const [pendingDelete, setPendingDelete] = useState<Trip | null>(null);
+  const { toast, show } = useToast();
+  const queryClient = useQueryClient();
+  const me = getCurrentUser();
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  const deleteTrip = useMutation({
+    mutationFn: (tripId: number) => api.deleteTrip(tripId),
+    onSuccess: (_, tripId) => {
+      if (Number(localStorage.getItem("selectedTripId")) === tripId) localStorage.removeItem("selectedTripId");
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["trips"] });
+      setPendingDelete(null);
+      show("行程已删除");
+    },
+    onError: (cause) => { setPendingDelete(null); show(cause instanceof Error ? cause.message : "删除行程失败"); },
+  });
   if (isLoading) return <LoadingState label="正在装载你的行程…" />;
   if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
   const trips = data?.trips ?? [];
@@ -377,7 +414,38 @@ export function TripsPage() {
   const orderedTrips = [...filteredTrips].sort((left, right) => Number(right.status === "ONGOING") - Number(left.status === "ONGOING"));
   const featuredTrip = orderedTrips[0];
   const otherTrips = orderedTrips.slice(1);
-  return <><div className="relative"><div className="gallery-orbit pointer-events-none absolute -right-8 -top-16 h-40 w-40 rounded-full border-[18px] border-coral/10 motion-reduce:animate-none" /><PageHeader eyebrow="ALL ROUTES" title="行程总览" description="每一张登机牌，都是一次共同决定过的出发。" action={<Link to="/trips/new"><Button><Plus size={16} className="mr-2 inline" />新建行程</Button></Link>} /></div><div className="mb-6 flex flex-wrap gap-2">{["全部", "进行中", "已规划", "已完成"].map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${status === item ? "bg-ink text-white" : "bg-white text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{item}</button>)}</div>{featuredTrip ? <div className="grid gap-5 md:grid-cols-2 lg:grid-rows-2"><div className="md:row-span-2"><BoardingPassCard trip={featuredTrip} featured onClick={() => window.location.assign(`/trips/${featuredTrip.id}`)} /></div>{otherTrips.map((trip) => <BoardingPassCard key={trip.id} trip={trip} onClick={() => window.location.assign(`/trips/${trip.id}`)} />)}</div> : <EmptyState title="还没有符合条件的行程" message="换一个状态筛选，或创建一段新的出发。" />}</>;
+  return <><div className="relative"><div className="gallery-orbit pointer-events-none absolute -right-8 -top-16 h-40 w-40 rounded-full border-[18px] border-coral/10 motion-reduce:animate-none" /><PageHeader eyebrow="ALL ROUTES" title="行程总览" description="每一张登机牌，都是一次共同决定过的出发。" action={<Link to="/trips/new"><Button><Plus size={16} className="mr-2 inline" />新建行程</Button></Link>} /></div><div className="mb-6 flex flex-wrap gap-2">{["全部", "进行中", "已规划", "已完成"].map((item) => <button key={item} onClick={() => setStatus(item)} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${status === item ? "bg-ink text-white" : "bg-white text-ink-soft hover:bg-sky/10 hover:text-sky"}`}>{item}</button>)}</div>{featuredTrip ? <div className="grid gap-5 md:grid-cols-2 lg:grid-rows-2"><div className="md:row-span-2"><TripCardWithDelete trip={featuredTrip} featured ownerId={me?.id} onDelete={setPendingDelete} /></div>{otherTrips.map((trip) => <TripCardWithDelete key={trip.id} trip={trip} ownerId={me?.id} onDelete={setPendingDelete} />)}</div> : <EmptyState title="还没有符合条件的行程" message="换一个状态筛选，或创建一段新的出发。" />}
+    <Modal open={!!pendingDelete} title="删除行程" onClose={() => setPendingDelete(null)}>
+      <div className="space-y-4">
+        <p className="text-sm leading-6 text-ink-soft">删除「{pendingDelete?.title ?? "该行程"}」后，行程节点、事件监测、替代方案、投票与费用记录都会一起清除，无法恢复。</p>
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => setPendingDelete(null)}>再想想</Button>
+          <Button className="flex-1" disabled={deleteTrip.isPending} onClick={() => pendingDelete && deleteTrip.mutate(pendingDelete.id)}>{deleteTrip.isPending ? "删除中…" : "确认删除"}</Button>
+        </div>
+      </div>
+    </Modal>
+    {toast}
+  </>;
+}
+
+/** 登机牌本身是一个大按钮，删除入口浮在它上层，只有小组群主能看到。 */
+function TripCardWithDelete({ trip, featured, ownerId, onDelete }: { trip: Trip; featured?: boolean; ownerId?: number; onDelete: (trip: Trip) => void }) {
+  const canDelete = ownerId !== undefined && trip.group?.ownerUser?.id === ownerId;
+  return (
+    <div className="relative">
+      <BoardingPassCard trip={trip} featured={featured} onClick={() => window.location.assign(`/trips/${trip.id}`)} />
+      {canDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(trip)}
+          aria-label={`删除${trip.title ?? "行程"}`}
+          className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full bg-ink/45 text-white/80 backdrop-blur transition hover:bg-coral hover:text-white motion-reduce:transition-none"
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 type NodeDraft = {
@@ -914,7 +982,8 @@ export function EventsPage() {
   });
   const assess = useMutation({
     mutationFn: () => api.assess(tripId as number),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] }); void queryClient.invalidateQueries({ queryKey: ["risk", tripId] }); show("已重新评估影响与风险"); },
+    // 重新评估会顺手清掉不再属于任何当前节点的旧事件，事件列表也要一起刷新。
+    onSuccess: () => { refreshMonitor(); show("已重新评估影响与风险"); },
     onError: (err) => show(err instanceof Error ? err.message : "评估失败"),
   });
   if (scope.isLoading || isLoading) return <LoadingState label="正在同步事件信号…" />;
@@ -1025,6 +1094,8 @@ export function PlansPage() {
   const scope = useTripScope();
   const tripId = scope.tripId;
   const plansQuery = useQuery({ queryKey: ["plans", tripId], queryFn: () => api.plans(tripId as number), enabled: tripId !== undefined });
+  const historyQuery = useQuery({ queryKey: ["plan-history", tripId], queryFn: () => api.planHistory(tripId as number), enabled: tripId !== undefined });
+  const [historyOpen, setHistoryOpen] = useState(false);
   const plans = (plansQuery.data ?? []).map((plan) => ({
     ...plan,
     title: plan.title ?? "未命名方案",
@@ -1048,14 +1119,19 @@ export function PlansPage() {
       note: change.note ?? "暂无变更说明",
     })),
   }));
+  // 只有本轮还能被选的方案进入对比网格；已采纳的单独作为结果展示，往轮方案收进历史。
+  const selectablePlans = plans.filter((plan) => plan.status === "PROPOSED" || plan.status === "VOTING");
+  const acceptedPlan = plans.find((plan) => plan.status === "ACCEPTED");
+  const archivedPlans = historyQuery.data ?? [];
   const [selectedId, setSelectedId] = useState<number>();
-  const selected = plans.find((plan) => plan.id === selectedId) ?? plans[0];
+  const selected = plans.find((plan) => plan.id === selectedId) ?? selectablePlans[0] ?? acceptedPlan ?? plans[0];
+  const canVote = selected?.status === "PROPOSED" || selected?.status === "VOTING";
   const { toast, show } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const regenerate = useMutation({
     mutationFn: () => api.replan(tripId as number),
-    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["plans", tripId] }); show("已根据最新影响重新生成方案"); },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["plans", tripId] }); void queryClient.invalidateQueries({ queryKey: ["plan-history", tripId] }); setSelectedId(undefined); show("已根据最新影响重新生成方案"); },
     onError: (error) => show(error instanceof Error ? error.message : "重新生成失败"),
   });
   const startVoting = useMutation({
@@ -1066,7 +1142,7 @@ export function PlansPage() {
   if (scope.isLoading || plansQuery.isLoading) return <LoadingState label="正在读取替代方案…" />;
   if (plansQuery.isError) return <ErrorState onRetry={() => void plansQuery.refetch()} message={plansQuery.error instanceof Error ? plansQuery.error.message : undefined} />;
   if (!selected) return <><PageHeader eyebrow="应变方案" title="替代方案" description="不同的取舍，没有绝对正确的答案。" action={<Button disabled={tripId === undefined || regenerate.isPending} onClick={() => regenerate.mutate()}>{regenerate.isPending ? "生成中…" : "生成替代方案"}</Button>} /><TripSwitcher scope={scope} /><EmptyState title="暂无替代方案" message="当行程受到事件影响后，点右上角“生成替代方案”即可生成可比较的选项。" />{toast}</>;
-  return <><PageHeader eyebrow="应变方案" title="替代方案" description="不同的取舍，没有绝对正确的答案。把成本、时间和改变程度放在一起比较。" action={<div className="flex gap-2"><Button variant="ghost" disabled={tripId === undefined || regenerate.isPending} onClick={() => regenerate.mutate()}>{regenerate.isPending ? "生成中…" : "重新生成"}</Button><Button disabled={!selected || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{startVoting.isPending ? "发起中…" : selected?.status === "VOTING" ? "投票进行中" : "发起投票"}</Button></div>} /><TripSwitcher scope={scope} /><div className="grid gap-5 xl:grid-cols-3">{plans.map((plan) => <button key={plan.id} onClick={() => setSelectedId(plan.id)} className={`card p-5 text-left transition hover:-translate-y-1 ${selected.id === plan.id ? "border-coral ring-2 ring-coral/20" : ""}`}><div className="flex items-center justify-between"><Badge tone={plan.status === "VOTING" ? "coral" : plan.status === "ACCEPTED" ? "mint" : plan.status === "REJECTED" ? "coral" : "neutral"}>{PLAN_STATUS_LABEL[plan.status] ?? plan.status}</Badge><span className="rounded-full bg-sky/10 px-2 py-0.5 text-xs font-semibold text-blue-700">{PLAN_STRATEGY_LABEL[plan.strategy] ?? plan.strategy}</span></div><h2 className="mt-4 font-display text-lg font-bold text-ink">{plan.title}</h2><div className="mt-5 grid grid-cols-3 gap-2 border-y border-slate-100 py-4 text-center"><div><p className="font-mono text-lg font-bold text-ink">¥{plan.extraCost}</p><p className="text-[10px] text-ink-soft">额外成本</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.extraDelayMinutes}m</p><p className="text-[10px] text-ink-soft">额外延误</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.changedNodeCount}</p><p className="text-[10px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{plan.summary}</p><p className="mt-5 text-sm font-semibold text-sky">查看变更清单 →</p></button>)}</div><Card className="mt-6 p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">当前所选方案</p><h2 className="mt-2 font-display text-xl font-bold">{selected.title}</h2></div><Badge tone={selected.status === "ACCEPTED" ? "mint" : selected.status === "REJECTED" ? "coral" : "sky"}>{PLAN_STRATEGY_LABEL[selected.strategy] ?? selected.strategy}</Badge></div><div className="mt-5 grid grid-cols-3 gap-3"><div className="rounded-card bg-coral/5 p-3 text-center"><p className="font-mono text-lg font-bold text-coral-deep">¥{selected.extraCost}</p><p className="mt-1 text-[11px] text-ink-soft">额外成本</p></div><div className="rounded-card bg-sun/10 p-3 text-center"><p className="font-mono text-lg font-bold text-amber-700">{selected.extraDelayMinutes} 分钟</p><p className="mt-1 text-[11px] text-ink-soft">额外延误</p></div><div className="rounded-card bg-sky/5 p-3 text-center"><p className="font-mono text-lg font-bold text-blue-700">{selected.changedNodeCount} 处</p><p className="mt-1 text-[11px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{selected.summary}</p><div className="mt-5 space-y-4">{selected.changes.length === 0 ? <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">该方案无需改动任何节点，可直接沿用原计划。</p> : selected.changes.map((change) => <div key={change.key} className="rounded-card border border-slate-100 bg-white p-4"><div className="flex flex-wrap items-center gap-2"><Badge tone={change.type === "REMOVE" ? "coral" : change.type === "REPLACE" ? "sky" : "sun"}>{CHANGE_TYPE_LABEL[change.type] ?? change.type}</Badge><span className="text-xs text-ink-soft">{change.note}</span></div><div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2"><div className="rounded-xl bg-paper p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">原安排</p><p className="mt-1 text-sm font-semibold text-ink line-through decoration-coral/50">{change.fromPlace}</p><p className="mt-1 text-xs text-ink-soft">{fmtRange(change.fromStart, change.fromEnd)}</p>{change.fromCost !== undefined && <p className="text-xs text-ink-soft">费用 ¥{change.fromCost}</p>}</div><div className="grid place-items-center px-1 text-coral"><ArrowRight size={20} /></div>{change.type === "REMOVE" ? <div className="grid place-items-center rounded-xl bg-coral/5 p-3 text-center ring-1 ring-coral/20"><div><p className="text-sm font-bold text-coral-deep">移除该节点</p><p className="mt-1 text-xs text-ink-soft">该事件无法安全避让</p></div></div> : <div className="rounded-xl bg-mint/10 p-3 ring-1 ring-mint/30"><p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">调整为</p><p className="mt-1 text-sm font-bold text-emerald-800">{change.toPlace ?? change.fromPlace}</p><p className="mt-1 text-xs text-emerald-700">{fmtRange(change.toStart, change.toEnd)}</p>{change.toCost !== undefined && <p className="text-xs text-emerald-700">费用 ¥{change.toCost}{change.fromCost !== undefined && <span className="ml-1 font-semibold">（{Number(change.toCost) - Number(change.fromCost) >= 0 ? "+" : ""}{Number(change.toCost) - Number(change.fromCost)}）</span>}</p>}</div>}</div></div>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button disabled={!selected || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{selected?.status === "VOTING" ? "投票进行中" : "选择并发起投票"}</Button><Link to={`/votes?trip=${tripId}`}><Button variant="ghost">去投票中心</Button></Link></div></Card>{toast}</>;
+  return <><PageHeader eyebrow="应变方案" title="替代方案" description="不同的取舍，没有绝对正确的答案。把成本、时间和改变程度放在一起比较。" action={<div className="flex gap-2"><Button variant="ghost" disabled={tripId === undefined || regenerate.isPending} onClick={() => regenerate.mutate()}>{regenerate.isPending ? "生成中…" : "重新生成"}</Button><Button disabled={!canVote || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{startVoting.isPending ? "发起中…" : selected?.status === "VOTING" ? "投票进行中" : "发起投票"}</Button></div>} /><TripSwitcher scope={scope} />{acceptedPlan && <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 border-mint/40 bg-mint/10 p-5"><div><p className="eyebrow text-emerald-700">本轮结果</p><h2 className="mt-2 font-display text-lg font-bold text-ink">已采纳：{acceptedPlan.title}</h2><p className="mt-1 text-sm text-ink-soft">行程已按该方案更新，其余候选已失效。要恢复原安排请去变更记录回退。</p></div><Link to={`/trips/${tripId}/changelog`}><Button variant="ghost">查看变更记录</Button></Link></Card>}{selectablePlans.length === 0 && !acceptedPlan && <EmptyState title="本轮没有待决策的方案" message="行程受到新事件影响后，点“重新生成”就会出现新的可比较选项。" />}<div className="grid gap-5 xl:grid-cols-3">{selectablePlans.map((plan) => <button key={plan.id} onClick={() => setSelectedId(plan.id)} className={`card p-5 text-left transition hover:-translate-y-1 ${selected.id === plan.id ? "border-coral ring-2 ring-coral/20" : ""}`}><div className="flex items-center justify-between"><Badge tone={plan.status === "VOTING" ? "coral" : plan.status === "ACCEPTED" ? "mint" : plan.status === "REJECTED" ? "coral" : "neutral"}>{PLAN_STATUS_LABEL[plan.status] ?? plan.status}</Badge><span className="rounded-full bg-sky/10 px-2 py-0.5 text-xs font-semibold text-blue-700">{PLAN_STRATEGY_LABEL[plan.strategy] ?? plan.strategy}</span></div><h2 className="mt-4 font-display text-lg font-bold text-ink">{plan.title}</h2><div className="mt-5 grid grid-cols-3 gap-2 border-y border-slate-100 py-4 text-center"><div><p className="font-mono text-lg font-bold text-ink">¥{plan.extraCost}</p><p className="text-[10px] text-ink-soft">额外成本</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.extraDelayMinutes}m</p><p className="text-[10px] text-ink-soft">额外延误</p></div><div><p className="font-mono text-lg font-bold text-ink">{plan.changedNodeCount}</p><p className="text-[10px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{plan.summary}</p><p className="mt-5 text-sm font-semibold text-sky">查看变更清单 →</p></button>)}</div><Card className="mt-6 p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="eyebrow">当前所选方案</p><h2 className="mt-2 font-display text-xl font-bold">{selected.title}</h2></div><Badge tone={selected.status === "ACCEPTED" ? "mint" : selected.status === "REJECTED" ? "coral" : "sky"}>{PLAN_STRATEGY_LABEL[selected.strategy] ?? selected.strategy}</Badge></div><div className="mt-5 grid grid-cols-3 gap-3"><div className="rounded-card bg-coral/5 p-3 text-center"><p className="font-mono text-lg font-bold text-coral-deep">¥{selected.extraCost}</p><p className="mt-1 text-[11px] text-ink-soft">额外成本</p></div><div className="rounded-card bg-sun/10 p-3 text-center"><p className="font-mono text-lg font-bold text-amber-700">{selected.extraDelayMinutes} 分钟</p><p className="mt-1 text-[11px] text-ink-soft">额外延误</p></div><div className="rounded-card bg-sky/5 p-3 text-center"><p className="font-mono text-lg font-bold text-blue-700">{selected.changedNodeCount} 处</p><p className="mt-1 text-[11px] text-ink-soft">节点变更</p></div></div><p className="mt-4 text-sm leading-6 text-ink-soft">{selected.summary}</p><div className="mt-5 space-y-4">{selected.changes.length === 0 ? <p className="rounded-xl bg-paper p-4 text-sm text-ink-soft">该方案无需改动任何节点，可直接沿用原计划。</p> : selected.changes.map((change) => <div key={change.key} className="rounded-card border border-slate-100 bg-white p-4"><div className="flex flex-wrap items-center gap-2"><Badge tone={change.type === "REMOVE" ? "coral" : change.type === "REPLACE" ? "sky" : "sun"}>{CHANGE_TYPE_LABEL[change.type] ?? change.type}</Badge><span className="text-xs text-ink-soft">{change.note}</span></div><div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-stretch gap-2"><div className="rounded-xl bg-paper p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">原安排</p><p className="mt-1 text-sm font-semibold text-ink line-through decoration-coral/50">{change.fromPlace}</p><p className="mt-1 text-xs text-ink-soft">{fmtRange(change.fromStart, change.fromEnd)}</p>{change.fromCost !== undefined && <p className="text-xs text-ink-soft">费用 ¥{change.fromCost}</p>}</div><div className="grid place-items-center px-1 text-coral"><ArrowRight size={20} /></div>{change.type === "REMOVE" ? <div className="grid place-items-center rounded-xl bg-coral/5 p-3 text-center ring-1 ring-coral/20"><div><p className="text-sm font-bold text-coral-deep">移除该节点</p><p className="mt-1 text-xs text-ink-soft">该事件无法安全避让</p></div></div> : <div className="rounded-xl bg-mint/10 p-3 ring-1 ring-mint/30"><p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">调整为</p><p className="mt-1 text-sm font-bold text-emerald-800">{change.toPlace ?? change.fromPlace}</p><p className="mt-1 text-xs text-emerald-700">{fmtRange(change.toStart, change.toEnd)}</p>{change.toCost !== undefined && <p className="text-xs text-emerald-700">费用 ¥{change.toCost}{change.fromCost !== undefined && <span className="ml-1 font-semibold">（{Number(change.toCost) - Number(change.fromCost) >= 0 ? "+" : ""}{Number(change.toCost) - Number(change.fromCost)}）</span>}</p>}</div>}</div></div>)}</div><div className="mt-5 flex flex-wrap gap-3"><Button disabled={!canVote || startVoting.isPending} onClick={() => selected && startVoting.mutate(selected.id)}>{selected?.status === "VOTING" ? "投票进行中" : selected?.status === "ACCEPTED" ? "已采纳" : "选择并发起投票"}</Button><Link to={`/votes?trip=${tripId}`}><Button variant="ghost">去投票中心</Button></Link></div></Card>{archivedPlans.length > 0 && <Card className="mt-5 p-6"><button type="button" onClick={() => setHistoryOpen((open) => !open)} aria-expanded={historyOpen} className="flex w-full items-center justify-between text-left"><div><p className="eyebrow">EARLIER ROUNDS</p><h2 className="mt-2 font-display text-lg font-bold text-ink">历史方案 {archivedPlans.length} 个</h2><p className="mt-1 text-sm text-ink-soft">往轮已失效的候选，只供回溯，不能再发起投票。</p></div><ChevronDown size={18} className={`text-ink-soft transition-transform ${historyOpen ? "rotate-180" : ""}`} /></button>{historyOpen && <div className="mt-5 divide-y divide-slate-100">{archivedPlans.map((plan) => <div key={plan.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0"><div><p className="text-sm font-semibold text-ink">{plan.title ?? "未命名方案"}</p><p className="mt-1 text-xs text-ink-soft">{PLAN_STRATEGY_LABEL[plan.strategy ?? ""] ?? plan.strategy} · 额外成本 ¥{plan.extraCost ?? 0} · 变更 {plan.changedNodeCount ?? 0} 个节点{plan.createdAt ? ` · ${fmtDateTime(plan.createdAt)}` : ""}</p></div><Badge tone={plan.status === "ACCEPTED" ? "mint" : "neutral"}>{PLAN_STATUS_LABEL[plan.status ?? ""] ?? plan.status}</Badge></div>)}</div>}</Card>}{toast}</>;
 }
 
 export function VotesPage() {
@@ -1101,6 +1177,9 @@ export function VotesPage() {
       void queryClient.invalidateQueries({ queryKey: ["plan-votes", votingPlan?.id] });
       void queryClient.invalidateQueries({ queryKey: ["changelogs", tripId] });
       void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["plan-history", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
       show("计票完成");
     },
     onError: (error) => show(error instanceof Error ? error.message : "计票失败"),
@@ -1113,10 +1192,13 @@ export function VotesPage() {
 }
 
 export function ChangelogPage() {
+  const { id } = useParams();
+  const routeTripId = Number(id);
+  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard, enabled: !(Number.isFinite(routeTripId) && routeTripId > 0) });
+  // 路由里带了行程就锁定它，直接进页面时退回当前进行中的行程。
+  const tripId = Number.isFinite(routeTripId) && routeTripId > 0 ? routeTripId : dashboardQuery.data?.activeTrip?.id;
   const queryClient = useQueryClient();
   const { toast, show } = useToast();
-  const dashboardQuery = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
-  const tripId = dashboardQuery.data?.activeTrip?.id;
   const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ["changelogs", tripId], queryFn: () => api.changelogs(tripId as number), enabled: tripId !== undefined });
   const revert = useMutation({
     mutationFn: (planId: number) => api.revertPlan(planId),
@@ -1125,18 +1207,75 @@ export function ChangelogPage() {
       void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       void queryClient.invalidateQueries({ queryKey: ["plans", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["plan-history", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["impacts", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
       show("已回退，行程已恢复到变更前");
     },
     onError: (err) => show(err instanceof Error ? err.message : "回退失败"),
   });
   if (dashboardQuery.isLoading || isLoading) return <LoadingState label="正在读取变更记录…" />;
-  if (dashboardQuery.isError || isError) return <ErrorState onRetry={() => { void dashboardQuery.refetch(); void refetch(); }} message={(dashboardQuery.error ?? error) instanceof Error ? (dashboardQuery.error ?? error)?.message : undefined} />;
-  if (!data || data.length === 0) return <EmptyState title="还没有变更记录" message="当替代方案被采纳后，相关变更会显示在这里。" />;
-  return <>{toast}<PageHeader eyebrow="TRIP HISTORY" title="变更记录" description="每一次应变都有迹可循，费用、截止时间和关联方案都在这里。已应用的变更可随时一键回退。" /><Card className="divide-y divide-slate-100 p-6">{data.map((log) => {
-    const reverted = (log.description ?? "").includes("已回退");
-    const canRevert = !reverted && log.relatedPlan?.status === "ACCEPTED";
-    return <div key={log.id} className="flex flex-wrap items-start justify-between gap-5 py-5 first:pt-0 last:pb-0"><div><div className="flex items-center gap-2"><Badge tone={reverted ? "neutral" : "mint"}>{reverted ? "已回退" : "已应用"}</Badge>{log.createdAt && <span className="font-mono text-xs text-ink-soft">{log.createdAt.replace("T", " ")}</span>}</div><h2 className="mt-3 font-semibold text-ink">{log.description ?? "未命名变更"}</h2><p className="mt-2 text-sm text-ink-soft">关联方案：{log.relatedPlan?.title ?? "暂无关联方案"}</p>{canRevert && <Button variant="ghost" className="mt-3 flex items-center gap-2 text-sm" disabled={revert.isPending && revert.variables === log.relatedPlan?.id} onClick={() => { if (log.relatedPlan?.id && window.confirm("确定回退此变更吗？行程将恢复到该方案应用前的状态。")) revert.mutate(Number(log.relatedPlan.id)); }}><RotateCcw size={15} />{revert.isPending && revert.variables === log.relatedPlan?.id ? "回退中…" : "回退此变更"}</Button>}</div><div className="text-right"><p className="font-mono text-lg font-bold text-coral">{log.extraCost !== undefined ? `+¥${log.extraCost}` : "费用待定"}</p>{log.refundDeadline && <p className="mt-1 text-xs text-ink-soft">退款截止 {log.refundDeadline.replace("T", " ")}</p>}</div></div>;
-  })}</Card></>;
+  if (isError) return <ErrorState onRetry={() => void refetch()} message={error instanceof Error ? error.message : undefined} />;
+  const logs = [...(data ?? [])].sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
+  // 已经被回退过的方案不再提供回退入口，比从描述文案里找"已回退"更可靠。
+  const revertedPlanIds = new Set(logs.filter((log) => isReverted(log)).map((log) => log.relatedPlan?.id));
+  return <>
+    {toast}
+    <PageHeader eyebrow="TRIP HISTORY" title="变更记录" description="每一次应变都有迹可循：改了哪些节点、多花了多少钱、什么时候还能反悔。" />
+    {logs.length === 0 ? <EmptyState title="还没有变更记录" message="当替代方案被采纳并应用到行程后，这里会记录每一次改动。" /> : (
+      <Card className="p-6">
+        <ol className="relative space-y-6 border-l border-dashed border-slate-200 pl-6">
+          {logs.map((log) => {
+            const reverted = isReverted(log);
+            const canRevert = !reverted && log.relatedPlan?.status === "ACCEPTED" && !revertedPlanIds.has(log.relatedPlan?.id);
+            const details = (log.details ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+            const reverting = revert.isPending && revert.variables === log.relatedPlan?.id;
+            return (
+              <li key={log.id} className="relative">
+                <span className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${reverted ? "bg-slate-300" : "bg-mint"}`} />
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={reverted ? "neutral" : "mint"}>{reverted ? "已回退" : "已应用"}</Badge>
+                      {log.createdAt && <span className="font-mono text-xs text-ink-soft">{fmtDateTime(log.createdAt)}</span>}
+                    </div>
+                    <h2 className="mt-3 font-semibold text-ink">{log.description ?? "未命名变更"}</h2>
+                    <p className="mt-1 text-sm text-ink-soft">关联方案：{log.relatedPlan?.title ?? "暂无关联方案"}</p>
+                    {details.length > 0 && (
+                      <ul className="mt-3 space-y-1.5">
+                        {details.map((line) => (
+                          <li key={line} className="rounded-xl bg-paper px-3 py-2 text-sm text-ink">{line}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {canRevert && (
+                      <Button
+                        variant="ghost"
+                        className="mt-3 flex items-center gap-2 text-sm"
+                        disabled={reverting}
+                        onClick={() => { if (log.relatedPlan?.id && window.confirm("确定回退此变更吗？行程将恢复到该方案应用前的状态。")) revert.mutate(Number(log.relatedPlan.id)); }}
+                      >
+                        <RotateCcw size={15} />{reverting ? "回退中…" : "回退此变更"}
+                      </Button>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`font-mono text-lg font-bold ${reverted ? "text-ink-soft" : "text-coral"}`}>{log.extraCost === undefined ? "费用待定" : reverted ? "已退回" : `+¥${log.extraCost}`}</p>
+                    {!reverted && log.refundDeadline && <p className="mt-1 text-xs text-ink-soft">退款截止 {fmtDateTime(log.refundDeadline)}</p>}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
+    )}
+  </>;
+}
+
+/** 新记录带 type 字段；历史数据只有描述文案，按旧口径兜底。 */
+function isReverted(log: { type?: string; description?: string }) {
+  return log.type ? log.type === "REVERTED" : (log.description ?? "").includes("已回退");
 }
 
 function relativeTime(iso: string): string {

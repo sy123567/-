@@ -36,6 +36,36 @@ public class AiClient {
     return key != null && !key.isBlank();
   }
 
+  /** 自由文本对话，用于智能助手；不可用或调用失败时返回 null，由调用方降级。 */
+  public String chatText(String systemPrompt, String userPrompt) {
+    if (!enabled()) return null;
+    try {
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.APPLICATION_JSON);
+      headers.setBearerAuth(key);
+      Map<String, Object> body =
+          Map.of(
+              "model",
+              model,
+              "messages",
+              List.of(
+                  Map.of("role", "system", "content", systemPrompt),
+                  Map.of("role", "user", "content", userPrompt)),
+              "temperature",
+              0.6);
+      String endpoint = host.replaceAll("/+$", "") + "/chat/completions";
+      JsonNode response =
+          http.postForObject(endpoint, new HttpEntity<>(body, headers), JsonNode.class);
+      String content =
+          response == null
+              ? ""
+              : response.path("choices").path(0).path("message").path("content").asText("");
+      return content.isBlank() ? null : content.trim();
+    } catch (Exception ignored) {
+      return null;
+    }
+  }
+
   public JsonNode chatJson(String systemPrompt, String userPrompt) {
     if (!enabled()) return null;
     try {

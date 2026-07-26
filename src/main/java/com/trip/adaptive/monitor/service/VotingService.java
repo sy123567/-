@@ -2,7 +2,9 @@ package com.trip.adaptive.monitor.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +14,7 @@ import com.trip.adaptive.domain.ChangeLog;
 import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.GroupMember;
 import com.trip.adaptive.domain.ItineraryNode;
+import com.trip.adaptive.domain.NodeChange;
 import com.trip.adaptive.domain.PlanVote;
 import com.trip.adaptive.domain.Trip;
 import com.trip.adaptive.exception.BusinessException;
@@ -24,6 +27,8 @@ import com.trip.adaptive.repository.TripRepository;
 
 @Service
 public class VotingService {
+  private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm");
+
   private final AlternativePlanRepository plans;
   private final GroupMemberRepository members;
   private final PlanVoteRepository votes;
@@ -55,9 +60,12 @@ public class VotingService {
   @Transactional
   public AlternativePlan start(Long id) {
     AlternativePlan p = get(id);
+    if (p.isArchived()) {
+      throw new BusinessException("该方案已被新一轮方案取代，无法再发起投票");
+    }
     // 同一行程同一时间只允许一个方案处于投票：选中方案置为 VOTING，其余保持/回退到 PROPOSED。
     plans
-        .findByTripId(p.getTrip().getId())
+        .findByTripIdAndArchivedFalse(p.getTrip().getId())
         .forEach(
             x -> {
               if (x.getId().equals(id)) x.setStatus(Enums.PlanStatus.VOTING);
@@ -125,15 +133,22 @@ public class VotingService {
                 }
               });
       routing.recompute(p.getTrip()); // 节点地点/坐标变化后重算受影响路段
-      plans.findByTripId(p.getTrip().getId()).stream()
+      // 同一轮的其余方案已失效：否决并归档，不再出现在可选方案里。
+      plans.findByTripIdAndArchivedFalse(p.getTrip().getId()).stream()
           .filter(x -> !x.getId().equals(id))
-          .forEach(x -> x.setStatus(Enums.PlanStatus.REJECTED));
+          .forEach(
+              x -> {
+                x.setStatus(Enums.PlanStatus.REJECTED);
+                x.setArchived(true);
+              });
       ChangeLog l = new ChangeLog();
       l.setTrip(p.getTrip());
       l.setRelatedPlan(p);
       l.setExtraCost(p.getExtraCost());
       l.setRefundDeadline(LocalDateTime.now().plusHours(24));
+      l.setType(Enums.ChangeLogType.APPLIED);
       l.setDescription("集体投票通过替代方案：" + p.getTitle());
+      l.setDetails(details(p));
       logs.save(l);
       trips.save(p.getTrip());
       // 变更应用后按新节点重新监测：清除旧影响数据，影响改为指向变更后的时间/节点。
@@ -176,7 +191,9 @@ public class VotingService {
     l.setTrip(p.getTrip());
     l.setRelatedPlan(p);
     l.setExtraCost(BigDecimal.ZERO);
+    l.setType(Enums.ChangeLogType.REVERTED);
     l.setDescription("已回退替代方案：" + p.getTitle() + "，行程已恢复到变更前");
+    l.setDetails(details(p));
     logs.save(l);
     trips.save(p.getTrip());
     // 节点恢复后同步重算监测，影响回到恢复后的节点状态。
@@ -187,5 +204,28 @@ public class VotingService {
 
   private AlternativePlan get(Long id) {
     return plans.findById(id).orElseThrow(() -> new ResourceNotFoundException("方案不存在"));
+  }
+
+  /** 把方案的节点变更写成逐行明细，供变更记录直接展示“哪个节点、怎么变”。 */
+  private String details(AlternativePlan p) {
+    return p.getProposedNodeChanges().stream()
+        .map(this::describe)
+        .filter(line -> !line.isBlank())
+        .collect(Collectors.joining("\n"));
+  }
+
+  private String describe(NodeChange c) {
+    ItineraryNode node = c.getOriginalNode();
+    String name = node == null ? "节点" : node.getName();
+    String from = c.getPrevPlaceName() == null ? "原地点" : c.getPrevPlaceName();
+    return switch (c.getChangeType()) {
+      case REPLACE -> String.format("%s：%s → %s（换地点）", name, from, c.getNewPlaceName());
+      case RESCHEDULE ->
+          String.format(
+              "%s：%s 时间顺延至 %s（改时间）",
+              name, from, c.getNewStart() == null ? "待定" : TIME.format(c.getNewStart()));
+      case REMOVE -> String.format("%s：%s（移除节点）", name, from);
+      case ADD -> String.format("%s：新增 %s", name, c.getNewPlaceName());
+    };
   }
 }

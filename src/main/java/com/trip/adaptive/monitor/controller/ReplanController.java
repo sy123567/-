@@ -29,6 +29,11 @@ public class ReplanController {
     return s.list(id);
   }
 
+  @GetMapping("/trips/{id}/plans/history")
+  public List<?> history(@PathVariable Long id) {
+    return s.history(id);
+  }
+
   @GetMapping("/plans/{id}")
   public Object get(@PathVariable Long id) {
     return s.get(id);

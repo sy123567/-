@@ -2,7 +2,9 @@ package com.trip.adaptive.monitor.service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,7 @@ public class ImpactMatchingService {
   @Transactional
   public List<ImpactAssessment> assessTrip(Long id) {
     Trip t = trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在"));
+    purgeStaleMonitorEvents(t);
     assessments.deleteAll(assessments.findByTripId(id));
     for (ItineraryNode n : t.getItineraryNodes()) {
       if (n.getStatus() == Enums.NodeStatus.AFFECTED) {
@@ -71,6 +74,31 @@ public class ImpactMatchingService {
       }
     }
     return out;
+  }
+
+  /**
+   * 清理不再属于任何当前节点的监测事件。
+   *
+   * <p>天气/城市事件是按节点地点名拉取并落库的；节点被替代或移除后，旧地点的事件仍会留在库里，
+   * 使得事件监测继续展示“原节点的天气”，甚至因半径重叠再次命中新节点，表现为“换地方后又出现旧的监测原因”。
+   */
+  private void purgeStaleMonitorEvents(Trip t) {
+    Set<String> activePlaces = new HashSet<>();
+    for (ItineraryNode n : t.getItineraryNodes()) {
+      if (n.getStatus() == Enums.NodeStatus.CANCELLED) continue;
+      if (n.getPlaceName() != null) activePlaces.add(n.getPlaceName());
+    }
+    for (ExternalEvent e : events.findByTripId(t.getId())) {
+      if (!isMonitorGenerated(e.getSource())) continue;
+      if (e.getPlaceName() != null && activePlaces.contains(e.getPlaceName())) continue;
+      assessments.deleteByEvent_Id(e.getId());
+      events.delete(e);
+    }
+  }
+
+  private boolean isMonitorGenerated(String source) {
+    return source != null
+        && (source.startsWith("weathercn") || source.startsWith(CityEventProvider.SOURCE_PREFIX));
   }
 
   private boolean overlap(ExternalEvent e, ItineraryNode n) {

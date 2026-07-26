@@ -89,6 +89,18 @@ public class GroupController {
     return ResponseEntity.noContent().build();
   }
 
+  @PostMapping("/{id}/leave")
+  public ResponseEntity<Void> leave(Authentication authentication, @PathVariable Long id) {
+    s.leave(id, currentUser(authentication));
+    return ResponseEntity.noContent().build();
+  }
+
+  @DeleteMapping("/{id}")
+  public ResponseEntity<Void> disband(Authentication authentication, @PathVariable Long id) {
+    s.disband(id, currentUser(authentication));
+    return ResponseEntity.noContent().build();
+  }
+
   @PutMapping("/{id}/transfer")
   public TravelGroup transfer(
       Authentication authentication, @PathVariable Long id, @RequestParam Long newOwnerId) {

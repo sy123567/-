@@ -12,6 +12,8 @@ public interface ExternalEventRepository extends JpaRepository<ExternalEvent, Lo
 
   List<ExternalEvent> findByTripIdAndEndTimeAfter(Long tripId, LocalDateTime time);
 
+  List<ExternalEvent> findByTripId(Long tripId);
+
   boolean existsBySourceAndPlaceNameAndStartTimeAndTripId(
       String source, String placeName, java.time.LocalDateTime startTime, Long tripId);
 

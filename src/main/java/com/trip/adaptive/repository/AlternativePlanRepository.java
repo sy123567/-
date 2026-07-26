@@ -11,4 +11,8 @@ public interface AlternativePlanRepository extends JpaRepository<AlternativePlan
   List<AlternativePlan> findByTripId(Long tripId);
 
   List<AlternativePlan> findByTripIdAndStatus(Long tripId, Enums.PlanStatus status);
+
+  List<AlternativePlan> findByTripIdAndArchivedFalse(Long tripId);
+
+  List<AlternativePlan> findByTripIdAndArchivedFalseAndStatus(Long tripId, Enums.PlanStatus status);
 }

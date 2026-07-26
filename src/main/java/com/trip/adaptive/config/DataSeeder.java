@@ -46,6 +46,10 @@ public class DataSeeder implements CommandLineRunner {
   @Value("${app.seed.enabled:true}")
   boolean enabled;
 
+  /** 管理员账号邮箱列表，仅这些账号能看到数据看板。 */
+  @Value("${app.admin-emails:admin@example.com}")
+  String adminEmails;
+
   public DataSeeder(
       UserRepository u,
       TravelGroupRepository g,
@@ -77,6 +81,7 @@ public class DataSeeder implements CommandLineRunner {
     User b = ensureUser("李四", "lisi@example.com", "13800000002");
     User wangwu = ensureUser("王五", "wangwu@example.com", "13800000005");
     ensureUser("赵六", "zhaoliu@example.com", "13800000006");
+    ensureAdmins();
 
     seedGuides(a);
 
@@ -888,6 +893,26 @@ public class DataSeeder implements CommandLineRunner {
     guide.setReviews(reviews);
     guide.setSaves(saves);
     guides.save(guide);
+  }
+
+  /** 保证配置中的管理员账号存在且带有管理员标记（已存在的账号只补上标记，不改密码）。 */
+  private void ensureAdmins() {
+    for (String email : adminEmails.split(",")) {
+      String normalized = email.trim();
+      if (normalized.isEmpty()) continue;
+      User admin =
+          users
+              .findByEmail(normalized)
+              .orElseGet(
+                  () ->
+                      users.save(
+                          new User(
+                              "平台管理员", normalized, passwordEncoder.encode("password123"), null)));
+      if (!admin.isAdmin()) {
+        admin.setAdmin(true);
+        users.save(admin);
+      }
+    }
   }
 
   private User ensureUser(String name, String email, String phone) {

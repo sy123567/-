@@ -5,13 +5,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.trip.adaptive.ai.AiClient;
+import com.trip.adaptive.ai.AssistantService;
+import com.trip.adaptive.ai.AssistantService.AssistantAnswer;
 import com.trip.adaptive.service.AiConstraintService;
 import com.trip.adaptive.service.AiConstraintService.ConstraintContext;
 
@@ -25,11 +33,21 @@ public class AiController {
 
   private final AiClient ai;
   private final AiConstraintService constraints;
+  private final AssistantService assistant;
 
-  public AiController(AiClient ai, AiConstraintService constraints) {
+  public AiController(AiClient ai, AiConstraintService constraints, AssistantService assistant) {
     this.ai = ai;
     this.constraints = constraints;
+    this.assistant = assistant;
   }
+
+  /** 首页智能体：旅行推荐、攻略社区检索与站内目录导航。 */
+  @PostMapping("/assistant")
+  public AssistantAnswer assistant(@Valid @RequestBody AssistantRequest request) {
+    return assistant.ask(request.question());
+  }
+
+  public record AssistantRequest(@NotBlank @Size(max = 500) String question) {}
 
   @GetMapping("/plan")
   public AiPlanResult plan(
