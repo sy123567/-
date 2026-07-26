@@ -497,10 +497,10 @@ export const api = {
   async group(id: number): Promise<TravelGroup> {
     return request<TravelGroup>(`/api/groups/${id}`);
   },
-  async createGroup(name: string, description?: string): Promise<TravelGroup> {
+  async createGroup(name: string, description?: string, memberIds?: number[]): Promise<TravelGroup> {
     return request<TravelGroup>("/api/groups", {
       method: "POST",
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, description, memberIds }),
     });
   },
   async joinGroup(roomCode: string): Promise<TravelGroup> {

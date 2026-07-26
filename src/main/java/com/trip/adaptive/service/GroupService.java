@@ -13,6 +13,7 @@ import com.trip.adaptive.domain.TravelGroup;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.exception.BusinessException;
 import com.trip.adaptive.exception.ResourceNotFoundException;
+import com.trip.adaptive.repository.FriendshipRepository;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.MemberConstraintRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
@@ -24,6 +25,7 @@ public class GroupService {
   private final UserRepository users;
   private final GroupMemberRepository members;
   private final MemberConstraintRepository constraints;
+  private final FriendshipRepository friendships;
   private static final String ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   private static final SecureRandom ROOM_CODE_RANDOM = new SecureRandom();
 
@@ -31,21 +33,51 @@ public class GroupService {
       TravelGroupRepository g,
       UserRepository u,
       GroupMemberRepository m,
-      MemberConstraintRepository c) {
+      MemberConstraintRepository c,
+      FriendshipRepository f) {
     groups = g;
     users = u;
     members = m;
     constraints = c;
+    friendships = f;
   }
 
   @Transactional
   public TravelGroup create(String name, String description, User owner) {
+    return create(name, description, owner, null);
+  }
+
+  /** 创建小组，并把所选好友一并拉入群。仅与群主为好友关系的用户会被加入。 */
+  @Transactional
+  public TravelGroup create(String name, String description, User owner, List<Long> memberIds) {
     TravelGroup g = new TravelGroup(name, description, owner);
     g.setRoomCode(newRoomCode());
     g = groups.save(g);
-    GroupMember m = new GroupMember(g, owner, Enums.MemberRole.OWNER);
-    members.save(m);
+    members.save(new GroupMember(g, owner, Enums.MemberRole.OWNER));
+    if (memberIds != null) {
+      for (Long uid : memberIds.stream().filter(id -> id != null).distinct().toList()) {
+        if (uid.equals(owner.getId())) {
+          continue;
+        }
+        if (!isFriend(owner.getId(), uid)) {
+          throw new BusinessException("只能拉自己的好友进群");
+        }
+        User friend = users.findById(uid).orElseThrow(() -> new ResourceNotFoundException("用户不存在"));
+        members.save(new GroupMember(g, friend, Enums.MemberRole.MEMBER));
+      }
+    }
     return g;
+  }
+
+  private boolean isFriend(Long a, Long b) {
+    return friendships
+            .findByRequesterIdAndAddresseeId(a, b)
+            .filter(f -> f.getStatus() == Enums.FriendshipStatus.ACCEPTED)
+            .isPresent()
+        || friendships
+            .findByRequesterIdAndAddresseeId(b, a)
+            .filter(f -> f.getStatus() == Enums.FriendshipStatus.ACCEPTED)
+            .isPresent();
   }
 
   @Transactional
