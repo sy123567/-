@@ -26,15 +26,17 @@ import com.trip.adaptive.monitor.service.ReplacementCandidateService;
 import com.trip.adaptive.monitor.service.ReplacementCandidateService.Candidate;
 import com.trip.adaptive.monitor.service.ReplacementCandidateService.ReplanConstraints;
 import com.trip.adaptive.monitor.service.WeatherClient;
+import com.trip.adaptive.repository.ItineraryNodeRepository;
 
 class ReplacementCandidateServiceTest {
 
   private final AiClient ai = mock(AiClient.class);
   private final BaiduMapClient maps = mock(BaiduMapClient.class);
   private final WeatherClient weather = mock(WeatherClient.class);
+  private final ItineraryNodeRepository nodes = mock(ItineraryNodeRepository.class);
 
   private ReplacementCandidateService service() {
-    ReplacementCandidateService s = new ReplacementCandidateService(ai, maps, weather);
+    ReplacementCandidateService s = new ReplacementCandidateService(ai, maps, weather, nodes);
     ReflectionTestUtils.setField(s, "searchRadiusMeters", 8000);
     ReflectionTestUtils.setField(s, "maxCandidates", 6);
     return s;
@@ -82,6 +84,36 @@ class ReplacementCandidateServiceTest {
 
     assertTrue(result.isPresent());
     assertEquals("室内馆", result.get().name());
+  }
+
+  @Test
+  void listsEveryValidatedCandidateWithDisplayDetails() {
+    when(ai.enabled()).thenReturn(false);
+    when(maps.enabled()).thenReturn(true);
+    when(maps.searchNearby(anyString(), anyDouble(), anyDouble(), anyInt()))
+        .thenReturn(
+            List.of(
+                place("雨中馆", 31.21, 121.41),
+                place("城市博物馆", 31.205, 121.405),
+                place("滨江展览馆", 31.207, 121.407)));
+    when(weather.summary(anyDouble(), anyDouble())).thenReturn(weather(false, false));
+    when(weather.summary(eq(31.21), eq(121.41))).thenReturn(weather(false, true)); // 降水 -> 淘汰
+
+    List<Candidate> result =
+        service()
+            .findSafeReplacements(
+                node(),
+                node().getPlannedStart(),
+                node().getPlannedEnd(),
+                ReplanConstraints.none(),
+                List.of(),
+                true,
+                5);
+
+    assertEquals(List.of("城市博物馆", "滨江展览馆"), result.stream().map(Candidate::name).toList());
+    assertTrue(result.get(0).indoor());
+    assertTrue(result.get(0).highlights().contains("室内可避雨"));
+    assertTrue(result.get(0).distanceKm() >= 0);
   }
 
   @Test

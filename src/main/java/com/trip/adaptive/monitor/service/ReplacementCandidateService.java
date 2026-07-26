@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +16,7 @@ import com.trip.adaptive.ai.AiClient;
 import com.trip.adaptive.domain.Enums;
 import com.trip.adaptive.domain.ExternalEvent;
 import com.trip.adaptive.domain.ItineraryNode;
+import com.trip.adaptive.repository.ItineraryNodeRepository;
 
 /**
  * 为受影响节点寻找可替代地点。分工： - AI（{@link AiClient}）只负责“提名”候选地点的名字与理由； - 百度地图（{@link
@@ -24,9 +27,13 @@ import com.trip.adaptive.domain.ItineraryNode;
  */
 @Service
 public class ReplacementCandidateService {
+  private static final List<String> INDOOR_KEYWORDS =
+      List.of("博物馆", "美术馆", "展览", "商场", "水族馆", "科技馆", "图书馆", "剧院", "购物", "室内", "温泉", "书店");
+
   private final AiClient ai;
   private final BaiduMapClient maps;
   private final WeatherClient weather;
+  private final ItineraryNodeRepository nodes;
 
   @Value("${replan.candidate-search-radius-meters:8000}")
   private int searchRadiusMeters;
@@ -34,10 +41,12 @@ public class ReplacementCandidateService {
   @Value("${replan.candidate-max-count:6}")
   private int maxCandidates;
 
-  public ReplacementCandidateService(AiClient ai, BaiduMapClient maps, WeatherClient weather) {
+  public ReplacementCandidateService(
+      AiClient ai, BaiduMapClient maps, WeatherClient weather, ItineraryNodeRepository nodes) {
     this.ai = ai;
     this.maps = maps;
     this.weather = weather;
+    this.nodes = nodes;
   }
 
   /**
@@ -52,7 +61,24 @@ public class ReplacementCandidateService {
       ReplanConstraints constraints,
       List<ExternalEvent> activeEvents,
       boolean rainy) {
-    if (node.getLatitude() == null || node.getLongitude() == null) return Optional.empty();
+    return findSafeReplacements(node, start, end, constraints, activeEvents, rainy, 1).stream()
+        .findFirst();
+  }
+
+  /**
+   * 列出该节点全部通过校验的替代地点，供成员自行挑选（方案生成只取第一个作为默认建议）。
+   *
+   * <p>校验顺序与单选一致：预算 → 可达半径 → 饮食 → 天气 → 事件，任何一项不通过都不会出现在候选里。
+   */
+  public List<Candidate> findSafeReplacements(
+      ItineraryNode node,
+      LocalDateTime start,
+      LocalDateTime end,
+      ReplanConstraints constraints,
+      List<ExternalEvent> activeEvents,
+      boolean rainy,
+      int limit) {
+    if (node.getLatitude() == null || node.getLongitude() == null) return List.of();
     double lat = node.getLatitude();
     double lng = node.getLongitude();
     String query = queryFor(node.getNodeType(), rainy);
@@ -60,16 +86,99 @@ public class ReplacementCandidateService {
     List<Candidate> candidates = new ArrayList<>();
     candidates.addAll(aiCandidates(node, query, constraints)); // AI 提名 → 百度落坐标
     candidates.addAll(nearbyCandidates(node, query, lat, lng)); // 百度就近搜索兜底
+    candidates.addAll(communityCandidates(node, reachKm)); // 其他队伍走过的同类地点
+    List<Candidate> out = new ArrayList<>();
     for (Candidate candidate : candidates) {
+      if (out.size() >= limit) break;
       if (isSamePlace(node, candidate)) continue;
+      if (out.stream().anyMatch(kept -> isDuplicate(kept, candidate))) continue;
       if (!withinBudget(candidate, constraints)) continue;
       if (!withinReach(node, candidate, reachKm)) continue; // 体力约束：不超出可达半径
       if (!dietOk(node, candidate, constraints)) continue; // 饮食约束：排除冲突餐饮
       if (!weatherSafe(candidate)) continue; // 天气闭环校验
       if (hitByEvent(candidate, start, end, activeEvents)) continue; // 事件闭环校验
-      return Optional.of(candidate);
+      out.add(describe(node, candidate, rainy));
     }
-    return Optional.empty();
+    return out;
+  }
+
+  /** 补齐候选的展示信息：与原地点的距离、室内与否、以及用于卡片的亮点标签。 */
+  private static Candidate describe(ItineraryNode node, Candidate candidate, boolean rainy) {
+    double distanceKm =
+        node.getLatitude() == null || node.getLongitude() == null
+            ? 0
+            : ImpactMatchingService.distance(
+                node.getLatitude(), node.getLongitude(), candidate.lat(), candidate.lng());
+    boolean indoor = isIndoor(candidate);
+    List<String> highlights = new ArrayList<>();
+    if (rainy && indoor) highlights.add("室内可避雨");
+    if (distanceKm <= 1.5) highlights.add("步行可达");
+    if (candidate.rating() != null && candidate.rating() >= 4.5) highlights.add("口碑很高");
+    if (candidate.cost() != null
+        && node.getCost() != null
+        && candidate.cost().compareTo(node.getCost()) < 0) {
+      highlights.add("比原计划便宜");
+    }
+    if (candidate.reviewCount() != null && candidate.reviewCount() >= 500) highlights.add("热门去处");
+    if ("community".equals(candidate.source())) highlights.add("其他队伍去过");
+    return candidate.with(Math.round(distanceKm * 10) / 10.0, indoor, highlights);
+  }
+
+  private static boolean isIndoor(Candidate candidate) {
+    String text =
+        (candidate.name() + " " + nullToEmpty(candidate.category())).toLowerCase(Locale.ROOT);
+    for (String keyword : INDOOR_KEYWORDS) {
+      if (text.contains(keyword)) return true;
+    }
+    return false;
+  }
+
+  private static boolean isDuplicate(Candidate kept, Candidate other) {
+    if (kept.name() != null && kept.name().equalsIgnoreCase(other.name())) return true;
+    return ImpactMatchingService.distance(kept.lat(), kept.lng(), other.lat(), other.lng()) < 0.05;
+  }
+
+  /** 兜底候选：其他行程在附近安排过的同类节点，让没有地图 Key 的环境也有真实可选项。 */
+  private List<Candidate> communityCandidates(ItineraryNode node, double reachKm) {
+    if (node.getNodeType() == null || node.getTrip() == null) return List.of();
+    double radius = reachKm == Double.MAX_VALUE ? 30 : reachKm;
+    return nodes.findByNodeType(node.getNodeType()).stream()
+        .filter(other -> other.getTrip() != null)
+        .filter(other -> !Objects.equals(other.getTrip().getId(), node.getTrip().getId()))
+        .filter(other -> other.getLatitude() != null && other.getLongitude() != null)
+        .filter(other -> other.getPlaceName() != null && !other.getPlaceName().isBlank())
+        .filter(
+            other ->
+                ImpactMatchingService.distance(
+                        node.getLatitude(), node.getLongitude(),
+                        other.getLatitude(), other.getLongitude())
+                    <= radius)
+        .limit(20)
+        .map(
+            other ->
+                Candidate.of(
+                    other.getPlaceName(),
+                    other.getLatitude(),
+                    other.getLongitude(),
+                    other.getCost() == null ? node.getCost() : other.getCost(),
+                    "community",
+                    "其他队伍在同一片区域安排过的" + typeLabel(other.getNodeType())))
+        .toList();
+  }
+
+  private static String typeLabel(Enums.NodeType type) {
+    if (type == null) return "地点";
+    return switch (type) {
+      case MEAL -> "用餐点";
+      case LODGING -> "住宿";
+      case ATTRACTION -> "景点";
+      case TRANSPORT -> "交通点";
+      default -> "地点";
+    };
+  }
+
+  private static String nullToEmpty(String value) {
+    return value == null ? "" : value;
   }
 
   /** 体力等级映射为替代地点的可达半径（公里）：体力越低越就近。 */
@@ -128,7 +237,7 @@ public class ReplacementCandidateService {
       if (resolved == null || resolved.lat() == null || resolved.lng() == null) continue;
       String reason = place.path("reason").asText("AI 推荐的替代地点");
       out.add(
-          new Candidate(
+          Candidate.of(
               resolved.name() == null ? name : resolved.name(),
               resolved.lat(),
               resolved.lng(),
@@ -149,7 +258,22 @@ public class ReplacementCandidateService {
       if (out.size() >= maxCandidates) break;
       if (place.lat() == null || place.lng() == null || place.name() == null) continue;
       BigDecimal cost = place.price() != null ? BigDecimal.valueOf(place.price()) : node.getCost();
-      out.add(new Candidate(place.name(), place.lat(), place.lng(), cost, "nearby", "就近可达的替代地点"));
+      out.add(
+          new Candidate(
+              place.name(),
+              place.lat(),
+              place.lng(),
+              cost,
+              "nearby",
+              "就近可达的替代地点",
+              place.address(),
+              place.tag(),
+              place.overallRating(),
+              place.commentNum(),
+              place.image(),
+              0,
+              false,
+              List.of()));
     }
     return out;
   }
@@ -251,7 +375,45 @@ public class ReplacementCandidateService {
     }
   }
 
-  /** 通过校验的替代地点候选。 */
+  /** 通过校验的替代地点候选，附带用于候选卡片的展示信息。 */
   public record Candidate(
-      String name, double lat, double lng, BigDecimal cost, String source, String reason) {}
+      String name,
+      double lat,
+      double lng,
+      BigDecimal cost,
+      String source,
+      String reason,
+      String address,
+      String category,
+      Double rating,
+      Integer reviewCount,
+      String image,
+      double distanceKm,
+      boolean indoor,
+      List<String> highlights) {
+
+    public static Candidate of(
+        String name, double lat, double lng, BigDecimal cost, String source, String reason) {
+      return new Candidate(
+          name, lat, lng, cost, source, reason, null, null, null, null, null, 0, false, List.of());
+    }
+
+    public Candidate with(double distanceKm, boolean indoor, List<String> highlights) {
+      return new Candidate(
+          name,
+          lat,
+          lng,
+          cost,
+          source,
+          reason,
+          address,
+          category,
+          rating,
+          reviewCount,
+          image,
+          distanceKm,
+          indoor,
+          highlights);
+    }
+  }
 }

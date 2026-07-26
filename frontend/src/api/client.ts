@@ -14,8 +14,10 @@ import type {
   ImpactAssessment,
   ItineraryNode,
   MemberConstraint,
+  NodeChange,
   NodeNote,
   NotificationItem,
+  PlanCandidate,
   PlanVote,
   TravelGuide,
   TravelGroup,
@@ -579,6 +581,15 @@ export const api = {
   },
   async disbandGroup(groupId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}`, { method: "DELETE" });
+  },
+  async planChangeCandidates(changeId: number): Promise<PlanCandidate[]> {
+    return request<PlanCandidate[]>(`/api/plan-changes/${changeId}/candidates`);
+  },
+  async choosePlanReplacement(changeId: number, candidate: PlanCandidate): Promise<NodeChange> {
+    return request<NodeChange>(`/api/plan-changes/${changeId}/replacement`, {
+      method: "PUT",
+      body: JSON.stringify({ name: candidate.name, lat: candidate.lat, lng: candidate.lng }),
+    });
   },
   async assistant(question: string): Promise<AssistantAnswer> {
     return request<AssistantAnswer>("/api/ai/assistant", {

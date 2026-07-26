@@ -22,6 +22,7 @@ import com.trip.adaptive.domain.ItineraryNode;
 import com.trip.adaptive.domain.MemberConstraint;
 import com.trip.adaptive.domain.NodeChange;
 import com.trip.adaptive.domain.Trip;
+import com.trip.adaptive.exception.BusinessException;
 import com.trip.adaptive.exception.ResourceNotFoundException;
 import com.trip.adaptive.monitor.service.ReplacementCandidateService.Candidate;
 import com.trip.adaptive.monitor.service.ReplacementCandidateService.ReplanConstraints;
@@ -52,6 +53,9 @@ public class ReplanningService {
 
   @Value("${weather.replan-buffer-minutes:30}")
   private int bufferMinutes;
+
+  @Value("${replan.selectable-candidate-count:8}")
+  private int maxSelectableCandidates;
 
   public ReplanningService(
       TripRepository t,
@@ -124,6 +128,88 @@ public class ReplanningService {
     }
     if (!out.isEmpty()) notifications.trip(id, "new-plans", out);
     return out;
+  }
+
+  /** 某个节点变更可选的全部替代地点：方案里给的只是默认建议，成员可以在候选里改选。 */
+  @Transactional(readOnly = true)
+  public List<Candidate> candidatesFor(Long changeId) {
+    NodeChange change =
+        changes.findById(changeId).orElseThrow(() -> new ResourceNotFoundException("节点变更不存在"));
+    ItineraryNode node = change.getOriginalNode();
+    if (node == null || node.getTrip() == null) return List.of();
+    Trip t = node.getTrip();
+    List<ExternalEvent> activeEvents =
+        events.findByTripIdAndEndTimeAfter(t.getId(), LocalDateTime.now());
+    boolean rainy =
+        hittingEvents(node, activeEvents).stream()
+            .anyMatch(e -> e.getEventType() == Enums.EventType.WEATHER);
+    return candidates.findSafeReplacements(
+        node,
+        node.getPlannedStart(),
+        node.getPlannedEnd(),
+        constraintsFor(t),
+        activeEvents,
+        rainy,
+        maxSelectableCandidates);
+  }
+
+  /**
+   * 成员为某个节点改选替代地点：只在方案还没进入投票时允许，改完后同步方案的成本/改动统计。
+   *
+   * @param selection 候选地点，必须来自 {@link #candidatesFor(Long)}（同名或 50 米内视为同一地点）
+   */
+  @Transactional
+  public NodeChange chooseReplacement(Long changeId, Candidate selection) {
+    NodeChange change =
+        changes.findById(changeId).orElseThrow(() -> new ResourceNotFoundException("节点变更不存在"));
+    AlternativePlan plan = change.getPlan();
+    if (plan.isArchived() || plan.getStatus() != Enums.PlanStatus.PROPOSED) {
+      throw new BusinessException("方案已进入投票或已归档，不能再更换替代地点");
+    }
+    ItineraryNode node = change.getOriginalNode();
+    Candidate verified =
+        candidatesFor(changeId).stream()
+            .filter(c -> matches(c, selection))
+            .findFirst()
+            .orElseThrow(() -> new BusinessException("该地点已不在通过校验的候选中，请刷新后重选"));
+
+    change.setChangeType(Enums.ChangeType.REPLACE);
+    change.setNewPlaceName(verified.name());
+    change.setNewLatitude(verified.lat());
+    change.setNewLongitude(verified.lng());
+    change.setNewStart(node.getPlannedStart());
+    change.setNewEnd(node.getPlannedEnd());
+    change.setNewCost(verified.cost());
+    change.setNote("成员选择的替代地点：" + verified.reason());
+    changes.save(change);
+    recomputeTotals(plan);
+    notifications.trip(node.getTrip().getId(), "plan-updated", plan);
+    return change;
+  }
+
+  private static boolean matches(Candidate candidate, Candidate selection) {
+    if (selection.name() != null && selection.name().equalsIgnoreCase(candidate.name()))
+      return true;
+    return ImpactMatchingService.distance(
+            candidate.lat(), candidate.lng(), selection.lat(), selection.lng())
+        < 0.05;
+  }
+
+  /** 改选后重新汇总方案的额外成本与改动节点数，保证卡片上的对比数字与实际变更一致。 */
+  private void recomputeTotals(AlternativePlan plan) {
+    BigDecimal extraCost = BigDecimal.ZERO;
+    int changedNodes = 0;
+    for (NodeChange change : changes.findByPlanId(plan.getId())) {
+      BigDecimal original =
+          change.getOriginalNode() == null
+              ? BigDecimal.ZERO
+              : nz(change.getOriginalNode().getCost());
+      extraCost = extraCost.add(nz(change.getNewCost()).subtract(original).max(BigDecimal.ZERO));
+      changedNodes++;
+    }
+    plan.setExtraCost(extraCost);
+    plan.setChangedNodeCount(changedNodes);
+    plans.save(plan);
   }
 
   /** 根据策略在候选动作里挑选：三种策略的排序偏好不同，产出差异化方案。 */

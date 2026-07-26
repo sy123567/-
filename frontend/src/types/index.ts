@@ -176,6 +176,24 @@ export interface ChangeLog {
   relatedPlan?: AlternativePlan;
 }
 
+/** 替代地点候选：已通过预算/体力/饮食/天气/事件校验，可由成员改选。 */
+export interface PlanCandidate {
+  name: string;
+  lat: number;
+  lng: number;
+  cost?: number;
+  source: "ai" | "nearby" | "community" | string;
+  reason: string;
+  address?: string;
+  category?: string;
+  rating?: number;
+  reviewCount?: number;
+  image?: string;
+  distanceKm: number;
+  indoor: boolean;
+  highlights: string[];
+}
+
 export interface AssistantGuideHint {
   id: Id;
   title: string;

@@ -57,7 +57,8 @@ Swagger UI：`http://localhost:8080/swagger-ui.html`
 - `POST /api/groups/{id}/leave`：成员主动退出小组，同时清理其成员约束与投票记录；群主需先转移群主或解散小组。
 - `DELETE /api/groups/{id}`：群主解散小组，连同小组下的全部行程、群聊会话与成员数据一并删除。
 
-### 首页智能体
+### 全局旅行助手
+- 入口是各页面右下角的悬浮图标（`AssistantDock`），任意页面都能唤起，`Esc` 关闭。
 - `POST /api/ai/assistant`，请求体 `{"question": "上海三天适合去哪玩？"}`。
 - 服务端先在攻略社区中按标题/城市/主题/标签/正文检索，再匹配站内功能目录，最后把检索结果作为上下文交给 DeepSeek 生成回答。
 - 未配置 `DEEPSEEK_API_KEY` 或调用失败时，退回本地攻略与目录导航答案，响应中的 `source` 字段标明 `ai` / `local` / `offline`。
@@ -67,6 +68,11 @@ Swagger UI：`http://localhost:8080/swagger-ui.html`
 - 重新生成方案时，上一轮的候选会被标记为归档（`AlternativePlan.archived`），未进入投票的 `PROPOSED` 方案直接删除，因此界面上只会出现当前这一轮的可选项。
 - 某个方案通过后，同轮其它方案会被置为 `REJECTED` 并归档；已归档方案不能再发起投票。
 - `GET /api/trips/{id}/plans` 只返回当前轮次，`GET /api/trips/{id}/plans/history` 返回历史轮次，供前端“历史方案”折叠区展示。
+
+### 可选择的替代地点
+- `GET /api/plan-changes/{changeId}/candidates`：列出该节点变更全部通过校验（预算 → 可达半径 → 饮食 → 天气 → 事件 → 去重）的替代地点，候选来源为 AI 提名、地图就近搜索与其他队伍走过的同类节点，并附带距离、评分、评论数、室内与否与亮点标签。
+- `PUT /api/plan-changes/{changeId}/replacement`：成员改选替代地点，请求体 `{"name": "...", "lat": 31.2, "lng": 121.4}`；服务端会重新跑一次校验（同名或 50 米内视为同一地点），只有方案仍是 `PROPOSED` 且未归档时才允许改选，改完会重算方案的额外成本与改动节点数。
+- 候选数量上限由 `replan.selectable-candidate-count`（默认 8）控制。
 
 ### 事件监测的自清理
 - 每次执行影响评估（`POST /api/trips/{id}/assess`）时，会先清除由监测器自动生成、但地点已不属于任何有效行程节点的事件（如换掉某个景点后残留的天气记录），再重算影响与风险。
