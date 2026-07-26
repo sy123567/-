@@ -176,6 +176,58 @@ export interface ChangeLog {
   relatedPlan?: AlternativePlan;
 }
 
+/** 替代地点候选：已通过预算/体力/饮食/天气/事件校验，可由成员改选。 */
+export interface PlanCandidate {
+  name: string;
+  lat: number;
+  lng: number;
+  cost?: number;
+  source: "ai" | "nearby" | "community" | string;
+  reason: string;
+  address?: string;
+  category?: string;
+  rating?: number;
+  reviewCount?: number;
+  image?: string;
+  distanceKm: number;
+  indoor: boolean;
+  highlights: string[];
+}
+
+export type NodeVoteChoice = "CANDIDATE" | "KEEP_PLAN" | "ABSTAIN";
+
+export interface NodeVoteOption {
+  key: string;
+  label: string;
+  lat?: number;
+  lng?: number;
+  count: number;
+  voters: string[];
+}
+
+export interface NodeVoteNote {
+  member: string;
+  choice: NodeVoteChoice;
+  option?: string;
+  comment?: string;
+  votedAt?: string;
+}
+
+/** 节点级投票的实时结果。 */
+export interface NodeVoteTally {
+  changeId: Id;
+  totalMembers: number;
+  castCount: number;
+  abstainCount: number;
+  quorumReached: boolean;
+  decided: boolean;
+  tie: boolean;
+  appliedOption?: string;
+  open: boolean;
+  options: NodeVoteOption[];
+  notes: NodeVoteNote[];
+}
+
 export interface AssistantGuideHint {
   id: Id;
   title: string;

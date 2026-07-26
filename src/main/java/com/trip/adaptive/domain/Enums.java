@@ -100,6 +100,13 @@ public final class Enums {
     ABSTAIN
   }
 
+  /** 节点级投票的表态：投给某个候选地点、维持方案原安排、弃权。 */
+  public enum NodeVoteChoice {
+    CANDIDATE,
+    KEEP_PLAN,
+    ABSTAIN
+  }
+
   public enum FriendshipStatus {
     PENDING,
     ACCEPTED,

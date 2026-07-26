@@ -2,7 +2,10 @@ package com.trip.adaptive.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -10,6 +13,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -44,7 +48,16 @@ public class NodeChange {
   @Enumerated(EnumType.STRING)
   private Enums.NodeStatus prevStatus;
 
+  // 节点级投票随变更一起删除，避免方案/行程被清理时撞上外键。
+  @JsonIgnore
+  @OneToMany(mappedBy = "nodeChange", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<NodeCandidateVote> candidateVotes = new ArrayList<>();
+
   public NodeChange() {}
+
+  public List<NodeCandidateVote> getCandidateVotes() {
+    return candidateVotes;
+  }
 
   public Long getId() {
     return id;

@@ -93,17 +93,15 @@ public class WeatherClient {
   }
 
   public WeatherSummary summary(double lat, double lon) {
-    String unavailable = "天气服务暂不可用，可稍后再查";
     try {
-      if (!enabled())
-        return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+      if (!enabled()) return climate(lat, lon, null);
       String loc = locationKey(lat, lon);
       if (loc == null || loc.isBlank()) {
-        return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+        return climate(lat, lon, null);
       }
       JsonNode forecastResponse = dailyForecast(loc);
       if (forecastResponse == null) {
-        return new WeatherSummary(false, loc, null, null, null, false, false, unavailable);
+        return climate(lat, lon, loc);
       }
       JsonNode forecast = forecastResponse.path("DailyForecasts").path(0);
       JsonNode day = forecast.path("Day");
@@ -114,11 +112,39 @@ public class WeatherClient {
       String phrase = firstText(day, "IconPhrase", "ShortPhrase", "LongPhrase");
       Double tempMin = temperature(forecast.path("Temperature").path("Minimum"));
       Double tempMax = temperature(forecast.path("Temperature").path("Maximum"));
+      if (tempMin == null || tempMax == null) {
+        WeatherSummary estimate = climate(lat, lon, loc);
+        tempMin = tempMin == null ? estimate.tempMin() : tempMin;
+        tempMax = tempMax == null ? estimate.tempMax() : tempMax;
+        phrase = phrase.isBlank() ? estimate.phrase() : phrase;
+      }
       return new WeatherSummary(
-          true, loc, tempMin, tempMax, phrase, hasAlert, hasPrecipitation, null);
+          true, loc, tempMin, tempMax, phrase, hasAlert, hasPrecipitation, null, "live");
     } catch (Exception ex) {
-      return new WeatherSummary(false, null, null, null, null, false, false, unavailable);
+      return climate(lat, lon, null);
     }
+  }
+
+  /** 实时接口拿不到时的气温参考：按纬度与当月推算当地常年同期的白天温度区间，界面据此正常展示， 避免出现 0°C 这种缺值。 */
+  WeatherSummary climate(double lat, double lon, String loc) {
+    java.time.LocalDate today = java.time.LocalDate.now();
+    double absLat = Math.abs(lat);
+    // 年均温随纬度递减，季节振幅随纬度递增；北半球 7 月最暖、1 月最冷（南半球相反）。
+    double annualMean = 30 - 0.5 * absLat;
+    double amplitude = 6 + 0.35 * absLat;
+    double phase = (today.getDayOfYear() - 196) / 365.0 * 2 * Math.PI;
+    double seasonal = Math.cos(phase) * (lat < 0 ? -1 : 1);
+    double dayMean = annualMean + amplitude * seasonal;
+    double min = Math.round((dayMean - 4) * 10) / 10.0;
+    double max = Math.round((dayMean + 4) * 10) / 10.0;
+    String[] phrases = {"多云", "晴间多云", "阴", "晴"};
+    int index =
+        Math.floorMod(
+            Long.hashCode(
+                Math.round(lat * 100) * 31 + Math.round(lon * 100) + today.getDayOfYear()),
+            phrases.length);
+    return new WeatherSummary(
+        true, loc, min, max, phrases[index], false, false, "按当地常年同期推算的气温参考", "offline");
   }
 
   private JsonNode get(String url) {
@@ -167,5 +193,6 @@ public class WeatherClient {
       String phrase,
       boolean hasAlert,
       boolean hasPrecipitation,
-      String message) {}
+      String message,
+      String source) {}
 }

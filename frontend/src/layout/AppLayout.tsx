@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, getToken, isAdmin } from "../auth";
 import { api } from "../api/client";
 import { useTripRealtime, type TripEvent } from "../api/realtime";
+import { AssistantDock } from "../components/AssistantDock";
 
 const groups = [
   { label: "社交", items: [{ label: "我的小组", to: "/groups", icon: Users }, { label: "好友与邀请", to: "/friends", icon: Users }, { label: "聊天", to: "/chat", icon: MessageSquare }] },
@@ -24,7 +25,7 @@ function WalletIcon() {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <div className="min-h-screen bg-paper"><RealtimeBridge /><Sidebar open={open} onClose={() => setOpen(false)} /><div className="lg:pl-[248px]"><TopBar onMenu={() => setOpen(true)} /><main className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10">{children}</main></div></div>;
+  return <div className="min-h-screen bg-paper"><RealtimeBridge /><Sidebar open={open} onClose={() => setOpen(false)} /><div className="lg:pl-[248px]"><TopBar onMenu={() => setOpen(true)} /><main className="mx-auto max-w-[1440px] px-5 py-7 md:px-8 lg:px-10">{children}</main></div><AssistantDock /></div>;
 }
 
 /**

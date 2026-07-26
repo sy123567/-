@@ -14,8 +14,12 @@ import type {
   ImpactAssessment,
   ItineraryNode,
   MemberConstraint,
+  NodeChange,
   NodeNote,
+  NodeVoteChoice,
+  NodeVoteTally,
   NotificationItem,
+  PlanCandidate,
   PlanVote,
   TravelGuide,
   TravelGroup,
@@ -579,6 +583,30 @@ export const api = {
   },
   async disbandGroup(groupId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}`, { method: "DELETE" });
+  },
+  async planChangeCandidates(changeId: number): Promise<PlanCandidate[]> {
+    return request<PlanCandidate[]>(`/api/plan-changes/${changeId}/candidates`);
+  },
+  async choosePlanReplacement(changeId: number, candidate: PlanCandidate): Promise<NodeChange> {
+    return request<NodeChange>(`/api/plan-changes/${changeId}/replacement`, {
+      method: "PUT",
+      body: JSON.stringify({ name: candidate.name, lat: candidate.lat, lng: candidate.lng }),
+    });
+  },
+  async nodeVotes(changeId: number): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes`);
+  },
+  async castNodeVote(
+    changeId: number,
+    body: { memberId: number; choice: NodeVoteChoice; placeName?: string; lat?: number; lng?: number; comment?: string },
+  ): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async tallyNodeVote(changeId: number): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes/tally`, { method: "POST" });
   },
   async assistant(question: string): Promise<AssistantAnswer> {
     return request<AssistantAnswer>("/api/ai/assistant", {

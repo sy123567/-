@@ -47,6 +47,10 @@ public class AlternativePlan {
   @Column(nullable = false)
   private boolean archived = false;
 
+  // 第几轮监测生成：同一次监测产出的方案共用一个轮次号，界面按轮次整批展示。
+  @Column(nullable = false)
+  private int roundNo = 1;
+
   @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<NodeChange> proposedNodeChanges = new ArrayList<>();
 
@@ -136,6 +140,14 @@ public class AlternativePlan {
 
   public void setArchived(boolean v) {
     archived = v;
+  }
+
+  public int getRoundNo() {
+    return roundNo;
+  }
+
+  public void setRoundNo(int v) {
+    roundNo = v;
   }
 
   public List<NodeChange> getProposedNodeChanges() {

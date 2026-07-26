@@ -19,6 +19,7 @@ import com.trip.adaptive.repository.ConversationRepository;
 import com.trip.adaptive.repository.FriendshipRepository;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.MemberConstraintRepository;
+import com.trip.adaptive.repository.NodeCandidateVoteRepository;
 import com.trip.adaptive.repository.PlanVoteRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
 import com.trip.adaptive.repository.TripRepository;
@@ -32,6 +33,7 @@ public class GroupService {
   private final MemberConstraintRepository constraints;
   private final FriendshipRepository friendships;
   private final PlanVoteRepository votes;
+  private final NodeCandidateVoteRepository nodeVotes;
   private final TripRepository trips;
   private final TripDeletionService tripDeletion;
   private final ConversationRepository conversations;
@@ -46,6 +48,7 @@ public class GroupService {
       MemberConstraintRepository c,
       FriendshipRepository f,
       PlanVoteRepository v,
+      NodeCandidateVoteRepository nv,
       TripRepository t,
       TripDeletionService tripDeletion,
       ConversationRepository conversations,
@@ -56,6 +59,7 @@ public class GroupService {
     constraints = c;
     friendships = f;
     votes = v;
+    nodeVotes = nv;
     trips = t;
     this.tripDeletion = tripDeletion;
     this.conversations = conversations;
@@ -191,6 +195,7 @@ public class GroupService {
             });
     for (GroupMember member : members.findByGroupId(groupId)) {
       votes.deleteAll(votes.findByMemberId(member.getId()));
+      nodeVotes.deleteAll(nodeVotes.findByMemberId(member.getId()));
       constraints.deleteByMemberId(member.getId());
     }
     groups.delete(group); // 成员由 TravelGroup 的级联关系一并删除
@@ -199,6 +204,7 @@ public class GroupService {
   /** 成员被投票记录引用，需先清理投票与个人约束再删除成员本身。 */
   private void deleteMember(GroupMember member) {
     votes.deleteAll(votes.findByMemberId(member.getId()));
+    nodeVotes.deleteAll(nodeVotes.findByMemberId(member.getId()));
     constraints.deleteByMemberId(member.getId());
     members.delete(member);
   }

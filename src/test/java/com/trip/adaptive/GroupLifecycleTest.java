@@ -22,6 +22,7 @@ import com.trip.adaptive.repository.ConversationRepository;
 import com.trip.adaptive.repository.FriendshipRepository;
 import com.trip.adaptive.repository.GroupMemberRepository;
 import com.trip.adaptive.repository.MemberConstraintRepository;
+import com.trip.adaptive.repository.NodeCandidateVoteRepository;
 import com.trip.adaptive.repository.PlanVoteRepository;
 import com.trip.adaptive.repository.TravelGroupRepository;
 import com.trip.adaptive.repository.TripRepository;
@@ -37,6 +38,7 @@ class GroupLifecycleTest {
   private final ConversationRepository conversations = mock(ConversationRepository.class);
   private final MemberConstraintRepository constraints = mock(MemberConstraintRepository.class);
   private final PlanVoteRepository votes = mock(PlanVoteRepository.class);
+  private final NodeCandidateVoteRepository nodeVotes = mock(NodeCandidateVoteRepository.class);
 
   private GroupService service() {
     return new GroupService(
@@ -46,6 +48,7 @@ class GroupLifecycleTest {
         constraints,
         mock(FriendshipRepository.class),
         votes,
+        nodeVotes,
         trips,
         tripDeletion,
         conversations,
