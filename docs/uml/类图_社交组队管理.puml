@@ -1,0 +1,97 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 社交组队管理 类图（祖建明）
+
+class GroupController <<Controller>> {
+  +create(GroupRequest): TravelGroup
+  +join(roomCode): TravelGroup
+  +members(groupId): List<GroupMember>
+  +setConstraint(memberId, MemberConstraint): MemberConstraint
+  +leave(groupId): void
+  +disband(groupId): void
+  +transferOwner(groupId, newOwnerId): TravelGroup
+}
+class FriendshipController <<Controller>>
+class ChatController <<Controller>>
+
+class GroupService <<Service>> {
+  +create(name, description, owner, memberIds): TravelGroup
+  +join(roomCode, currentUser): TravelGroup
+  +addMember(gid, uid): GroupMember
+  +setConstraint(memberId, c): MemberConstraint
+  +removeMember(groupId, memberId, operator): void
+  +leave(groupId, operator): void
+  +disband(groupId, operator): void
+  +transferOwner(groupId, newOwnerId, operator): TravelGroup
+}
+class FriendshipService <<Service>> {
+  +searchUsers(keyword): List<User>
+  +sendRequest(requesterId, addresseeId): Friendship
+  +acceptRequest(friendshipId, currentUserId): Friendship
+  +rejectRequest(friendshipId, currentUserId): Friendship
+  +getFriends(userId): List<User>
+}
+class ChatService <<Service>> {
+  +directConversation(me, otherUserId): Conversation
+  +groupConversation(groupId, me): Conversation
+  +messages(conversationId, me): List<MessageView>
+  +send(conversationId, me, content): MessageView
+}
+
+class TravelGroupRepository <<Repository>>
+class GroupMemberRepository <<Repository>>
+class MemberConstraintRepository <<Repository>>
+class FriendshipRepository <<Repository>>
+
+class TravelGroup <<Entity>> {
+  +id: Long
+  +name: String
+  +roomCode: String
+  +memberLimit: int
+  +owner: User
+}
+class GroupMember <<Entity>> {
+  +id: Long
+  +role: MemberRole
+  +status: String
+}
+class MemberConstraint <<Entity>> {
+  +availableFrom: LocalDate
+  +availableTo: LocalDate
+  +maxBudget: BigDecimal
+  +mustVisitPlaces: List<String>
+  +fitnessLevel: FitnessLevel
+  +dietaryRestrictions: List<String>
+}
+class Friendship <<Entity>> {
+  +id: Long
+  +status: FriendshipStatus
+}
+class Conversation <<Entity>>
+class ChatMessage <<Entity>>
+
+GroupController --> GroupService
+FriendshipController --> FriendshipService
+ChatController --> ChatService
+GroupService --> TravelGroupRepository
+GroupService --> GroupMemberRepository
+GroupService --> MemberConstraintRepository
+FriendshipService --> FriendshipRepository
+TravelGroupRepository ..> TravelGroup
+GroupMemberRepository ..> GroupMember
+MemberConstraintRepository ..> MemberConstraint
+FriendshipRepository ..> Friendship
+ChatService ..> Conversation
+Conversation "1" *-- "0..*" ChatMessage
+TravelGroup "1" o-- "1..*" GroupMember
+GroupMember "1" -- "0..1" MemberConstraint
+@enduml

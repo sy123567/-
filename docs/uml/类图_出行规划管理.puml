@@ -1,0 +1,107 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 出行规划管理 类图（祖建明）
+
+class PlanningController <<Controller>> {
+  +generate(groupId): PlanResult
+}
+class TripController <<Controller>> {
+  +list(): List<Trip>
+  +create(TripRequest): Trip
+  +nodes(tripId): List<ItineraryNode>
+  +addNode(tripId, NodeRequest): ItineraryNode
+  +updateNode(tripId, nodeId, NodeRequest): ItineraryNode
+  +deleteNode(tripId, nodeId): void
+  +delete(tripId): void
+}
+class MapController <<Controller>> {
+  +search(query, region): SearchResult
+  +hotels(lat, lng, radius): HotelRecommendations
+  +route(from, to, mode): RouteResult
+  -estimateRoute(from, to, mode): RouteSummary
+}
+class ExpenseController <<Controller>>
+
+class PlanningService <<Service>> {
+  +generateInitialPlan(gid): PlanResult
+}
+class TripService <<Service>> {
+  +get(id): Trip
+  +requireMember(id, user): Trip
+  +addNode(id, node): ItineraryNode
+  +updateNode(tripId, nodeId, payload): ItineraryNode
+  +notes(tripId, nodeId): List<NodeNote>
+  +delete(id, operator): void
+}
+class TripDeletionService <<Service>> {
+  +delete(Trip): void
+}
+class TripExpenseService <<Service>> {
+  +list(tripId): List<TripExpense>
+  +settle(tripId): Settlement
+}
+class AiConstraintService <<Service>> {
+  +forGroup(groupId): ConstraintContext
+  +promptText(context): String
+}
+
+class TripRepository <<Repository>>
+class ItineraryNodeRepository <<Repository>>
+class RouteRepository <<Repository>>
+class TripExpenseRepository <<Repository>>
+
+class Trip <<Entity>> {
+  +id: Long
+  +title: String
+  +status: TripStatus
+  +startDate: LocalDate
+  +endDate: LocalDate
+  +totalBudget: BigDecimal
+  +spentBudget: BigDecimal
+  +riskScore: int
+}
+class ItineraryNode <<Entity>> {
+  +id: Long
+  +name: String
+  +placeName: String
+  +nodeType: NodeType
+  +plannedStart: LocalDateTime
+  +plannedEnd: LocalDateTime
+  +latitude: Double
+  +longitude: Double
+  +status: NodeStatus
+}
+class Route <<Entity>> {
+  +transportMode: String
+  +distanceKm: double
+  +durationMinutes: int
+}
+class NodeNote <<Entity>>
+class TripExpense <<Entity>>
+
+PlanningController --> PlanningService
+TripController --> TripService
+ExpenseController --> TripExpenseService
+PlanningService --> TripRepository
+PlanningService --> AiConstraintService
+TripService --> TripRepository
+TripService --> ItineraryNodeRepository
+TripService --> TripDeletionService
+TripExpenseService --> TripExpenseRepository
+TripRepository ..> Trip
+ItineraryNodeRepository ..> ItineraryNode
+RouteRepository ..> Route
+TripExpenseRepository ..> TripExpense
+Trip "1" *-- "1..*" ItineraryNode
+Trip "1" *-- "0..*" Route
+ItineraryNode "1" -- "0..*" NodeNote
+@enduml

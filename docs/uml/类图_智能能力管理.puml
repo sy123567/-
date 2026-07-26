@@ -1,0 +1,81 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 智能能力管理 类图（宋研）
+
+class AiController <<Controller>> {
+  +assistant(AssistantRequest): AssistantAnswer
+  +plan(city, days, interests, groupId): AiPlanResult
+  -parsePlaces(JsonNode): List<AiPlace>
+  -fallback(city): AiPlanResult
+}
+class AssistantService <<Service>> {
+  +ask(question): AssistantAnswer
+  -matchGuides(question): List<GuideHint>
+  -matchNav(question): List<NavEntry>
+  -buildPrompt(matched, links): String
+  -offlineAnswer(matched, links): String
+}
+class AiClient <<Client>> {
+  +enabled(): boolean
+  +chatText(systemPrompt, userPrompt): String
+  +chatJson(systemPrompt, userPrompt): JsonNode
+}
+class AiConstraintService <<Service>> {
+  +forGroup(groupId): ConstraintContext
+  +promptText(context): String
+}
+class AssistantAnswer <<Record>> {
+  +answer: String
+  +source: String
+  +guides: List<GuideHint>
+  +navigations: List<NavHint>
+}
+class GuideHint <<Record>> {
+  +id: Long
+  +title: String
+  +city: String
+}
+class NavHint <<Record>> {
+  +label: String
+  +path: String
+  +description: String
+}
+class AiPlace <<Record>> {
+  +placeName: String
+  +category: String
+  +nodeType: String
+  +latitude: Double
+  +longitude: Double
+  +suggestedDurationMinutes: Integer
+}
+class TravelGuideRepository <<Repository>>
+class GroupMemberRepository <<Repository>>
+class PlanningService <<Service>> {
+  +generateInitialPlan(gid): PlanResult
+}
+class ReplacementCandidateService <<Service>> {
+  +findSafeReplacements(...): List<Candidate>
+}
+
+AiController --> AssistantService
+AiController --> AiClient
+AiController --> AiConstraintService
+AssistantService --> AiClient
+AssistantService --> TravelGuideRepository
+AiConstraintService --> GroupMemberRepository
+AssistantService ..> AssistantAnswer
+AssistantAnswer *-- GuideHint
+AssistantAnswer *-- NavHint
+AiController ..> AiPlace
+PlanningService ..> AiConstraintService : 候选进入统一规划链路
+ReplacementCandidateService ..> AiClient : 替代地点智能提名
+@enduml

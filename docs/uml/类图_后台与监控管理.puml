@@ -1,0 +1,70 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 后台与监控管理 类图（宋研）
+
+class AdminController <<Controller>> {
+  +stats(Authentication): Stats
+  -requireAdmin(Authentication): void
+}
+class AdminStatsService <<Service>> {
+  +stats(): Stats
+}
+class Stats <<Record>> {
+  +totalTrips: long
+  +budgetMedian: BigDecimal
+  +totalBudget: BigDecimal
+  +totalEvents: long
+  +hitEvents: long
+  +totalPlans: long
+  +acceptedPlans: long
+  +topPlaces: List<PlaceCount>
+  +budgetBuckets: List<BudgetBucket>
+}
+class PlaceCount <<Record>> {
+  +label: String
+  +count: long
+}
+class BudgetBucket <<Record>> {
+  +label: String
+  +count: long
+}
+class SecurityConfig <<Config>> {
+  +filterChain(HttpSecurity): SecurityFilterChain
+}
+class GlobalExceptionHandler <<Advice>> {
+  +handleBusiness(BusinessException): ResponseEntity
+  +handleForbidden(ForbiddenException): ResponseEntity
+  +handleNotFound(ResourceNotFoundException): ResponseEntity
+}
+class OpenApiConfig <<Config>>
+class WeatherPollingJob <<Job>> {
+  +run(): void
+}
+
+class TripRepository <<Repository>>
+class ItineraryNodeRepository <<Repository>>
+class ExternalEventRepository <<Repository>>
+class ImpactAssessmentRepository <<Repository>>
+class AlternativePlanRepository <<Repository>>
+
+AdminController --> AdminStatsService
+AdminController ..> SecurityConfig : 管理员邮箱白名单
+AdminStatsService --> TripRepository
+AdminStatsService --> ItineraryNodeRepository
+AdminStatsService --> ExternalEventRepository
+AdminStatsService --> ImpactAssessmentRepository
+AdminStatsService --> AlternativePlanRepository
+AdminStatsService ..> Stats
+Stats *-- PlaceCount
+Stats *-- BudgetBucket
+GlobalExceptionHandler ..> AdminController
+@enduml
