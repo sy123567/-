@@ -1,0 +1,31 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+autonumber
+title 智能能力管理（全局旅行助手）
+
+actor 成员 as user
+boundary "AssistantDock 悬浮入口" as web
+control "AiController" as controller
+control "AssistantService" as service
+database "TravelGuideRepository / MySQL" as mysql
+control "AiClient / DeepSeek" as llm
+
+user -> web : 右下角唤起助手并提问
+web -> controller : POST /api/ai/assistant {question}
+controller -> service : ask(question)
+service -> mysql : 按标题/城市/主题/标签/正文检索攻略
+mysql --> service : 命中攻略（打分取前三）
+service -> service : 匹配站内功能目录\n（页面名 + 路径 + 关键词）
+service -> llm : systemPrompt + 站内攻略与目录作为上下文
+alt 模型可用
+  llm --> service : 自然语言回答
+  service --> controller : AssistantAnswer(source=ai, 攻略卡片, 导航链接)
+else 未配置 Key 或调用失败
+  llm --> service : null
+  service -> service : 用站内素材拼装规则回答
+  service --> controller : AssistantAnswer(source=local/offline)
+end
+controller --> web : 回答 + 来源标记 + 可点击入口
+web --> user : 展示回答、攻略卡片与页面链接
+@enduml

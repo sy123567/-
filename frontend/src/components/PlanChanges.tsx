@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowRight, Check, Footprints, Landmark, MinusCircle, PinOff, Sparkles, Star, Users, Vote, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, Check, Footprints, Landmark, MinusCircle, PinOff, Sparkles, Star, Users, Vote, Wallet, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Badge } from "./ui";
@@ -96,8 +96,40 @@ export function PlanChangeCard({
         )}
       </div>
       {skyOpen && change.id !== undefined && (
-        <CandidateSky changeId={change.id} currentPlace={change.toPlace} memberId={memberId} onChosen={onChosen} onError={onError} />
+        <CandidateSkyOverlay title={change.fromPlace} onClose={() => setSkyOpen(false)}>
+          <CandidateSky changeId={change.id} currentPlace={change.toPlace} memberId={memberId} onChosen={onChosen} onError={onError} />
+        </CandidateSkyOverlay>
       )}
+    </div>
+  );
+}
+
+/** 候选投票铺满屏幕展示，避免卡片被窄栏挤压或裁切。 */
+function CandidateSkyOverlay({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/40 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label={`${title} 的候选地点投票`}>
+      <div className="relative my-auto w-full max-w-[92rem]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="关闭候选投票"
+          className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-ink shadow-soft transition hover:bg-white"
+        >
+          <X size={18} />
+        </button>
+        {children}
+      </div>
     </div>
   );
 }
@@ -150,7 +182,7 @@ function CandidateSky({
     cast.mutate({ choice, candidate });
   };
   return (
-    <section className="relative mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-sky/10 via-white to-paper p-5">
+    <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-b from-sky/10 via-white to-paper p-6 shadow-2xl sm:p-8">
       <div className="sky-glow pointer-events-none absolute -left-10 -top-16 h-52 w-52 rounded-full bg-sky/20 blur-3xl" />
       <div className="sky-glow pointer-events-none absolute -right-16 top-10 h-64 w-64 rounded-full bg-coral/10 blur-3xl" style={{ animationDelay: "-6s" }} />
       <div className="relative flex flex-wrap items-end justify-between gap-3">
@@ -190,7 +222,7 @@ function CandidateSky({
       {!candidatesQuery.isLoading && !candidatesQuery.isError && candidates.length === 0 && (
         <p className="relative mt-6 rounded-2xl bg-white/70 p-4 text-sm leading-6 text-ink-soft">附近暂时没有同时满足天气、预算和体力的地点。可以投「维持原安排」，或者在行程页手动改这个节点。</p>
       )}
-      <div className="relative mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="relative mt-6 grid items-start gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {candidates.map((candidate, index) => {
           const settled = currentPlace === candidate.name;
           const option = votesFor(candidate.name);
@@ -209,14 +241,14 @@ function CandidateSky({
                 "--drift-y": `${-10 - (index % 3) * 4}px`,
                 marginTop: index % 3 === 1 ? "1.25rem" : index % 3 === 2 ? "0.5rem" : undefined,
               } as React.CSSProperties}
-              className={`thought group relative overflow-hidden p-5 text-left shadow-soft ring-1 backdrop-blur transition-shadow disabled:cursor-progress ${
+              className={`thought group relative flex h-full flex-col p-6 text-left shadow-soft ring-1 backdrop-blur transition-shadow disabled:cursor-progress ${
                 settled ? "thought-settled bg-ink text-white ring-ink" : "bg-white/85 ring-white hover:shadow-xl"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate font-display text-base font-bold ${settled ? "text-white" : "text-ink"}`}>{candidate.name}</p>
-                  <p className={`mt-1 truncate text-[11px] ${settled ? "text-white/60" : "text-ink-soft"}`}>{candidate.address || candidate.category || "位置已核对"}</p>
+                  <p className={`font-display text-base font-bold leading-6 ${settled ? "text-white" : "text-ink"}`}>{candidate.name}</p>
+                  <p className={`mt-1 text-[11px] leading-5 ${settled ? "text-white/60" : "text-ink-soft"}`}>{candidate.address || candidate.category || "位置已核对"}</p>
                 </div>
                 <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${settled ? "bg-coral text-white" : "bg-sky/10 text-sky"}`}>
                   {settled ? <Check size={15} /> : candidate.source === "ai" ? <Sparkles size={15} /> : candidate.source === "community" ? <Users size={15} /> : <Landmark size={15} />}
@@ -234,7 +266,8 @@ function CandidateSky({
                   ))}
                 </div>
               )}
-              <p className={`mt-3 line-clamp-2 text-xs leading-5 ${settled ? "text-white/70" : "text-ink-soft"}`}>{candidate.reason}</p>
+              <p className={`mt-3 text-xs leading-5 ${settled ? "text-white/70" : "text-ink-soft"}`}>{candidate.reason}</p>
+              <span className="flex-1" />
               <VoteFooter count={count} voters={option?.voters ?? []} settled={settled} pending={pending} hint={SOURCE_LABEL[candidate.source] ?? candidate.source} />
             </button>
           );
@@ -313,7 +346,7 @@ function PlainOption({
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper text-ink-soft">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-ink">{title}</span>
-        <span className="mt-0.5 block truncate text-[11px] text-ink-soft">{detail}</span>
+        <span className="mt-0.5 block text-[11px] leading-5 text-ink-soft">{detail}</span>
       </span>
       <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${count > 0 ? "bg-coral/10 text-coral-deep" : "bg-paper text-ink-soft"}`}>
         {count} 票{voters.length > 0 ? ` · ${voters.slice(0, 2).join("、")}${voters.length > 2 ? "等" : ""}` : ""}

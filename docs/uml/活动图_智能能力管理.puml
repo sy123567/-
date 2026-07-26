@@ -1,0 +1,30 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+title 智能能力管理
+
+start
+:任意页面唤起全局助手;
+:提交问题;
+:攻略社区关键词命中打分;
+:匹配站内功能目录;
+if (模型可用?) then (是)
+  :站内攻略与目录作为上下文调用模型;
+  if (返回有效回答?) then (是)
+    :source = ai;
+  else (否)
+    :source = local;
+    :用站内素材拼装规则回答;
+  endif
+else (否)
+  if (存在站内命中?) then (是)
+    :source = local;
+    :输出攻略摘要与导航入口;
+  else (否)
+    :source = offline;
+    :输出引导性提示;
+  endif
+endif
+:返回回答 + 攻略卡片 + 页面链接 + 来源标记;
+stop
+@enduml

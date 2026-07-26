@@ -7,7 +7,7 @@ import type { AssistantAnswer } from "../types";
 
 const PROMPTS = ["周末想去海边，有推荐吗？", "杭州三天怎么安排比较松弛？", "在哪里给成员填写时间和预算约束？", "行程被暴雨影响了要怎么改？"];
 
-const SOURCE_LABEL: Record<string, string> = { ai: "AI 生成", local: "来自攻略与站内目录", offline: "离线提示" };
+const SOURCE_LABEL: Record<string, string> = { ai: "AI 生成", local: "来自攻略与站内目录", offline: "站内建议" };
 
 /**
  * 全局旅行助手：右下角常驻的悬浮入口，任意页面都能唤起。
@@ -29,6 +29,12 @@ export function AssistantDock() {
     if (open) inputRef.current?.focus();
   }, [open]);
   useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -46,21 +52,24 @@ export function AssistantDock() {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={open ? "收起旅行助手" : "打开旅行助手"}
-        className="boarding-float fixed bottom-6 right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-ink text-coral shadow-xl ring-4 ring-white/70 transition hover:scale-105 hover:text-white"
+        className={`boarding-float fixed bottom-8 right-8 z-[60] flex items-center gap-2 rounded-full bg-ink py-4 text-coral shadow-2xl ring-4 ring-white/70 transition hover:scale-105 hover:text-white ${open ? "px-4" : "px-5"}`}
       >
-        {open ? <X size={22} /> : <Sparkles size={22} />}
+        {open ? <X size={24} /> : <Sparkles size={24} />}
+        {!open && <span className="hidden text-sm font-semibold text-white sm:inline">旅行助手</span>}
       </button>
       {open && (
-        <div className="fixed inset-x-4 bottom-24 z-40 max-h-[72vh] overflow-y-auto rounded-card border border-slate-100 bg-surface p-5 shadow-2xl sm:inset-x-auto sm:right-6 sm:w-[26rem]">
+        <>
+          <button type="button" aria-label="关闭旅行助手" onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default bg-ink/30 backdrop-blur-sm" />
+          <aside className="fixed inset-y-0 right-0 z-50 flex w-full flex-col overflow-y-auto border-l border-slate-100 bg-surface p-6 shadow-2xl sm:w-[50vw] sm:min-w-[30rem] sm:p-8" role="dialog" aria-modal="true" aria-label="旅行助手">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-ink text-coral"><Sparkles size={18} /></span>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-ink text-coral"><Sparkles size={20} /></span>
             <div>
               <p className="eyebrow">TRAVEL COPILOT</p>
-              <h2 className="mt-1 font-display text-lg font-bold text-ink">问问旅行助手</h2>
-              <p className="mt-1 text-xs leading-5 text-ink-soft">想去哪、怎么安排、功能在哪一页，都可以直接问。</p>
+              <h2 className="mt-1 font-display text-xl font-bold text-ink">问问旅行助手</h2>
+              <p className="mt-1 text-sm leading-6 text-ink-soft">想去哪、怎么安排、功能在哪一页，都可以直接问。</p>
             </div>
           </div>
-          <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); submit(question); }}>
+          <form className="mt-5 flex gap-2" onSubmit={(event) => { event.preventDefault(); submit(question); }}>
             <input
               ref={inputRef}
               value={question}
@@ -68,9 +77,9 @@ export function AssistantDock() {
               placeholder="例如：五一三天两晚，带老人去哪合适？"
               maxLength={500}
               aria-label="向旅行助手提问"
-              className="w-full rounded-xl border border-slate-200 bg-paper px-3 py-2.5 text-sm text-ink outline-none transition focus:border-sky"
+              className="w-full rounded-xl border border-slate-200 bg-paper px-4 py-3 text-sm text-ink outline-none transition focus:border-sky"
             />
-            <button type="submit" disabled={!question.trim() || ask.isPending} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-coral px-3 text-sm font-semibold text-white transition hover:bg-coral-deep disabled:opacity-50">
+            <button type="submit" disabled={!question.trim() || ask.isPending} className="flex shrink-0 items-center gap-1.5 rounded-xl bg-coral px-4 text-sm font-semibold text-white transition hover:bg-coral-deep disabled:opacity-50">
               <Send size={14} />{ask.isPending ? "思考中" : "提问"}
             </button>
           </form>
@@ -89,14 +98,14 @@ export function AssistantDock() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-ink-soft">
                   <Compass size={11} />{SOURCE_LABEL[answer.source] ?? answer.source}
                 </span>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink">{answer.answer}</p>
+                <p className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-ink">{answer.answer}</p>
               </div>
               {answer.guides.length > 0 && (
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">攻略社区里的相关内容</p>
-                  <div className="mt-2 space-y-2">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {answer.guides.map((guide) => (
-                      <button key={guide.id} type="button" onClick={() => { setOpen(false); navigate(`/guides/${guide.id}`); }} className="w-full rounded-xl bg-paper p-3 text-left transition hover:bg-sky/5">
+                      <button key={guide.id} type="button" onClick={() => { setOpen(false); navigate(`/guides/${guide.id}`); }} className="w-full rounded-xl bg-paper p-4 text-left transition hover:bg-sky/5">
                         <p className="text-sm font-semibold text-ink">{guide.title}</p>
                         <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-soft"><MapPin size={11} />{guide.city || "不限城市"}{guide.theme ? ` · ${guide.theme}` : ""}</p>
                       </button>
@@ -118,7 +127,8 @@ export function AssistantDock() {
               )}
             </div>
           )}
-        </div>
+          </aside>
+        </>
       )}
     </>
   );
