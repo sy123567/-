@@ -1,0 +1,99 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 社区管理 类图（王一飞）
+
+class GuideController <<Controller>> {
+  +list(): List<TravelGuide>
+  +detail(id): TravelGuide
+  +publishFromTrip(GuideRequest): TravelGuide
+  +comments(guideId): List<GuideComment>
+  +toggleSave(id): TravelGuide
+}
+class DiscussionController <<Controller>> {
+  +list(tripId): List<DiscussionPost>
+  +create(tripId, body): DiscussionPost
+  +toggleLike(postId): DiscussionPost
+}
+class NotificationController <<Controller>>
+
+class TravelGuideService <<Service>> {
+  +list(): List<TravelGuide>
+  +get(id): TravelGuide
+  +publishFromTrip(author, tripId, note, ...): TravelGuide
+  +listComments(guideId): List<GuideComment>
+  +addComment(guideId, author, body): GuideComment
+  +toggleSave(id, user): TravelGuide
+}
+class GuideEngagementService <<Service>> {
+  +decorate(guide): void
+  +reviewCount(guide): int
+  +saveCount(guide): int
+  +adjustSaves(guide, delta): int
+}
+class GuideStatsPersistenceService <<Service>>
+class DiscussionService <<Service>> {
+  +list(tripId): List<DiscussionPost>
+  +create(tripId, author, body): DiscussionPost
+  +toggleLike(postId, user): DiscussionPost
+}
+class UserNotificationService <<Service>> {
+  +list(user): List<UserNotification>
+  +unread(user): long
+  +markRead(user, id): UserNotification
+  +notifyTripMembers(trip, type, title, detail): void
+}
+
+class TravelGuideRepository <<Repository>>
+class GuideCommentRepository <<Repository>>
+class DiscussionPostRepository <<Repository>>
+class UserNotificationRepository <<Repository>>
+
+class TravelGuide <<Entity>> {
+  +id: Long
+  +title: String
+  +city: String
+  +theme: String
+  +days: int
+  +price: BigDecimal
+  +rating: BigDecimal
+  +savedBy: List<Long>
+}
+class GuideComment <<Entity>> {
+  +body: String
+  +rating: int
+}
+class DiscussionPost <<Entity>> {
+  +body: String
+  +likedBy: List<Long>
+}
+class UserNotification <<Entity>> {
+  +type: String
+  +title: String
+  +readAt: LocalDateTime
+}
+
+GuideController --> TravelGuideService
+GuideController --> GuideEngagementService
+DiscussionController --> DiscussionService
+NotificationController --> UserNotificationService
+TravelGuideService --> TravelGuideRepository
+TravelGuideService --> GuideCommentRepository
+TravelGuideService --> GuideEngagementService
+GuideEngagementService --> GuideStatsPersistenceService
+DiscussionService --> DiscussionPostRepository
+UserNotificationService --> UserNotificationRepository
+TravelGuideRepository ..> TravelGuide
+GuideCommentRepository ..> GuideComment
+DiscussionPostRepository ..> DiscussionPost
+UserNotificationRepository ..> UserNotification
+TravelGuide "1" *-- "0..*" GuideComment
+@enduml

@@ -1,0 +1,153 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 监测与应变管理 类图（宋研）
+
+class EventController <<Controller>>
+class ImpactController <<Controller>>
+class ReplanController <<Controller>> {
+  +list(tripId): List<AlternativePlan>
+  +history(tripId): List<AlternativePlan>
+  +candidates(changeId): List<Candidate>
+  +chooseReplacement(changeId, Candidate): NodeChange
+}
+class VoteController <<Controller>>
+class NodeVoteController <<Controller>>
+class ChangeLogController <<Controller>>
+
+class EventIngestionService <<Service>> {
+  +ingestAllForTrip(tripId, force): List<ExternalEvent>
+  +activeForTrips(tripIds): List<ExternalEvent>
+  -applyTemperature(event, node): void
+  -runPipeline(tripId): void
+}
+class CityEventProvider <<Service>> {
+  +eventsForNode(node): List<ExternalEvent>
+}
+class WeatherClient <<Client>> {
+  +summary(lat, lon): WeatherSummary
+  +alerts(locationKey): JsonNode
+  ~climate(lat, lon, loc): WeatherSummary
+}
+class BaiduMapClient <<Client>> {
+  +searchNearby(query, lat, lng, radius): List<Place>
+  +hotels(lat, lng, radius): HotelRecommendations
+  +route(from, to, mode): RouteSummary
+}
+class ImpactMatchingService <<Service>> {
+  +assessTrip(id): List<ImpactAssessment>
+  +{static} distance(lat1, lon1, lat2, lon2): double
+}
+class RiskScoringService <<Service>> {
+  +scoreTrip(id): TripRiskResult
+}
+class ReplanningService <<Service>> {
+  +generate(id): List<AlternativePlan>
+  +candidatesFor(changeId): List<Candidate>
+  +chooseReplacement(changeId, selection): NodeChange
+  +list(id): List<AlternativePlan>
+  +history(id): List<AlternativePlan>
+  +clearProposed(id): void
+}
+class ReplacementCandidateService <<Service>> {
+  +findSafeReplacement(...): Optional<Candidate>
+  +findSafeReplacements(...): List<Candidate>
+}
+class VotingService <<Service>> {
+  +start(id): AlternativePlan
+  +vote(pid, mid, choice, comment): PlanVote
+  +tally(id): Trip
+  +revert(id): Trip
+}
+class NodeCandidateVotingService <<Service>> {
+  +vote(changeId, memberId, optionKey, comment): NodeVoteTally
+  +tally(changeId): NodeVoteTally
+  +summary(changeId): NodeVoteTally
+}
+class RouteRecalculationService <<Service>> {
+  +segment(from, to, mode): Segment
+  +recompute(trip): void
+}
+class NotificationService <<Service>>
+class WeatherPollingJob <<Job>> {
+  +run(): void
+}
+
+class ExternalEvent <<Entity>> {
+  +eventType: EventType
+  +severity: Severity
+  +latitude: double
+  +longitude: double
+  +radiusKm: double
+  +startTime: LocalDateTime
+  +endTime: LocalDateTime
+  +tempMin: Double
+  +tempMax: Double
+}
+class ImpactAssessment <<Entity>> {
+  +impactLevel: ImpactLevel
+  +riskScore: int
+}
+class AlternativePlan <<Entity>> {
+  +strategy: PlanStrategy
+  +extraCost: BigDecimal
+  +extraDelayMinutes: int
+  +changedNodeCount: int
+  +status: PlanStatus
+  +roundNo: int
+}
+class NodeChange <<Entity>> {
+  +changeType: ChangeType
+  +newPlaceName: String
+  +newStart: LocalDateTime
+  +newEnd: LocalDateTime
+}
+class PlanVote <<Entity>> {
+  +choice: VoteChoice
+  +comment: String
+}
+class NodeCandidateVote <<Entity>> {
+  +optionKey: String
+  +comment: String
+}
+class ChangeLog <<Entity>> {
+  +type: String
+  +description: String
+  +extraCost: BigDecimal
+}
+
+EventController --> EventIngestionService
+ImpactController --> ImpactMatchingService
+ImpactController --> RiskScoringService
+ReplanController --> ReplanningService
+VoteController --> VotingService
+NodeVoteController --> NodeCandidateVotingService
+ChangeLogController ..> ChangeLog
+WeatherPollingJob --> EventIngestionService
+EventIngestionService --> WeatherClient
+EventIngestionService --> CityEventProvider
+EventIngestionService --> ImpactMatchingService
+EventIngestionService --> RiskScoringService
+EventIngestionService --> ReplanningService
+ReplanningService --> ReplacementCandidateService
+ReplanningService --> RouteRecalculationService
+ReplacementCandidateService --> BaiduMapClient
+RouteRecalculationService --> BaiduMapClient
+VotingService --> RouteRecalculationService
+VotingService --> NotificationService
+EventIngestionService ..> ExternalEvent
+ImpactMatchingService ..> ImpactAssessment
+ExternalEvent "1" -- "0..*" ImpactAssessment
+AlternativePlan "1" *-- "1..*" NodeChange
+AlternativePlan "1" -- "0..*" PlanVote
+NodeChange "1" -- "0..*" NodeCandidateVote
+AlternativePlan "0..1" -- "0..*" ChangeLog
+@enduml

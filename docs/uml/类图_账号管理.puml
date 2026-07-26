@@ -1,0 +1,68 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #D6E8FF
+  BorderColor #1D4ED8
+  FontColor #0F2447
+  AttributeFontColor #0F2447
+  StereotypeFontColor #1D4ED8
+}
+title 账号管理 类图（王一飞）
+
+class AuthController <<Controller>> {
+  +login(LoginRequest): AuthResponse
+  +register(RegisterRequest): AuthResponse
+}
+class UserController <<Controller>> {
+  +me(): User
+  +updateProfile(ProfileRequest): User
+  +changePassword(PasswordRequest): void
+  +deleteAccount(): void
+}
+class AuthService <<Service>> {
+  +login(email, password): AuthResponse
+  +register(name, email, password, phone): AuthResponse
+  +response(User): AuthResponse
+}
+class UserService <<Service>> {
+  +get(id): User
+  +updateProfile(current, name, email, phone): User
+  +changePassword(current, currentPassword, newPassword): void
+  +deleteAccount(current): void
+}
+class JwtService <<Service>> {
+  +issue(User): String
+  +userId(token): Long
+}
+class JwtAuthenticationFilter <<Filter>> {
+  +doFilterInternal(request, response, chain): void
+}
+class SecurityConfig <<Config>> {
+  +filterChain(HttpSecurity): SecurityFilterChain
+  +passwordEncoder(): PasswordEncoder
+}
+class UserRepository <<Repository>> {
+  +findByEmail(email): Optional<User>
+  +existsByEmail(email): boolean
+}
+class User <<Entity>> {
+  +id: Long
+  +name: String
+  +email: String
+  +passwordHash: String
+  +phone: String
+  +status: UserStatus
+}
+
+AuthController --> AuthService
+UserController --> UserService
+AuthService --> JwtService
+AuthService --> UserRepository
+UserService --> UserRepository
+JwtAuthenticationFilter --> JwtService
+JwtAuthenticationFilter --> UserRepository
+SecurityConfig ..> JwtAuthenticationFilter
+UserRepository ..> User
+@enduml
