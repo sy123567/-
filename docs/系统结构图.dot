@@ -75,11 +75,13 @@ digraph TripAdaptivePlatform {
     planning_constraints [label="成员约束管理"];
     planning_initial [label="初始方案生成"];
     planning_nodes [label="行程节点管理"];
+    planning_ai [label="AI 辅助行程生成"];
     planning_map [label="地图路线导航"];
     planning_budget [label="预算费用管理"];
     planning -> planning_constraints;
     planning_constraints -> planning_initial;
-    planning_initial -> planning_nodes;
+    planning_initial -> planning_ai;
+    planning_ai -> planning_nodes;
     planning_nodes -> planning_map;
     planning_map -> planning_budget;
   }
@@ -122,6 +124,23 @@ digraph TripAdaptivePlatform {
     community_discussion -> community_guides;
   }
 
+  subgraph cluster_ai {
+    label="";
+    color="transparent";
+    penwidth=0;
+    ai [label="智能能力管理", fillcolor="#F0F0F0", fontsize=16, penwidth=1.5];
+    ai_assistant [label="全局旅行助手"];
+    ai_retrieval [label="攻略与目录检索"];
+    ai_navigation [label="功能导航问答"];
+    ai_replan [label="替代地点智能提名"];
+    ai_fallback [label="模型不可用降级"];
+    ai -> ai_assistant;
+    ai_assistant -> ai_retrieval;
+    ai_retrieval -> ai_navigation;
+    ai_navigation -> ai_replan;
+    ai_replan -> ai_fallback;
+  }
+
   subgraph cluster_admin {
     label="";
     color="transparent";
@@ -140,12 +159,14 @@ digraph TripAdaptivePlatform {
   system -> planning;
   system -> adaptive;
   system -> community;
+  system -> ai;
   system -> admin;
 
-  { rank=same; account; social; planning; adaptive; community; admin; }
+  { rank=same; account; social; planning; adaptive; community; ai; admin; }
   account -> social [style=invis, weight=100];
   social -> planning [style=invis, weight=100];
   planning -> adaptive [style=invis, weight=100];
   adaptive -> community [style=invis, weight=100];
-  community -> admin [style=invis, weight=100];
+  community -> ai [style=invis, weight=100];
+  ai -> admin [style=invis, weight=100];
 }

@@ -1,0 +1,28 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+left to right direction
+
+actor 用户 as user
+actor "大模型服务" as llm
+
+rectangle "智能能力管理" {
+  usecase "全局旅行助手提问" as a1
+  usecase "攻略与目录检索" as a2
+  usecase "功能导航问答" as a3
+  usecase "AI 辅助行程生成" as a4
+  usecase "替代地点智能提名" as a5
+  usecase "模型不可用降级" as a6
+}
+
+user --> a1
+user --> a3
+user --> a4
+a1 --> a2
+a1 ..> a6 : <<extend>>
+a4 ..> a6 : <<extend>>
+a5 ..> a6 : <<extend>>
+a1 --> llm
+a4 --> llm
+a5 --> llm
+@enduml

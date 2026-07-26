@@ -51,11 +51,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* 候选地点像"念头"一样在天空里缓慢漂浮：轮廓与位置一起变化，避免机械的上下平移。 */
+/* 候选地点像"念头"一样在天空里缓慢漂浮：轮廓与位置一起变化，但圆角保持在不裁切文字的范围内。 */
 @keyframes thought-drift {
-  0% { transform: translate3d(0, 0, 0) rotate(-0.6deg); border-radius: 58% 42% 47% 53% / 46% 52% 48% 54%; }
-  50% { transform: translate3d(var(--drift-x, 8px), var(--drift-y, -14px), 0) rotate(0.7deg); border-radius: 44% 56% 58% 42% / 57% 43% 57% 43%; }
-  100% { transform: translate3d(calc(var(--drift-x, 8px) * -1), calc(var(--drift-y, -14px) * -0.35), 0) rotate(-0.3deg); border-radius: 53% 47% 39% 61% / 49% 58% 42% 51%; }
+  0% { transform: translate3d(0, 0, 0) rotate(-0.5deg); border-radius: 34px 26px 32px 24px; }
+  50% { transform: translate3d(var(--drift-x, 8px), var(--drift-y, -14px), 0) rotate(0.6deg); border-radius: 24px 34px 26px 32px; }
+  100% { transform: translate3d(calc(var(--drift-x, 8px) * -1), calc(var(--drift-y, -14px) * -0.35), 0) rotate(-0.25deg); border-radius: 30px 24px 34px 28px; }
 }
 
 @keyframes sky-breathe {
@@ -64,7 +64,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .thought {
-  border-radius: 58% 42% 47% 53% / 46% 52% 48% 54%;
+  border-radius: 34px 26px 32px 24px;
   animation: thought-drift var(--drift-duration, 13s) var(--drift-delay, 0s) ease-in-out infinite alternate;
 }
 .thought:hover, .thought:focus-visible, .thought-settled { animation-play-state: paused; }
