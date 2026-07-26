@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { isAuthed } from "./auth";
+import { isAdmin, isAuthed } from "./auth";
 import { AppLayout } from "./layout/AppLayout";
 import { AuthPage } from "./pages/AuthPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -38,6 +38,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return isAuthed() ? children : <Navigate to="/login" replace />;
 }
 
+// 数据看板属于运营视图：普通用户即使手输地址也会被送回首页，接口侧同样只对管理员开放。
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  if (!isAuthed()) return <Navigate to="/login" replace />;
+  return isAdmin() ? children : <Navigate to="/" replace />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -68,7 +74,7 @@ function App() {
           <Route path="/discussions" element={<RequireAuth><AppLayout><DiscussionsPage /></AppLayout></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><AppLayout><NotificationsPage /></AppLayout></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth><AppLayout><SettingsPage /></AppLayout></RequireAuth>} />
-          <Route path="/admin" element={<RequireAuth><AppLayout><AdminPage /></AppLayout></RequireAuth>} />
+          <Route path="/admin" element={<RequireAdmin><AppLayout><AdminPage /></AppLayout></RequireAdmin>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

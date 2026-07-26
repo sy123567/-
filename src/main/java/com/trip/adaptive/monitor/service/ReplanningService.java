@@ -76,8 +76,8 @@ public class ReplanningService {
   public List<AlternativePlan> generate(Long id) {
     Trip t = trips.findById(id).orElseThrow(() -> new ResourceNotFoundException("行程不存在"));
     // 投票锁：已有方案在投票中时不重算，避免打断进行中的群体决策。
-    if (!plans.findByTripIdAndStatus(id, Enums.PlanStatus.VOTING).isEmpty()) {
-      return plans.findByTripId(id);
+    if (!plans.findByTripIdAndArchivedFalseAndStatus(id, Enums.PlanStatus.VOTING).isEmpty()) {
+      return list(id);
     }
     List<ItineraryNode> affected =
         impacts.findByTripId(id).stream()
@@ -90,7 +90,7 @@ public class ReplanningService {
             .stream()
             .toList();
     if (affected.isEmpty()) return List.of();
-    clearProposed(id);
+    archivePreviousRound(id);
 
     List<ExternalEvent> activeEvents = events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now());
     ReplanConstraints constraints = constraintsFor(t);
@@ -312,7 +312,23 @@ public class ReplanningService {
 
   @Transactional
   public void clearProposed(Long id) {
-    plans.deleteAll(plans.findByTripIdAndStatus(id, Enums.PlanStatus.PROPOSED));
+    plans.deleteAll(plans.findByTripIdAndArchivedFalseAndStatus(id, Enums.PlanStatus.PROPOSED));
+  }
+
+  /**
+   * 新一轮方案生成前清场：从未表决的旧提议直接删除，已投过票（采纳/否决）的归档为历史。
+   *
+   * <p>否则上一轮的方案会和新方案混在一起继续展示，群组会对已失效的旧方案重新发起投票。
+   */
+  private void archivePreviousRound(Long id) {
+    for (AlternativePlan plan : plans.findByTripIdAndArchivedFalse(id)) {
+      if (plan.getStatus() == Enums.PlanStatus.PROPOSED) {
+        plans.delete(plan);
+      } else {
+        plan.setArchived(true);
+        plans.save(plan);
+      }
+    }
   }
 
   private List<ExternalEvent> hittingEvents(ItineraryNode node, List<ExternalEvent> candidates) {
@@ -348,8 +364,14 @@ public class ReplanningService {
     return value == null ? BigDecimal.ZERO : value;
   }
 
+  /** 当前轮次的方案（不含已归档的历史方案）。 */
   public List<AlternativePlan> list(Long id) {
-    return plans.findByTripId(id);
+    return plans.findByTripIdAndArchivedFalse(id);
+  }
+
+  /** 历史方案：已归档的往轮方案，仅用于回溯。 */
+  public List<AlternativePlan> history(Long id) {
+    return plans.findByTripId(id).stream().filter(AlternativePlan::isArchived).toList();
   }
 
   public AlternativePlan get(Long id) {

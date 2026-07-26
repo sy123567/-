@@ -2,6 +2,7 @@ import { getToken, type AuthUser } from "../auth";
 import type {
   AdminStats,
   AlternativePlan,
+  AssistantAnswer,
   ChangeLog,
   ChatMessage,
   Conversation,
@@ -56,6 +57,7 @@ export type AuthResponse = {
   name: string;
   email: string;
   phone?: string;
+  admin?: boolean;
 };
 
 export type FriendshipRequest = {
@@ -524,6 +526,9 @@ export const api = {
   async plans(tripId: number): Promise<AlternativePlan[]> {
     return request<AlternativePlan[]>(`/api/trips/${tripId}/plans`);
   },
+  async planHistory(tripId: number): Promise<AlternativePlan[]> {
+    return request<AlternativePlan[]>(`/api/trips/${tripId}/plans/history`);
+  },
   async changelogs(tripId: number): Promise<ChangeLog[]> {
     return request<ChangeLog[]>(`/api/trips/${tripId}/changelogs`);
   },
@@ -565,6 +570,21 @@ export const api = {
   },
   async scanEvents(tripId: number): Promise<ExternalEvent[]> {
     return request<ExternalEvent[]>(`/api/trips/${tripId}/events/scan`, { method: "POST" });
+  },
+  async deleteTrip(tripId: number): Promise<void> {
+    await request<void>(`/api/trips/${tripId}`, { method: "DELETE" });
+  },
+  async leaveGroup(groupId: number): Promise<void> {
+    await request<void>(`/api/groups/${groupId}/leave`, { method: "POST" });
+  },
+  async disbandGroup(groupId: number): Promise<void> {
+    await request<void>(`/api/groups/${groupId}`, { method: "DELETE" });
+  },
+  async assistant(question: string): Promise<AssistantAnswer> {
+    return request<AssistantAnswer>("/api/ai/assistant", {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    });
   },
   async removeMember(groupId: number, memberId: number): Promise<void> {
     await request<void>(`/api/groups/${groupId}/members/${memberId}`, { method: "DELETE" });

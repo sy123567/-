@@ -10,5 +10,7 @@ import com.trip.adaptive.domain.PlanVote;
 public interface PlanVoteRepository extends JpaRepository<PlanVote, Long> {
   List<PlanVote> findByPlanId(Long planId);
 
+  List<PlanVote> findByMemberId(Long memberId);
+
   Optional<PlanVote> findByPlanIdAndMemberId(Long planId, Long memberId);
 }

@@ -1,0 +1,66 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+title 社交组队管理
+
+start
+:打开社交组队管理;
+:搜索好友或输入关键词;
+if (找到目标用户?) then (是)
+  :查看脱敏用户资料;
+  :发送好友申请;
+  :写入 friendships(PENDING);
+  :通知目标用户;
+  if (目标用户同意?) then (同意)
+    :更新 friendships 为 ACCEPTED;
+    :刷新好友列表;
+  else (拒绝)
+    :更新 friendships 为 REJECTED;
+  endif
+else (否)
+  :提示暂无匹配用户;
+endif
+
+:选择创建出行小组;
+:填写小组名称、描述和人数上限;
+:生成唯一 room_code;
+:写入 travel_groups;
+:写入群主 group_members(OWNER);
+
+if (邀请好友进组?) then (是)
+  :选择已建立好友关系的成员;
+  :写入或发送 group_members 邀请;
+else (否)
+  :等待成员使用房间码加入;
+endif
+
+:成员输入房间码;
+:Redis 查询 room:{roomCode};
+if (房间码有效且小组未满?) then (是)
+  if (成员尚未加入?) then (是)
+    :事务写入 group_members(MEMBER);
+    :创建默认 member_constraints;
+    :通知群主和新成员;
+  else (否)
+    :提示成员已在小组中;
+  endif
+else (否)
+  :提示房间码无效、过期或容量已满;
+endif
+
+:查看成员列表和角色;
+if (群主执行成员管理?) then (是)
+  if (移除成员?) then (是)
+    :校验群主权限;
+    :更新 group_members.status;
+    :通知被移除成员;
+  else (转移群主)
+    :选择现有成员;
+    :事务更新 OWNER/MEMBER 角色;
+    :通知新旧群主;
+  endif
+else (否)
+  :成员仅查看自己的小组信息;
+endif
+stop
+@enduml

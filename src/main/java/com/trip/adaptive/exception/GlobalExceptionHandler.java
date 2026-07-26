@@ -26,6 +26,11 @@ public class GlobalExceptionHandler {
     return body(404, "Not Found", e.getMessage(), r, null);
   }
 
+  @ExceptionHandler(ForbiddenException.class)
+  ResponseEntity<ApiError> forbidden(ForbiddenException e, HttpServletRequest r) {
+    return body(403, "Forbidden", e.getMessage(), r, null);
+  }
+
   @ExceptionHandler(BusinessException.class)
   ResponseEntity<ApiError> business(BusinessException e, HttpServletRequest r) {
     return body(409, "Business Conflict", e.getMessage(), r, null);

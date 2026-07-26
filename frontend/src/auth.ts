@@ -3,6 +3,7 @@ export type AuthUser = {
   name: string;
   email: string;
   phone?: string;
+  admin?: boolean;
 };
 
 const TOKEN_KEY = "trip_token";
@@ -20,6 +21,11 @@ export function getCurrentUser(): AuthUser | null {
   } catch {
     return null;
   }
+}
+
+/** 前端只用它隐藏入口，真正的权限校验在后端 /api/admin/*。 */
+export function isAdmin() {
+  return getCurrentUser()?.admin === true;
 }
 
 export function isAuthed() {

@@ -39,6 +39,8 @@ management:
       exposure:
         include: health,info
 app:
+  # 数据看板等管理端能力只对这里列出的邮箱开放，多个邮箱用逗号分隔
+  admin-emails: ${ADMIN_EMAILS:admin@example.com}
   seed:
     enabled: true
   qweather:

@@ -1,0 +1,123 @@
+@startuml
+skinparam defaultFontName "WenQuanYi Zen Hei"
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class User {
+  +id: Long
+  +name: String
+  +email: String
+  +phone: String
+  +status: UserStatus
+}
+class TravelGroup {
+  +id: Long
+  +name: String
+  +roomCode: String
+  +memberLimit: int
+}
+class GroupMember {
+  +id: Long
+  +role: MemberRole
+  +status: String
+}
+class MemberConstraint {
+  +availableFrom: LocalDate
+  +availableTo: LocalDate
+  +maxBudget: BigDecimal
+  +mustVisitPlaces: List<String>
+  +fitnessLevel: FitnessLevel
+}
+class Trip {
+  +id: Long
+  +title: String
+  +status: TripStatus
+  +startDate: LocalDate
+  +endDate: LocalDate
+  +totalBudget: BigDecimal
+  +spentBudget: BigDecimal
+  +riskScore: int
+}
+class ItineraryNode {
+  +id: Long
+  +name: String
+  +nodeType: NodeType
+  +plannedStart: LocalDateTime
+  +plannedEnd: LocalDateTime
+  +status: NodeStatus
+}
+class Route {
+  +id: Long
+  +transportMode: String
+  +distanceKm: double
+  +durationMinutes: int
+}
+class ExternalEvent {
+  +id: Long
+  +eventType: EventType
+  +severity: Severity
+  +latitude: double
+  +longitude: double
+  +startTime: LocalDateTime
+  +endTime: LocalDateTime
+}
+class ImpactAssessment {
+  +id: Long
+  +impactLevel: ImpactLevel
+  +riskScore: int
+  +description: String
+}
+class AlternativePlan {
+  +id: Long
+  +strategy: PlanStrategy
+  +extraCost: BigDecimal
+  +extraDelayMinutes: int
+  +changedNodeCount: int
+  +status: PlanStatus
+}
+class NodeChange {
+  +id: Long
+  +changeType: ChangeType
+  +newStart: LocalDateTime
+  +newEnd: LocalDateTime
+}
+class PlanVote {
+  +id: Long
+  +choice: VoteChoice
+  +votedAt: LocalDateTime
+}
+class ChangeLog {
+  +id: Long
+  +description: String
+  +extraCost: BigDecimal
+  +refundDeadline: LocalDateTime
+}
+class TravelGuide {
+  +id: Long
+  +title: String
+  +city: String
+  +days: int
+  +price: BigDecimal
+  +rating: BigDecimal
+}
+
+User "1" -- "0..*" GroupMember
+TravelGroup "1" o-- "1..*" GroupMember
+GroupMember "1" -- "0..1" MemberConstraint
+TravelGroup "1" -- "0..*" Trip
+TravelGroup "1" -- "1" User : owner
+Trip "1" *-- "1..*" ItineraryNode
+Trip "1" *-- "0..*" Route
+Trip "1" -- "0..*" ImpactAssessment
+ExternalEvent "1" -- "0..*" ImpactAssessment
+ItineraryNode "1" -- "0..*" ImpactAssessment
+Trip "1" -- "0..*" AlternativePlan
+AlternativePlan "1" *-- "1..*" NodeChange
+AlternativePlan "1" -- "0..*" PlanVote
+GroupMember "1" -- "0..*" PlanVote
+Trip "1" -- "0..*" ChangeLog
+AlternativePlan "0..1" -- "0..*" ChangeLog
+User "1" -- "0..*" TravelGuide : author
+TravelGuide "1" ..> Trip : sourceGuideId
+@enduml

@@ -28,6 +28,10 @@ public class User {
 
   private String phone;
 
+  /** 管理员标记：仅管理员可以访问数据看板等运营接口，普通用户界面不会出现相关入口。 */
+  @Column(nullable = false)
+  private boolean admin = false;
+
   public User() {}
 
   public User(String name, String email, String password, String phone) {
@@ -71,5 +75,13 @@ public class User {
 
   public void setPassword(String v) {
     password = v;
+  }
+
+  public boolean isAdmin() {
+    return admin;
+  }
+
+  public void setAdmin(boolean v) {
+    admin = v;
   }
 }

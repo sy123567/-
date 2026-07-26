@@ -81,6 +81,12 @@ public final class Enums {
     REJECTED
   }
 
+  /** 变更记录类型：方案被采纳并应用 / 已应用方案被回退。 */
+  public enum ChangeLogType {
+    APPLIED,
+    REVERTED
+  }
+
   public enum ChangeType {
     RESCHEDULE,
     REPLACE,

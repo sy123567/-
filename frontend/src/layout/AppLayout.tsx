@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bell, Compass, LayoutDashboard, Map, Menu, MessageSquare, Search, Settings, Users, X } from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getCurrentUser, getToken } from "../auth";
+import { getCurrentUser, getToken, isAdmin } from "../auth";
 import { api } from "../api/client";
 import { useTripRealtime, type TripEvent } from "../api/realtime";
 
@@ -12,8 +12,11 @@ const groups = [
   { label: "行程中", items: [{ label: "事件监测", to: "/events", icon: Bell }, { label: "影响与风险", to: "/impacts", icon: LayoutDashboard }] },
   { label: "决策", items: [{ label: "替代方案", to: "/plans", icon: Compass }, { label: "投票中心", to: "/votes", icon: Users }] },
   { label: "社区", items: [{ label: "讨论区", to: "/discussions", icon: Users }, { label: "通知", to: "/notifications", icon: Bell }] },
-  { label: "我的", items: [{ label: "分账与结算", to: "/settlement", icon: WalletIcon }, { label: "个人设置", to: "/settings", icon: Settings }, { label: "数据后台", to: "/admin", icon: LayoutDashboard }] },
+  { label: "我的", items: [{ label: "分账与结算", to: "/settlement", icon: WalletIcon }, { label: "个人设置", to: "/settings", icon: Settings }] },
 ];
+
+// 数据看板是运营视图，只对管理员显示入口。
+const adminGroup = { label: "运营", items: [{ label: "数据后台", to: "/admin", icon: LayoutDashboard }] };
 
 function WalletIcon() {
   return <span className="text-[16px]">¥</span>;
@@ -39,6 +42,9 @@ function RealtimeBridge() {
       void queryClient.invalidateQueries({ queryKey: ["risk", tripId] });
       void queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
       void queryClient.invalidateQueries({ queryKey: ["changelogs", tripId] });
+      void queryClient.invalidateQueries({ queryKey: ["plan-history", tripId] });
+      // 方案应用/回退会重算监测事件，事件列表也要跟着刷新，否则页面上会留着旧节点的天气。
+      void queryClient.invalidateQueries({ queryKey: ["events"] });
       if (event.type === "plan-accepted" || event.type === "plan-rejected") {
         void queryClient.invalidateQueries({ queryKey: ["plan-votes"] });
       }
@@ -53,7 +59,8 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const authed = !!getToken();
   const notificationsQuery = useQuery({ queryKey: ["notifications"], queryFn: api.notifications, enabled: authed, refetchInterval: 30000 });
   const unread = (notificationsQuery.data ?? []).filter((item) => !item.read).length;
-  return <><div className={`fixed inset-0 z-40 bg-ink/30 backdrop-blur-sm transition lg:hidden ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} onClick={onClose} /><aside className={`fixed inset-y-0 left-0 z-50 w-[248px] bg-ink px-4 py-6 text-white transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}><div className="flex items-center justify-between px-3"><Link to="/" className="flex items-center gap-3" onClick={onClose}><div className="grid h-9 w-9 place-items-center rounded-xl bg-coral font-display font-bold">游</div><div><p className="font-display text-lg font-bold">智能旅游平台</p><p className="font-mono text-[9px] tracking-wider text-white/40">SMART TRAVEL</p></div></Link><button className="text-white/50 lg:hidden" onClick={onClose} aria-label="关闭导航"><X size={20} /></button></div><nav className="mt-9 space-y-6">{groups.map((group) => <div key={group.label}><p className="px-3 text-[10px] font-bold tracking-[0.18em] text-white/35">{group.label}</p><div className="mt-2 space-y-1">{group.items.map(({ label, to, icon: Icon }) => { const showUnread = to === "/notifications" && unread > 0; return <NavLink key={to} to={to} onClick={onClose} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${isActive ? "bg-white/10 font-semibold text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}`}><Icon size={17} />{label}{showUnread && <span className="ml-auto grid h-4 min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>}</NavLink>; })}</div></div>)}</nav><div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-white/10 bg-white/5 p-4"><p className="font-mono text-[10px] text-coral">NEXT STOP</p><p className="mt-2 text-sm font-semibold">去看看今天的路线</p><p className="mt-1 text-xs leading-5 text-white/45">每一次变化，都能找到下一站。</p></div></aside></>;
+  const navGroups = isAdmin() ? [...groups, adminGroup] : groups;
+  return <><div className={`fixed inset-0 z-40 bg-ink/30 backdrop-blur-sm transition lg:hidden ${open ? "opacity-100" : "pointer-events-none opacity-0"}`} onClick={onClose} /><aside className={`fixed inset-y-0 left-0 z-50 w-[248px] bg-ink px-4 py-6 text-white transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}><div className="flex items-center justify-between px-3"><Link to="/" className="flex items-center gap-3" onClick={onClose}><div className="grid h-9 w-9 place-items-center rounded-xl bg-coral font-display font-bold">游</div><div><p className="font-display text-lg font-bold">智能旅游平台</p><p className="font-mono text-[9px] tracking-wider text-white/40">SMART TRAVEL</p></div></Link><button className="text-white/50 lg:hidden" onClick={onClose} aria-label="关闭导航"><X size={20} /></button></div><nav className="mt-9 space-y-6">{navGroups.map((group) => <div key={group.label}><p className="px-3 text-[10px] font-bold tracking-[0.18em] text-white/35">{group.label}</p><div className="mt-2 space-y-1">{group.items.map(({ label, to, icon: Icon }) => { const showUnread = to === "/notifications" && unread > 0; return <NavLink key={to} to={to} onClick={onClose} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${isActive ? "bg-white/10 font-semibold text-white" : "text-white/55 hover:bg-white/5 hover:text-white"}`}><Icon size={17} />{label}{showUnread && <span className="ml-auto grid h-4 min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-bold text-white">{unread > 9 ? "9+" : unread}</span>}</NavLink>; })}</div></div>)}</nav><div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-white/10 bg-white/5 p-4"><p className="font-mono text-[10px] text-coral">NEXT STOP</p><p className="mt-2 text-sm font-semibold">去看看今天的路线</p><p className="mt-1 text-xs leading-5 text-white/45">每一次变化，都能找到下一站。</p></div></aside></>;
 }
 
 function TopBar({ onMenu }: { onMenu: () => void }) {

@@ -43,6 +43,10 @@ public class AlternativePlan {
 
   private LocalDateTime createdAt;
 
+  /** 已归档：上一轮重规划产出的旧方案，仅作为历史保留，不再作为可选方案展示。 */
+  @Column(nullable = false)
+  private boolean archived = false;
+
   @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<NodeChange> proposedNodeChanges = new ArrayList<>();
 
@@ -124,6 +128,14 @@ public class AlternativePlan {
 
   public LocalDateTime getCreatedAt() {
     return createdAt;
+  }
+
+  public boolean isArchived() {
+    return archived;
+  }
+
+  public void setArchived(boolean v) {
+    archived = v;
   }
 
   public List<NodeChange> getProposedNodeChanges() {

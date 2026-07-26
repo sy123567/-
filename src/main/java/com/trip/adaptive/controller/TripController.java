@@ -46,8 +46,8 @@ public class TripController {
   }
 
   @DeleteMapping("/{id}")
-  public ResponseEntity<Void> delete(@PathVariable Long id) {
-    s.delete(id);
+  public ResponseEntity<Void> delete(@PathVariable Long id, Authentication authentication) {
+    s.delete(id, currentUser(authentication));
     return ResponseEntity.noContent().build();
   }
 

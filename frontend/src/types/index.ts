@@ -143,6 +143,8 @@ export interface AlternativePlan {
   changedNodeCount?: number;
   summary?: string;
   status?: "PROPOSED" | "VOTING" | "ACCEPTED" | "REJECTED";
+  archived?: boolean;
+  createdAt?: string;
   proposedNodeChanges?: NodeChange[];
 }
 
@@ -166,10 +168,35 @@ export interface PlanVote {
 export interface ChangeLog {
   id: Id;
   description?: string;
+  type?: "APPLIED" | "REVERTED";
+  details?: string;
   extraCost?: number;
   refundDeadline?: string;
   createdAt?: string;
   relatedPlan?: AlternativePlan;
+}
+
+export interface AssistantGuideHint {
+  id: Id;
+  title: string;
+  city?: string;
+  theme?: string;
+  days?: number;
+  rating?: number;
+  description?: string;
+}
+
+export interface AssistantNavHint {
+  label: string;
+  path: string;
+  description: string;
+}
+
+export interface AssistantAnswer {
+  answer: string;
+  source: "ai" | "local" | "offline";
+  guides: AssistantGuideHint[];
+  links: AssistantNavHint[];
 }
 
 export interface TravelGuide {
