@@ -60,7 +60,8 @@ class ReplacementCandidateServiceTest {
   }
 
   private static WeatherClient.WeatherSummary weather(boolean alert, boolean precip) {
-    return new WeatherClient.WeatherSummary(true, "p", 20d, 28d, "phrase", alert, precip, "ok");
+    return new WeatherClient.WeatherSummary(
+        true, "p", 20d, 28d, "phrase", alert, precip, "ok", "live");
   }
 
   @Test

@@ -67,12 +67,32 @@ Swagger UI：`http://localhost:8080/swagger-ui.html`
 ### 替代方案的轮次管理
 - 重新生成方案时，上一轮的候选会被标记为归档（`AlternativePlan.archived`），未进入投票的 `PROPOSED` 方案直接删除，因此界面上只会出现当前这一轮的可选项。
 - 某个方案通过后，同轮其它方案会被置为 `REJECTED` 并归档；已归档方案不能再发起投票。
-- `GET /api/trips/{id}/plans` 只返回当前轮次，`GET /api/trips/{id}/plans/history` 返回历史轮次，供前端“历史方案”折叠区展示。
+- 每次监测生成的方案共用一个轮次号（`AlternativePlan.roundNo`）。`GET /api/trips/{id}/plans` 返回**当前轮次的全部方案**（含已否决、已采纳的），页面因此能完整列出这次监测给出的所有选择；`GET /api/trips/{id}/plans/history` 返回更早轮次，供“历史方案”折叠区展示。
 
 ### 可选择的替代地点
 - `GET /api/plan-changes/{changeId}/candidates`：列出该节点变更全部通过校验（预算 → 可达半径 → 饮食 → 天气 → 事件 → 去重）的替代地点，候选来源为 AI 提名、地图就近搜索与其他队伍走过的同类节点，并附带距离、评分、评论数、室内与否与亮点标签。
 - `PUT /api/plan-changes/{changeId}/replacement`：成员改选替代地点，请求体 `{"name": "...", "lat": 31.2, "lng": 121.4}`；服务端会重新跑一次校验（同名或 50 米内视为同一地点），只有方案仍是 `PROPOSED` 且未归档时才允许改选，改完会重算方案的额外成本与改动节点数。
 - 候选数量上限由 `replan.selectable-candidate-count`（默认 8）控制。
+
+### 节点级投票（这个节点换到哪里）
+方案层的整轮投票（`/api/plans/{id}/votes`）决定是否采纳整套方案；节点级投票只决定某一条节点变更用哪个替代地点。
+
+- `GET /api/plan-changes/{changeId}/node-votes`：当前票数分布、参与人数、弃权数、是否平票、每票备注。
+- `POST /api/plan-changes/{changeId}/node-votes`：投票，请求体 `{"memberId": 1, "choice": "CANDIDATE|KEEP_PLAN|ABSTAIN", "placeName": "...", "lat": 31.2, "lng": 121.4, "comment": "可选备注"}`。
+- `POST /api/plan-changes/{changeId}/node-votes/tally`：提前计票（例如群主想在全员投完前定案）。
+
+规则：
+
+- 每位成员对每条节点变更只有一票（`(node_change_id, member_id)` 唯一），可随时改票。
+- `CANDIDATE` 的地点会用 `candidatesFor` 重新校验（同名或 50 米内视为同一地点），伪造坐标或过期候选会被拒绝。
+- `ABSTAIN` 计入参与人数，但不计入任何选项；`KEEP_PLAN` 表示维持方案里给出的原安排，是一个独立的可投选项。
+- 落定条件：某个选项获得**全体成员过半**支持，或全员表态完毕且存在唯一领先项；平票一律不落定，避免系统替成员做隐式选择。
+- 落定为候选地点时才写回 `NodeChange` 并重算方案的额外成本与改动节点数；落定为 `KEEP_PLAN` 时不改动任何字段。
+- 方案离开 `PROPOSED`（进入整轮投票、被采纳或归档）后，节点投票关闭。
+
+### 外部数据缺失时的展示口径
+- 天气实时接口（和风/weathercn）不可用、未配置 Key 或返回缺失温度时，`GET /api/weather/preview` 会按当地纬度与当月推算常年同期的白天温度区间与天气描述返回，并把 `source` 标为 `offline`，界面显示“本地天气参考”。
+- 这样界面不会再出现 `0°C` 这类缺值渲染；实时服务恢复后自动切回 `source=live`。
 
 ### 事件监测的自清理
 - 每次执行影响评估（`POST /api/trips/{id}/assess`）时，会先清除由监测器自动生成、但地点已不属于任何有效行程节点的事件（如换掉某个景点后残留的天气记录），再重算影响与风险。

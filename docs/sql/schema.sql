@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS alternative_plans (
   summary VARCHAR(1000) NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'PROPOSED',
   archived TINYINT(1) NOT NULL DEFAULT 0, -- 归档后的往轮方案只用于回溯，不再出现在当前候选中
+  round_no INT NOT NULL DEFAULT 1, -- 第几轮监测：同一次监测产出的方案共用一个轮次号，界面按轮次整批展示
   source_assessment_hash CHAR(64) NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
@@ -246,6 +247,26 @@ CREATE TABLE IF NOT EXISTS node_changes (
   KEY idx_node_changes_plan (plan_id),
   CONSTRAINT fk_node_changes_plan FOREIGN KEY (plan_id) REFERENCES alternative_plans(id),
   CONSTRAINT fk_node_changes_original FOREIGN KEY (original_node_id) REFERENCES itinerary_nodes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 节点级投票：某个受影响节点换到哪里，由成员逐节点投票决定
+CREATE TABLE IF NOT EXISTS node_candidate_votes (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  node_change_id BIGINT UNSIGNED NOT NULL,
+  member_id BIGINT UNSIGNED NOT NULL,
+  choice VARCHAR(16) NOT NULL, -- CANDIDATE / KEEP_PLAN / ABSTAIN
+  place_name VARCHAR(160) NULL, -- 仅 CANDIDATE 有值，落库前经服务端重新校验
+  latitude DOUBLE NULL,
+  longitude DOUBLE NULL,
+  comment VARCHAR(500) NULL,
+  voted_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_node_votes_change_member (node_change_id, member_id),
+  KEY idx_node_votes_change_choice (node_change_id, choice),
+  CONSTRAINT fk_node_votes_change FOREIGN KEY (node_change_id) REFERENCES node_changes(id),
+  CONSTRAINT fk_node_votes_member FOREIGN KEY (member_id) REFERENCES group_members(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS plan_votes (

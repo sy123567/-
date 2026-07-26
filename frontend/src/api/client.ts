@@ -16,6 +16,8 @@ import type {
   MemberConstraint,
   NodeChange,
   NodeNote,
+  NodeVoteChoice,
+  NodeVoteTally,
   NotificationItem,
   PlanCandidate,
   PlanVote,
@@ -590,6 +592,21 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ name: candidate.name, lat: candidate.lat, lng: candidate.lng }),
     });
+  },
+  async nodeVotes(changeId: number): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes`);
+  },
+  async castNodeVote(
+    changeId: number,
+    body: { memberId: number; choice: NodeVoteChoice; placeName?: string; lat?: number; lng?: number; comment?: string },
+  ): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+  async tallyNodeVote(changeId: number): Promise<NodeVoteTally> {
+    return request<NodeVoteTally>(`/api/plan-changes/${changeId}/node-votes/tally`, { method: "POST" });
   },
   async assistant(question: string): Promise<AssistantAnswer> {
     return request<AssistantAnswer>("/api/ai/assistant", {

@@ -194,6 +194,40 @@ export interface PlanCandidate {
   highlights: string[];
 }
 
+export type NodeVoteChoice = "CANDIDATE" | "KEEP_PLAN" | "ABSTAIN";
+
+export interface NodeVoteOption {
+  key: string;
+  label: string;
+  lat?: number;
+  lng?: number;
+  count: number;
+  voters: string[];
+}
+
+export interface NodeVoteNote {
+  member: string;
+  choice: NodeVoteChoice;
+  option?: string;
+  comment?: string;
+  votedAt?: string;
+}
+
+/** 节点级投票的实时结果。 */
+export interface NodeVoteTally {
+  changeId: Id;
+  totalMembers: number;
+  castCount: number;
+  abstainCount: number;
+  quorumReached: boolean;
+  decided: boolean;
+  tie: boolean;
+  appliedOption?: string;
+  open: boolean;
+  options: NodeVoteOption[];
+  notes: NodeVoteNote[];
+}
+
 export interface AssistantGuideHint {
   id: Id;
   title: string;

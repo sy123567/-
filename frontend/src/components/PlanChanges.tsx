@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { ArrowRight, Check, Footprints, Landmark, Repeat, Sparkles, Star, Users, Wallet } from "lucide-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { ArrowRight, Check, Footprints, Landmark, MinusCircle, PinOff, Sparkles, Star, Users, Vote, Wallet } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Badge } from "./ui";
-import type { PlanCandidate } from "../types";
+import type { NodeVoteChoice, PlanCandidate } from "../types";
+
+const KEEP_PLAN_KEY = "__keep_plan__";
+
+const CHOICE_LABEL: Record<NodeVoteChoice, string> = { CANDIDATE: "投给候选", KEEP_PLAN: "维持原安排", ABSTAIN: "弃权" };
 
 const CHANGE_TYPE_LABEL: Record<string, string> = { RESCHEDULE: "调整时间", REPLACE: "替换节点", REMOVE: "移除节点", ADD: "新增节点" };
 
@@ -25,17 +29,19 @@ export interface PlanChangeView {
 }
 
 /**
- * 一条节点变更：左边原安排、右边调整后的安排，方案还没进投票时可以展开候选地点重新挑选。
+ * 一条节点变更：左边原安排、右边调整后的安排，方案还没进整体投票时可以展开候选地点由成员投票决定换到哪里。
  */
 export function PlanChangeCard({
   change,
   editable,
+  memberId,
   formatRange,
   onChosen,
   onError,
 }: {
   change: PlanChangeView;
   editable: boolean;
+  memberId?: number;
   formatRange: (start?: string, end?: string) => string;
   onChosen: (placeName: string) => void;
   onError: (message: string) => void;
@@ -53,8 +59,8 @@ export function PlanChangeCard({
             aria-expanded={skyOpen}
             className="ml-auto flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ink/85"
           >
-            <Repeat size={13} />
-            {skyOpen ? "收起可选地点" : "换个地点"}
+            <Vote size={13} />
+            {skyOpen ? "收起候选投票" : "投票换地点"}
           </button>
         )}
       </div>
@@ -90,7 +96,7 @@ export function PlanChangeCard({
         )}
       </div>
       {skyOpen && change.id !== undefined && (
-        <CandidateSky changeId={change.id} currentPlace={change.toPlace} onChosen={onChosen} onError={onError} />
+        <CandidateSky changeId={change.id} currentPlace={change.toPlace} memberId={memberId} onChosen={onChosen} onError={onError} />
       )}
     </div>
   );
@@ -102,50 +108,100 @@ export function PlanChangeCard({
 function CandidateSky({
   changeId,
   currentPlace,
+  memberId,
   onChosen,
   onError,
 }: {
   changeId: number;
   currentPlace?: string;
+  memberId?: number;
   onChosen: (placeName: string) => void;
   onError: (message: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [comment, setComment] = useState("");
   const candidatesQuery = useQuery({ queryKey: ["plan-candidates", changeId], queryFn: () => api.planChangeCandidates(changeId) });
-  const choose = useMutation({
-    mutationFn: (candidate: PlanCandidate) => api.choosePlanReplacement(changeId, candidate),
-    onSuccess: (_result, candidate) => onChosen(candidate.name),
-    onError: (cause) => onError(cause instanceof Error ? cause.message : "换地点失败，请稍后再试"),
+  const votesQuery = useQuery({ queryKey: ["node-votes", changeId], queryFn: () => api.nodeVotes(changeId) });
+  const cast = useMutation({
+    mutationFn: (input: { choice: NodeVoteChoice; candidate?: PlanCandidate }) =>
+      api.castNodeVote(changeId, {
+        memberId: memberId as number,
+        choice: input.choice,
+        placeName: input.candidate?.name,
+        lat: input.candidate?.lat,
+        lng: input.candidate?.lng,
+        comment: comment.trim() || undefined,
+      }),
+    onSuccess: (tally) => {
+      setComment("");
+      void queryClient.invalidateQueries({ queryKey: ["node-votes", changeId] });
+      if (tally.appliedOption) onChosen(tally.appliedOption);
+    },
+    onError: (cause) => onError(cause instanceof Error ? cause.message : "投票失败，请稍后再试"),
   });
   const candidates = candidatesQuery.data ?? [];
+  const tally = votesQuery.data;
+  const votesFor = (key: string) => tally?.options.find((option) => option.key === key || option.label === key);
+  const vote = (choice: NodeVoteChoice, candidate?: PlanCandidate) => {
+    if (memberId === undefined) {
+      onError("你不是该行程小组的成员，无法参与节点投票");
+      return;
+    }
+    cast.mutate({ choice, candidate });
+  };
   return (
     <section className="relative mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-sky/10 via-white to-paper p-5">
       <div className="sky-glow pointer-events-none absolute -left-10 -top-16 h-52 w-52 rounded-full bg-sky/20 blur-3xl" />
       <div className="sky-glow pointer-events-none absolute -right-16 top-10 h-64 w-64 rounded-full bg-coral/10 blur-3xl" style={{ animationDelay: "-6s" }} />
-      <div className="relative flex flex-wrap items-end justify-between gap-2">
+      <div className="relative flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow">FLOATING OPTIONS</p>
-          <h3 className="mt-1 font-display text-lg font-bold text-ink">还可以去这些地方</h3>
-          <p className="mt-1 text-xs leading-5 text-ink-soft">都已通过预算、体力、饮食、天气和事件校验。点一团想法，它就会落进方案里。</p>
+          <h3 className="mt-1 font-display text-lg font-bold text-ink">这个节点，大家想去哪</h3>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-ink-soft">候选都已通过预算、体力、饮食、天气和事件校验。每人一票（可改票）。某个选项获得全体成员过半支持，或全员表态后有唯一领先项时自动落定；平票不落定，继续投或换个选项。</p>
         </div>
-        <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-ink-soft">{candidates.length} 个可选</span>
+        {tally && (
+          <div className="rounded-2xl bg-white/75 px-4 py-2 text-right">
+            <p className="font-mono text-sm font-bold text-ink">{tally.castCount}/{tally.totalMembers} 已表态</p>
+            <p className="mt-0.5 text-[11px] text-ink-soft">
+              {tally.appliedOption
+                ? `已落定：${tally.appliedOption}`
+                : tally.tie
+                  ? "目前平票，等更多人投票"
+                  : tally.quorumReached
+                    ? "已过半参与，还差一个明确多数"
+                    : "还没过半，继续投"}
+              {tally.abstainCount > 0 ? ` · 弃权 ${tally.abstainCount}` : ""}
+            </p>
+          </div>
+        )}
       </div>
+      <label className="relative mt-4 block">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">投票备注（可选）</span>
+        <input
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          maxLength={200}
+          placeholder="说说你为什么选它，比如“带老人，室内更稳妥”"
+          className="mt-1 w-full rounded-xl border border-white bg-white/85 px-3 py-2.5 text-sm text-ink outline-none transition focus:border-sky"
+        />
+      </label>
       {candidatesQuery.isLoading && <p className="relative mt-6 text-sm text-ink-soft">正在从地图和其他队伍的路线里找可替代的地点…</p>}
-      {candidatesQuery.isError && (
-        <p className="relative mt-6 text-sm text-coral-deep" role="alert">候选地点没能加载出来，稍后再试一次。</p>
-      )}
+      {candidatesQuery.isError && <p className="relative mt-6 text-sm text-coral-deep" role="alert">候选地点没能加载出来，稍后再试一次。</p>}
       {!candidatesQuery.isLoading && !candidatesQuery.isError && candidates.length === 0 && (
-        <p className="relative mt-6 rounded-2xl bg-white/70 p-4 text-sm leading-6 text-ink-soft">附近暂时没有同时满足天气、预算和体力的地点。可以先顺延时间，或者在行程页手动改这个节点。</p>
+        <p className="relative mt-6 rounded-2xl bg-white/70 p-4 text-sm leading-6 text-ink-soft">附近暂时没有同时满足天气、预算和体力的地点。可以投「维持原安排」，或者在行程页手动改这个节点。</p>
       )}
       <div className="relative mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {candidates.map((candidate, index) => {
           const settled = currentPlace === candidate.name;
-          const pending = choose.isPending && choose.variables?.name === candidate.name;
+          const option = votesFor(candidate.name);
+          const count = option?.count ?? 0;
+          const pending = cast.isPending && cast.variables?.candidate?.name === candidate.name;
           return (
             <button
               key={`${candidate.name}-${candidate.lat}`}
               type="button"
-              disabled={choose.isPending}
-              onClick={() => choose.mutate(candidate)}
+              disabled={cast.isPending}
+              onClick={() => vote("CANDIDATE", candidate)}
               style={{
                 "--drift-delay": `${-index * 1.7}s`,
                 "--drift-duration": `${11 + (index % 4) * 1.6}s`,
@@ -179,13 +235,89 @@ function CandidateSky({
                 </div>
               )}
               <p className={`mt-3 line-clamp-2 text-xs leading-5 ${settled ? "text-white/70" : "text-ink-soft"}`}>{candidate.reason}</p>
-              <p className={`mt-3 text-[10px] font-mono uppercase tracking-widest ${settled ? "text-coral" : "text-ink-soft/70"}`}>
-                {pending ? "落定中…" : settled ? "已落进方案" : SOURCE_LABEL[candidate.source] ?? candidate.source}
-              </p>
+              <VoteFooter count={count} voters={option?.voters ?? []} settled={settled} pending={pending} hint={SOURCE_LABEL[candidate.source] ?? candidate.source} />
             </button>
           );
         })}
       </div>
+      <div className="relative mt-5 grid gap-3 sm:grid-cols-2">
+        <PlainOption
+          icon={<PinOff size={15} />}
+          title="维持方案原安排"
+          detail={`继续用方案给的「${currentPlace ?? "原安排"}」，不再换地点`}
+          count={votesFor(KEEP_PLAN_KEY)?.count ?? 0}
+          voters={votesFor(KEEP_PLAN_KEY)?.voters ?? []}
+          disabled={cast.isPending}
+          onClick={() => vote("KEEP_PLAN")}
+        />
+        <PlainOption
+          icon={<MinusCircle size={15} />}
+          title="弃权"
+          detail="不计入有效票，但会计入参与人数"
+          count={tally?.abstainCount ?? 0}
+          voters={[]}
+          disabled={cast.isPending}
+          onClick={() => vote("ABSTAIN")}
+        />
+      </div>
+      {tally && tally.notes.length > 0 && (
+        <div className="relative mt-5 rounded-2xl bg-white/70 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">投票与备注</p>
+          <ul className="mt-3 space-y-2">
+            {tally.notes.map((note, index) => (
+              <li key={`${note.member}-${index}`} className="flex flex-wrap items-baseline gap-2 text-xs">
+                <span className="font-semibold text-ink">{note.member}</span>
+                <span className="rounded-full bg-sky/10 px-2 py-0.5 text-[10px] font-semibold text-sky">{CHOICE_LABEL[note.choice]}{note.option ? ` · ${note.option}` : ""}</span>
+                {note.comment && <span className="text-ink-soft">“{note.comment}”</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
+  );
+}
+
+function VoteFooter({ count, voters, settled, pending, hint }: { count: number; voters: string[]; settled: boolean; pending: boolean; hint: string }) {
+  return (
+    <div className="mt-3 flex items-center justify-between gap-2">
+      <span className={`text-[10px] font-mono uppercase tracking-widest ${settled ? "text-coral" : "text-ink-soft/70"}`}>
+        {pending ? "投票中…" : settled ? "已落进方案" : hint}
+      </span>
+      <span className={`flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${count > 0 ? "bg-coral/10 text-coral-deep" : settled ? "bg-white/15 text-white/70" : "bg-paper text-ink-soft"}`}>
+        <Vote size={11} />{count} 票{voters.length > 0 ? ` · ${voters.slice(0, 2).join("、")}${voters.length > 2 ? "等" : ""}` : ""}
+      </span>
+    </div>
+  );
+}
+
+function PlainOption({
+  icon,
+  title,
+  detail,
+  count,
+  voters,
+  disabled,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+  count: number;
+  voters: string[];
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" disabled={disabled} onClick={onClick} className="flex items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white/70 p-4 text-left transition hover:border-sky hover:bg-white disabled:opacity-60">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper text-ink-soft">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-ink">{title}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-ink-soft">{detail}</span>
+      </span>
+      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${count > 0 ? "bg-coral/10 text-coral-deep" : "bg-paper text-ink-soft"}`}>
+        {count} 票{voters.length > 0 ? ` · ${voters.slice(0, 2).join("、")}${voters.length > 2 ? "等" : ""}` : ""}
+      </span>
+    </button>
   );
 }

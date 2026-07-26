@@ -112,7 +112,7 @@ export function RouteTrail({
                       {(uniqueEvents.length > 0 ? uniqueEvents : [undefined]).map((event, eventIndex) => (
                         <span key={event?.id ?? `affected-${eventIndex}`} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${event?.severity ? severityStyle[event.severity] : "bg-slate-100 text-ink-soft"}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${event?.severity === "CRITICAL" || event?.severity === "HIGH" ? "bg-coral" : event?.severity === "MEDIUM" ? "bg-sun" : "bg-mint"}`} />
-                          {event?.title ?? "受事件影响"}{event?.tempMin !== undefined && event.tempMax !== undefined ? ` · ${Math.round(event.tempMin)}~${Math.round(event.tempMax)}°C` : ""}
+                          {event?.title ?? "受事件影响"}{Number.isFinite(event?.tempMin) && Number.isFinite(event?.tempMax) ? ` · ${Math.round(event!.tempMin as number)}~${Math.round(event!.tempMax as number)}°C` : ""}
                         </span>
                       ))}
                     </div>

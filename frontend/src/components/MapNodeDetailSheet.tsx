@@ -258,10 +258,10 @@ export function MapNodeDetailSheet({
             <SectionHeading icon={<MapPin size={17} />} title="天气上下文" tone="coral" />
             {weatherQuery.isLoading ? (
               <InfoPanel>正在查询该地点的天气…</InfoPanel>
-            ) : weather?.available && weather.tempMin !== undefined && weather.tempMax !== undefined ? (
+            ) : weather?.available && Number.isFinite(weather.tempMin) && Number.isFinite(weather.tempMax) ? (
               <div className={`rounded-card p-4 ${weather.hasAlert || weather.hasPrecipitation ? "bg-sun/20 text-amber-900" : "bg-mint/10 text-emerald-900"}`}>
                 <p className="font-mono text-lg font-bold">
-                  {Math.round(weather.tempMin)}~{Math.round(weather.tempMax)}°C
+                  {Math.round(weather.tempMin as number)}~{Math.round(weather.tempMax as number)}°C
                   {weather.phrase && <span className="ml-2 font-sans text-sm font-semibold">{weather.phrase}</span>}
                 </p>
                 {(weather.wind || weather.precipitation) && (

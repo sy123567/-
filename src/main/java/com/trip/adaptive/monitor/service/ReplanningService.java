@@ -95,6 +95,7 @@ public class ReplanningService {
             .toList();
     if (affected.isEmpty()) return List.of();
     archivePreviousRound(id);
+    int roundNo = nextRound(id);
 
     List<ExternalEvent> activeEvents = events.findByTripIdAndEndTimeAfter(id, LocalDateTime.now());
     ReplanConstraints constraints = constraintsFor(t);
@@ -104,6 +105,7 @@ public class ReplanningService {
       p.setTrip(t);
       p.setStrategy(strategy);
       p.setTitle("替代方案-" + strategy);
+      p.setRoundNo(roundNo);
       p.setStatus(Enums.PlanStatus.PROPOSED);
 
       BigDecimal extraCost = BigDecimal.ZERO;
@@ -451,13 +453,32 @@ public class ReplanningService {
   }
 
   /** 当前轮次的方案（不含已归档的历史方案）。 */
+  /** 当前轮：最近一次监测产出的全部方案（含已否决/已采纳），让成员看到这次监测到底给了哪些选择。 */
   public List<AlternativePlan> list(Long id) {
-    return plans.findByTripIdAndArchivedFalse(id);
+    List<AlternativePlan> all = plans.findByTripId(id);
+    int latest = latestRound(all);
+    return all.stream()
+        .filter(plan -> plan.getRoundNo() == latest)
+        .sorted(Comparator.comparing(AlternativePlan::getId))
+        .toList();
   }
 
-  /** 历史方案：已归档的往轮方案，仅用于回溯。 */
+  /** 历史方案：更早轮次的方案，仅用于回溯。 */
   public List<AlternativePlan> history(Long id) {
-    return plans.findByTripId(id).stream().filter(AlternativePlan::isArchived).toList();
+    List<AlternativePlan> all = plans.findByTripId(id);
+    int latest = latestRound(all);
+    return all.stream()
+        .filter(plan -> plan.getRoundNo() < latest)
+        .sorted(Comparator.comparing(AlternativePlan::getId).reversed())
+        .toList();
+  }
+
+  private int nextRound(Long tripId) {
+    return latestRound(plans.findByTripId(tripId)) + 1;
+  }
+
+  private static int latestRound(List<AlternativePlan> all) {
+    return all.stream().mapToInt(AlternativePlan::getRoundNo).max().orElse(0);
   }
 
   public AlternativePlan get(Long id) {
