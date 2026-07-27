@@ -1,5 +1,5 @@
-import { Heart, Search, SlidersHorizontal, Star } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Heart, ImagePlus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -22,6 +22,12 @@ function GuidePublishModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [cover, setCover] = useState("");
   const [tags, setTags] = useState("");
   const [toast, setToast] = useState("");
+  const coverInput = useRef<HTMLInputElement>(null);
+  const uploadCover = useMutation({
+    mutationFn: (file: File) => api.uploadImage(file),
+    onSuccess: (url) => setCover(url),
+    onError: (error) => setToast(error instanceof Error ? error.message : "封面上传失败"),
+  });
   const reset = () => { setTripId(""); setNote(""); setTheme(themeOptions[0]); setCity(""); setCover(""); setTags(""); };
   const publish = useMutation({
     mutationFn: () => api.publishGuide({
@@ -42,7 +48,15 @@ function GuidePublishModal({ open, onClose }: { open: boolean; onClose: () => vo
       <div><label className="text-xs font-semibold text-ink-soft">选择已完成的行程</label><select value={tripId} onChange={(e) => setTripId(e.target.value ? Number(e.target.value) : "")} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">请选择一段已完成的行程</option>{completedTrips.map((trip) => <option key={trip.id} value={trip.id}>{trip.title} · {trip.startDate}~{trip.endDate}</option>)}</select></div>
       <div><label className="text-xs font-semibold text-ink-soft">备注说明</label><textarea value={note} onChange={(e) => setNote(e.target.value)} className="mt-1 min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="这段行程的亮点、避坑建议、适合谁去…" /></div>
       <div className="grid grid-cols-2 gap-3"><div><label className="text-xs font-semibold text-ink-soft">主题</label><select value={theme} onChange={(e) => setTheme(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">{themeOptions.map((t) => <option key={t}>{t}</option>)}</select></div><div><label className="text-xs font-semibold text-ink-soft">城市（可选，留空自动识别）</label><Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="上海" /></div></div>
-      <div><label className="text-xs font-semibold text-ink-soft">封面图链接（可选）</label><Input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="https://…" /></div>
+      <div>
+        <label className="text-xs font-semibold text-ink-soft">封面图（可选，从本地选图）</label>
+        <div className="mt-1 flex items-center gap-3">
+          <input ref={coverInput} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) uploadCover.mutate(file); }} />
+          <Button variant="secondary" className="flex items-center gap-2" disabled={uploadCover.isPending} onClick={() => coverInput.current?.click()}><ImagePlus size={15} />{uploadCover.isPending ? "上传中…" : cover ? "重新选图" : "选择图片"}</Button>
+          {cover && <><img src={cover} alt="封面预览" className="h-14 w-20 rounded-lg object-cover" /><button type="button" className="text-xs text-ink-soft underline" onClick={() => setCover("")}>移除</button></>}
+        </div>
+        <p className="mt-1 text-[11px] text-ink-soft">支持 JPG / PNG / WEBP / GIF，单张不超过 5MB。</p>
+      </div>
       <div><label className="text-xs font-semibold text-ink-soft">标签（用逗号或空格分隔）</label><Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Citywalk 咖啡 拍照" /></div>
     </>}
     <div className="flex justify-end gap-3 border-t border-slate-100 pt-4"><Button variant="ghost" onClick={onClose}>取消</Button><Button disabled={!valid || publish.isPending} onClick={() => publish.mutate()}>{publish.isPending ? "发布中…" : "发布攻略"}</Button></div>

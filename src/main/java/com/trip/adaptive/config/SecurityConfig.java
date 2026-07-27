@@ -2,6 +2,7 @@ package com.trip.adaptive.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -45,6 +46,9 @@ public class SecurityConfig {
                         "/",
                         "/index.html",
                         "/assets/**")
+                    .permitAll()
+                    // 上传的图片由 <img> 直接加载，带不上鉴权头，只放开读取。
+                    .requestMatchers(HttpMethod.GET, "/api/uploads/images/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated())

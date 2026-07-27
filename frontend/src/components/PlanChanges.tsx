@@ -152,8 +152,20 @@ function CandidateSky({
 }) {
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
-  const candidatesQuery = useQuery({ queryKey: ["plan-candidates", changeId], queryFn: () => api.planChangeCandidates(changeId) });
-  const votesQuery = useQuery({ queryKey: ["node-votes", changeId], queryFn: () => api.nodeVotes(changeId) });
+  // 候选在后端已固定，不需要反复重取；每次重取都会让漂浮的卡片重排，看起来像界面在刷新。
+  const candidatesQuery = useQuery({
+    queryKey: ["plan-candidates", changeId],
+    queryFn: () => api.planChangeCandidates(changeId),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  // 票数要能看到其他成员的实时表态。
+  const votesQuery = useQuery({
+    queryKey: ["node-votes", changeId],
+    queryFn: () => api.nodeVotes(changeId),
+    refetchInterval: 5000,
+  });
   const cast = useMutation({
     mutationFn: (input: { choice: NodeVoteChoice; candidate?: PlanCandidate }) =>
       api.castNodeVote(changeId, {

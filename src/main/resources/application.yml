@@ -20,6 +20,10 @@ spring:
   web:
     resources:
       add-mappings: true
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -41,6 +45,9 @@ management:
 app:
   # 数据看板等管理端能力只对这里列出的邮箱开放，多个邮箱用逗号分隔
   admin-emails: ${ADMIN_EMAILS:admin@example.com}
+  # 攻略封面等本地上传图片的存放目录
+  upload:
+    dir: ${UPLOAD_DIR:uploads}
   seed:
     enabled: true
   qweather:

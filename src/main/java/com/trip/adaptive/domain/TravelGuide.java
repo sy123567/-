@@ -7,12 +7,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 
 @Entity
 public class TravelGuide {
@@ -35,6 +38,11 @@ public class TravelGuide {
   private Long tripId;
 
   @ElementCollection private List<String> tags = new ArrayList<>();
+
+  // 路线模板：发布时从原行程抄下来的节点安排，读者纳用时按自己的出发日期展开。
+  @OneToMany(mappedBy = "guide", cascade = CascadeType.ALL, orphanRemoval = true)
+  @OrderBy("sequenceOrder ASC")
+  private List<GuideTemplateNode> templateNodes = new ArrayList<>();
 
   private double rating;
   private int reviews;
@@ -65,6 +73,14 @@ public class TravelGuide {
 
   public void setTitle(String v) {
     title = v;
+  }
+
+  public List<GuideTemplateNode> getTemplateNodes() {
+    return templateNodes;
+  }
+
+  public void setTemplateNodes(List<GuideTemplateNode> v) {
+    templateNodes = v;
   }
 
   public String getCity() {
