@@ -344,6 +344,33 @@ export const api = {
   async toggleGuideSave(id: number): Promise<TravelGuide> {
     return request<TravelGuide>(`/api/guides/${id}/save`, { method: "POST" });
   },
+  /** 本地图片上传，返回可直接放进 <img src> 的地址。 */
+  async uploadImage(file: File): Promise<string> {
+    const form = new FormData();
+    form.append("file", file);
+    const token = getToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const endpoint = `${apiBase}/api/uploads/images`;
+    let response: Response;
+    try {
+      response = await fetch(endpoint, { method: "POST", headers, body: form });
+    } catch {
+      throw new ApiError(`无法连接后端服务：${apiBase}`, { endpoint, isNetworkError: true });
+    }
+    if (!response.ok) {
+      let message = `图片上传失败（${response.status}）`;
+      try {
+        const body = (await response.json()) as { message?: string };
+        if (body.message) message = body.message;
+      } catch {
+        // Keep the HTTP status message when the response is not JSON.
+      }
+      throw new ApiError(message, { endpoint, status: response.status });
+    }
+    const body = (await response.json()) as { url: string };
+    return body.url;
+  },
   async publishGuide(draft: GuidePublishDraft): Promise<TravelGuide> {
     return request<TravelGuide>("/api/guides", {
       method: "POST",

@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ public class ReplanningService {
   private final ExternalEventRepository events;
   private final ReplacementCandidateService candidates;
   private final RouteRecalculationService routing;
+  private final NodeCandidateStore candidateStore;
 
   @Value("${weather.replan-buffer-minutes:30}")
   private int bufferMinutes;
@@ -65,7 +67,8 @@ public class ReplanningService {
       NotificationService n,
       ExternalEventRepository e,
       ReplacementCandidateService candidates,
-      RouteRecalculationService routing) {
+      RouteRecalculationService routing,
+      NodeCandidateStore candidateStore) {
     trips = t;
     impacts = i;
     plans = p;
@@ -74,6 +77,7 @@ public class ReplanningService {
     events = e;
     this.candidates = candidates;
     this.routing = routing;
+    this.candidateStore = candidateStore;
   }
 
   @Transactional
@@ -132,9 +136,27 @@ public class ReplanningService {
     return out;
   }
 
-  /** 某个节点变更可选的全部替代地点：方案里给的只是默认建议，成员可以在候选里改选。 */
+  /**
+   * 某个节点变更可选的全部替代地点：方案里给的只是默认建议，成员可以在候选里改选。
+   *
+   * <p>候选只在第一次请求时生成并落库，之后全组、每次刷新拿到的都是同一份；否则 AI 提名与地图检索 每次结果都不一样，成员之间根本没有共同选项，投票也会因为“候选已失效”被拒。
+   */
   @Transactional(readOnly = true)
   public List<Candidate> candidatesFor(Long changeId) {
+    List<Candidate> stored = candidateStore.load(changeId);
+    if (!stored.isEmpty()) return stored;
+    List<Candidate> fresh = generateCandidates(changeId);
+    if (fresh.isEmpty()) return fresh;
+    try {
+      candidateStore.save(changeId, fresh);
+    } catch (DataIntegrityViolationException alreadyGenerated) {
+      // 另一位成员同时打开了这个节点，以先落库的那份为准。
+    }
+    List<Candidate> persisted = candidateStore.load(changeId);
+    return persisted.isEmpty() ? fresh : persisted;
+  }
+
+  private List<Candidate> generateCandidates(Long changeId) {
     NodeChange change =
         changes.findById(changeId).orElseThrow(() -> new ResourceNotFoundException("节点变更不存在"));
     ItineraryNode node = change.getOriginalNode();

@@ -12,3 +12,6 @@ target/
 .env.*
 !application.yml
 frontend/vite.config.ts.timestamp-*.mjs
+
+# 本地上传的图片
+uploads/

@@ -53,6 +53,11 @@ public class NodeChange {
   @OneToMany(mappedBy = "nodeChange", cascade = CascadeType.ALL, orphanRemoval = true)
   private List<NodeCandidateVote> candidateVotes = new ArrayList<>();
 
+  // 候选地点同样随变更一起删除。
+  @JsonIgnore
+  @OneToMany(mappedBy = "nodeChange", cascade = CascadeType.ALL, orphanRemoval = true)
+  private List<NodeChangeCandidate> candidatePlaces = new ArrayList<>();
+
   public NodeChange() {}
 
   public List<NodeCandidateVote> getCandidateVotes() {

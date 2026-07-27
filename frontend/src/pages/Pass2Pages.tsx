@@ -579,6 +579,34 @@ function schedulePlannerPlaces(places: PlannerPlace[], date: string, days: numbe
   });
 }
 
+/** 攻略自带的路线模板：把「第几天 + 时刻」按读者选的出发日期展开成具体节点。 */
+function expandGuideTemplate(guide: TravelGuide, date: string): ItineraryNode[] {
+  return (guide.templateNodes ?? []).map((node, index) => {
+    const day = dateAfter(date, Math.max(0, node.dayIndex - 1));
+    const [startHour, startMinute] = splitClock(node.startTime, 9, 0);
+    const [endHour, endMinute] = splitClock(node.endTime, startHour + 2, startMinute);
+    return {
+      id: -(index + 1),
+      name: node.name || node.placeName,
+      placeName: node.placeName || node.name,
+      latitude: node.latitude ?? 0,
+      longitude: node.longitude ?? 0,
+      nodeType: node.nodeType,
+      plannedStart: localDateTime(day, startHour, startMinute),
+      plannedEnd: localDateTime(day, endHour, endMinute),
+      cost: node.cost ?? 0,
+      sequenceOrder: node.sequenceOrder || index + 1,
+      status: "PLANNED" as const,
+    };
+  });
+}
+
+function splitClock(value: string | undefined, fallbackHour: number, fallbackMinute: number): [number, number] {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value ?? "");
+  if (!match) return [fallbackHour, fallbackMinute];
+  return [Number(match[1]), Number(match[2])];
+}
+
 function categoryForNodeType(nodeType: NodeType): PlannerPlace["category"] {
   if (nodeType === "MEAL") return "吃";
   if (nodeType === "LODGING") return "住";
@@ -1502,7 +1530,10 @@ export function GuideDetailPage() {
   });
   if (guideQuery.isLoading) return <LoadingState label="正在读取攻略…" />;
   if (guideQuery.isError || !guide) return <ErrorState message={guideQuery.error instanceof Error ? guideQuery.error.message : "攻略不存在"} onRetry={() => void guideQuery.refetch()} />;
-  const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), "2025-05-03", guide.days);
+  // 优先用作者发布时带过来的真实路线，早期没有模板的攻略才用城市推荐地点拼一条。
+  const previewDate = new Date().toISOString().slice(0, 10);
+  const guideTemplate = expandGuideTemplate(guide, previewDate);
+  const templateNodes = guideTemplate.length > 0 ? guideTemplate : schedulePlannerPlaces(getCitySuggestions(guide.city).slice(0, 2).map(offlinePlannerPlace), previewDate, guide.days);
   const otherGuides = (authorQuery.data ?? []).filter((item) => item.id !== guide.id);
   const comments = commentsQuery.data ?? [];
   return <><div className="mb-7 flex items-center gap-3 text-sm text-ink-soft"><Link to="/guides" className="hover:text-ink">攻略社区</Link><span>/</span><span className="text-ink">{guide.title}</span></div><div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><div><Card className="overflow-hidden"><div className="h-72 md:h-96"><ImageFallback src={guide.cover} alt={guide.title} city={guide.city} /></div><div className="p-6 md:p-8"><div className="flex flex-wrap items-center gap-2"><Badge tone="coral">{guide.theme}</Badge><Badge tone="neutral">{guide.city} · {guide.days} 天</Badge><span className="ml-auto flex items-center gap-1 text-sm"><Heart size={16} className="text-coral" />{guide.saves} 收藏</span></div><h1 className="mt-4 font-display text-3xl font-bold text-ink">{guide.title}</h1><p className="mt-4 text-sm leading-7 text-ink-soft">{guide.description} 这是一份把具体地点、留白时间和真实预算放在一起的可复用路线。</p><div className="mt-5 flex flex-wrap gap-2">{guide.tags.map((tag) => <Badge key={tag} tone="sky">#{tag}</Badge>)}</div></div></Card><Card className="mt-5 p-6 md:p-8"><p className="eyebrow">TEMPLATE ITINERARY</p><h2 className="mt-2 font-display text-2xl font-bold">路线模板</h2><div className="mt-7"><RouteTrail nodes={templateNodes} /></div></Card><Card className="mt-5 p-6 md:p-8"><div className="flex items-end justify-between gap-3"><div><p className="eyebrow">COMMENTS</p><h2 className="mt-2 font-display text-2xl font-bold">评论区</h2></div><Badge tone="neutral">{comments.length} 条</Badge></div><div className="mt-6 space-y-4">{commentsQuery.isLoading ? <LoadingState label="正在读取评论…" /> : comments.length === 0 ? <p className="rounded-card bg-paper p-5 text-sm text-ink-soft">还没有评论，来留下第一句建议吧。</p> : comments.map((comment) => <div key={comment.id} className="flex gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{comment.authorName.slice(0, 1)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-ink">{comment.authorName}</p><span className="text-[11px] text-ink-soft">{relativeTime(comment.createdAt)}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-soft">{comment.body}</p></div></div>)}</div><div className="mt-6 border-t border-slate-100 pt-5"><textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={500} className="min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm leading-6 focus:border-sky focus:outline-none" placeholder="分享你的体验或给作者一点建议…" /><div className="mt-3 flex items-center justify-between"><span className="text-xs text-ink-soft">{commentBody.length}/500</span><Button disabled={!commentBody.trim() || addComment.isPending} onClick={() => addComment.mutate()}><Send size={15} className="mr-2 inline" />{addComment.isPending ? "发布中…" : "发表评论"}</Button></div></div></Card></div><div className="space-y-5"><Card className="sticky top-24 p-6"><p className="eyebrow">READY TO GO?</p><h2 className="mt-3 font-display text-2xl font-bold">把这条路线带回你的小组</h2><p className="mt-3 text-sm leading-6 text-ink-soft">选择小组和实际出发日期，模板中的第 1 天 / 第 2 天会自动映射到你的真实行程。</p><div className="mt-6 flex items-center justify-between border-y border-slate-100 py-4"><span className="text-sm text-ink-soft">预计人均</span><span className="font-mono text-xl font-bold">¥{guide.price.toLocaleString()}</span></div><Button className="mt-5 w-full" onClick={() => setOpen(true)}>攻略纳用</Button><Button variant="ghost" className="mt-2 w-full" onClick={() => setShareOpen(true)}><MessageSquare size={15} className="mr-2 inline" />分享到聊天</Button></Card><Card className="p-6"><p className="eyebrow">BY {guide.author.name.toUpperCase()}</p><div className="mt-4 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-mint/15 font-semibold text-ink">{guide.author.name.slice(0, 1)}</div><div><p className="text-sm font-semibold">{guide.author.name}</p><p className="text-xs text-ink-soft">{guide.rating.toFixed(1)} 分 · {guide.reviews} 条评价</p></div></div><h3 className="mt-6 border-t border-slate-100 pt-5 font-display text-lg font-bold">作者的其他攻略 / 笔记</h3><div className="mt-4 space-y-3">{authorQuery.isLoading ? <p className="text-sm text-ink-soft">正在读取作者笔记…</p> : otherGuides.length === 0 ? <p className="text-sm text-ink-soft">作者暂时还没有其他已发布攻略。</p> : otherGuides.map((other) => <Link key={other.id} to={`/guides/${other.id}`} className="block rounded-xl bg-paper p-3 transition hover:-translate-y-0.5 hover:bg-sky/5"><p className="text-sm font-semibold text-ink">{other.title}</p><p className="mt-1 text-xs text-ink-soft">{other.city} · {other.days} 天 · {other.rating.toFixed(1)} 分</p></Link>)}</div></Card></div></div><ApplyGuideModal guide={guide} open={open} onClose={() => setOpen(false)} onDone={(tripId) => { setOpen(false); show("攻略纳用完成，正在打开新行程"); navigate(`/trips/${tripId}`); }} /><ShareGuideModal guide={guide} open={shareOpen} onClose={() => setShareOpen(false)} onDone={(name) => { setShareOpen(false); show(`已分享给「${name}」`); }} />{toast}</>;
@@ -1516,7 +1547,8 @@ function ApplyGuideModal({ guide, open, onClose, onDone }: { guide: TravelGuide;
   const [error, setError] = useState("");
   const groups = groupsQuery.data ?? [];
   const selectedGroupId = groupId === "" ? groups[0]?.id : groupId;
-  const templateNodes = schedulePlannerPlaces(getCitySuggestions(guide.city).map(offlinePlannerPlace), departDate, guide.days);
+  const guideTemplate = expandGuideTemplate(guide, departDate);
+  const templateNodes = guideTemplate.length > 0 ? guideTemplate : schedulePlannerPlaces(getCitySuggestions(guide.city).map(offlinePlannerPlace), departDate, guide.days);
   const applyMutation = useMutation({
     mutationFn: async () => {
       if (selectedGroupId === undefined) throw new Error("请先创建或加入一个小组");

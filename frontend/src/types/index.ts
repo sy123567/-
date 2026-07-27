@@ -266,6 +266,21 @@ export interface TravelGuide {
   saves: number;
   savedBy?: Id[];
   description: string;
+  templateNodes?: GuideTemplateNode[];
+}
+
+export interface GuideTemplateNode {
+  id: Id;
+  sequenceOrder: number;
+  dayIndex: number;
+  name: string;
+  placeName: string;
+  latitude?: number;
+  longitude?: number;
+  nodeType: NodeType;
+  startTime?: string;
+  endTime?: string;
+  cost?: number;
 }
 
 export interface DiscussionPost {
