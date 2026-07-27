@@ -25,7 +25,7 @@ export function MapNodeDetailSheet({
   const queryClient = useQueryClient();
   const resolveQuery = useQuery({
     queryKey: ["map-resolve", node.id, node.placeName || node.name, node.latitude, node.longitude],
-    queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude),
+    queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude, trip.id),
     enabled: hasCoordinates(node) && Boolean(node.placeName || node.name),
   });
   const resolvedNode = useMemo(() => {

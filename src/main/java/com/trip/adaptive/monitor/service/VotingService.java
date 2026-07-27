@@ -202,6 +202,12 @@ public class VotingService {
     return p.getTrip();
   }
 
+  /** 方案所属行程，用于在进入事务前先拿到该行程的监测互斥锁。 */
+  @Transactional(readOnly = true)
+  public Long tripIdOf(Long planId) {
+    return get(planId).getTrip().getId();
+  }
+
   private AlternativePlan get(Long id) {
     return plans.findById(id).orElseThrow(() -> new ResourceNotFoundException("方案不存在"));
   }

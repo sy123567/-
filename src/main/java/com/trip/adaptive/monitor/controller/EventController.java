@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.trip.adaptive.domain.ExternalEvent;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.monitor.service.EventIngestionService;
+import com.trip.adaptive.monitor.service.TripMonitorGuard;
 import com.trip.adaptive.service.TripService;
 
 @RestController
@@ -22,10 +23,12 @@ import com.trip.adaptive.service.TripService;
 public class EventController {
   private final EventIngestionService s;
   private final TripService trips;
+  private final TripMonitorGuard guard;
 
-  public EventController(EventIngestionService s, TripService trips) {
+  public EventController(EventIngestionService s, TripService trips, TripMonitorGuard guard) {
     this.s = s;
     this.trips = trips;
+    this.guard = guard;
   }
 
   @PostMapping("/events")
@@ -60,13 +63,13 @@ public class EventController {
   @PostMapping("/trips/{id}/events/weather")
   public List<ExternalEvent> weather(@PathVariable Long id, Authentication authentication) {
     trips.requireMember(id, currentUser(authentication));
-    return s.ingestWeatherForTrip(id);
+    return guard.runExclusively(id, () -> s.ingestWeatherForTrip(id));
   }
 
   @PostMapping("/trips/{id}/events/scan")
   public List<ExternalEvent> scan(@PathVariable Long id, Authentication authentication) {
     trips.requireMember(id, currentUser(authentication));
-    return s.ingestAllForTrip(id, false);
+    return guard.runExclusively(id, () -> s.ingestAllForTrip(id, false));
   }
 
   private User currentUser(Authentication authentication) {

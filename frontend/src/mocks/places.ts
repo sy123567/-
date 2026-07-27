@@ -193,10 +193,13 @@ const suggestedPlaces: SuggestedPlace[] = [
   { city: "大理", placeName: "苍山", latitude: 25.679, longitude: 100.12, nodeType: "ATTRACTION", durationMinutes: 180 },
 ];
 
-export function suggestPlaces(query: string): SuggestedPlace[] {
+export function suggestPlaces(query: string, city = ""): SuggestedPlace[] {
   const keyword = query.trim().toLowerCase();
-  if (!keyword) return suggestedPlaces.slice(0, 8);
-  return suggestedPlaces.filter((place) => `${place.city}${place.placeName}`.toLowerCase().includes(keyword)).slice(0, 8);
+  const scope = city.trim().toLowerCase();
+  // 限定在目的地城市内，避免选到同名的异地地点。
+  const pool = scope ? suggestedPlaces.filter((place) => place.city.toLowerCase().includes(scope)) : suggestedPlaces;
+  if (!keyword) return pool.slice(0, 8);
+  return pool.filter((place) => `${place.city}${place.placeName}`.toLowerCase().includes(keyword)).slice(0, 8);
 }
 
 export function getCitySuggestions(city: string): SuggestedPlace[] {

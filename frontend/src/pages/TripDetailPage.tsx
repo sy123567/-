@@ -44,7 +44,7 @@ export function TripDetailPage() {
   const overviewResolveQueries = useQueries({
     queries: topLevelNodes.map((node) => ({
       queryKey: ["trip-map-resolve-overview", node.id, node.placeName || node.name, node.latitude, node.longitude],
-      queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude),
+      queryFn: () => api.mapResolve(node.placeName || node.name, node.latitude, node.longitude, Number(id)),
       enabled: hasCoordinates(node) && Boolean(node.placeName || node.name),
     })),
   });

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.trip.adaptive.domain.User;
 import com.trip.adaptive.monitor.service.ImpactMatchingService;
 import com.trip.adaptive.monitor.service.RiskScoringService;
+import com.trip.adaptive.monitor.service.TripMonitorGuard;
 import com.trip.adaptive.service.TripService;
 
 @RestController
@@ -18,23 +19,26 @@ public class ImpactController {
   private final ImpactMatchingService matching;
   private final RiskScoringService risk;
   private final TripService trips;
+  private final TripMonitorGuard guard;
 
-  public ImpactController(ImpactMatchingService m, RiskScoringService r, TripService t) {
+  public ImpactController(
+      ImpactMatchingService m, RiskScoringService r, TripService t, TripMonitorGuard g) {
     matching = m;
     risk = r;
     trips = t;
+    guard = g;
   }
 
   @PostMapping("/{id}/assess")
   public Object assess(@PathVariable Long id, Authentication authentication) {
     trips.requireMember(id, currentUser(authentication));
-    return matching.assessTrip(id);
+    return guard.runExclusively(id, () -> matching.assessTrip(id));
   }
 
   @GetMapping("/{id}/impacts")
   public Object impacts(@PathVariable Long id, Authentication authentication) {
     trips.requireMember(id, currentUser(authentication));
-    return matching.assessTrip(id);
+    return guard.runExclusively(id, () -> matching.assessTrip(id));
   }
 
   @GetMapping("/{id}/risk")

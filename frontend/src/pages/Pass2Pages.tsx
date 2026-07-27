@@ -666,7 +666,7 @@ export function NewTripPage() {
 
   const selectedGroupId = groupId === "" ? groups[0].id : groupId;
   const selectedGroup = groups.find((group) => group.id === selectedGroupId);
-  const suggestions = suggestPlaces(nodeDraft.placeName);
+  const suggestions = suggestPlaces(nodeDraft.placeName, city);
   const cityPlaces = getCitySuggestions(city);
 
   const updateDraft = <K extends keyof NodeDraft>(key: K, value: NodeDraft[K]) => {
@@ -690,7 +690,7 @@ export function NewTripPage() {
     setMapSearchLoading(true);
     setMapSearchMessage("");
     try {
-      const result = await api.mapSearch(query, city.trim() || nodeDraft.placeName.trim());
+      const result = await api.mapSearch(query, city.trim());
       setMapPlaces(result.places);
       if (!result.available || result.places.length === 0) setMapSearchMessage(result.message ?? "没有匹配到地点，可以换个关键词，或从下方推荐地点中选择。");
     } catch {
