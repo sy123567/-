@@ -40,6 +40,7 @@ public class NodeChange {
 
   // 变更前快照：方案被采纳应用到节点时记录，用于「回退」恢复到变更前的行程状态。
   private boolean applied;
+  private String prevName;
   private String prevPlaceName;
   private Double prevLatitude, prevLongitude;
   private LocalDateTime prevStart, prevEnd;
@@ -154,6 +155,14 @@ public class NodeChange {
 
   public void setApplied(boolean v) {
     applied = v;
+  }
+
+  public String getPrevName() {
+    return prevName;
+  }
+
+  public void setPrevName(String v) {
+    prevName = v;
   }
 
   public String getPrevPlaceName() {

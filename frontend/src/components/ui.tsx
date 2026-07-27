@@ -42,10 +42,10 @@ export function RiskGauge({ score, label }: { score: number; label: string }) {
 
 const nodeIcon = { ATTRACTION: MapPin, MEAL: Sparkles, LODGING: Check, TRANSPORT: ChevronRight, OTHER: Sparkles };
 const nodeNames = { ATTRACTION: "景点", MEAL: "餐饮", LODGING: "住宿", TRANSPORT: "交通", OTHER: "其他" };
-const statusStyle: Record<NodeStatus, string> = { PLANNED: "bg-sky/10 text-blue-700", CONFIRMED: "bg-mint/10 text-emerald-700", AFFECTED: "bg-coral/10 text-coral-deep", CANCELLED: "bg-slate-100 text-ink-soft", REPLACED: "bg-sun/20 text-amber-700" };
+const statusStyle: Record<NodeStatus, string> = { PLANNED: "bg-sky/10 text-blue-700", CONFIRMED: "bg-mint/10 text-emerald-700", AFFECTED: "bg-coral/10 text-coral-deep", CANCELLED: "bg-slate-100 text-ink-soft", REPLACED: "bg-emerald-600 text-white" };
 
 export function StatusBadge({ status }: { status: NodeStatus }) {
-  const labels = { PLANNED: "已规划", CONFIRMED: "已确认", AFFECTED: "受影响", CANCELLED: "已取消", REPLACED: "已替换" };
+  const labels = { PLANNED: "已规划", CONFIRMED: "已确认", AFFECTED: "受影响", CANCELLED: "已取消", REPLACED: "投票已换新" };
   return <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${statusStyle[status]}`}>{labels[status]}</span>;
 }
 
@@ -72,7 +72,11 @@ export function RouteTrail({
   showNearby?: boolean;
 }) {
   const [selectedNode, setSelectedNode] = useState<ItineraryNode | null>(null);
-  const topLevelNodes = nodes.filter((node) => node.parentId === null || node.parentId === undefined);
+  // 换地点后节点时间会变，按开始时间排序才不会把旧顺序留在前面。
+  const topLevelNodes = nodes
+    .filter((node) => node.parentId === null || node.parentId === undefined)
+    .slice()
+    .sort((left, right) => (left.plannedStart ?? "").localeCompare(right.plannedStart ?? "") || left.sequenceOrder - right.sequenceOrder);
   const childrenByParent = new Map<number, ItineraryNode[]>();
   nodes.filter((node) => node.parentId !== null && node.parentId !== undefined).forEach((node) => {
     const children = childrenByParent.get(node.parentId!) ?? [];
@@ -86,6 +90,8 @@ export function RouteTrail({
           const events = eventsByNode?.[node.id] ?? [];
           const uniqueEvents = Array.from(new Map(events.map((event) => [event.title ?? `event-${event.id}`, event])).values());
           const Icon = nodeIcon[node.nodeType];
+          const replaced = node.status === "REPLACED";
+          const cancelled = node.status === "CANCELLED";
           return (
             <div key={node.id} className="group/route relative flex gap-3">
               {index < topLevelNodes.length - 1 && (
@@ -93,20 +99,26 @@ export function RouteTrail({
                   <Send size={13} className="route-plane absolute -left-[7px] top-1/2 rotate-90 bg-paper text-mint" />
                 </div>
               )}
-              <div className="relative z-10 h-12 w-12 shrink-0 overflow-hidden rounded-2xl border-2 border-paper bg-mint/10 shadow-sm">
+              <div className={`relative z-10 h-12 w-12 shrink-0 overflow-hidden rounded-2xl border-2 bg-mint/10 shadow-sm ${replaced ? "border-emerald-500" : "border-paper"} ${cancelled ? "opacity-50 grayscale" : ""}`}>
                 <ImageFallback src={getPlaceImage(node.placeName, node.nodeType)} alt={node.placeName} city={node.placeName} />
                 <div className="absolute inset-0 grid place-items-center bg-ink/15 text-white"><Icon size={14} /></div>
               </div>
               <div className="min-w-0 flex-1">
-                <div className={`rounded-card border border-slate-100 bg-white/80 p-4 shadow-sm transition duration-200 group-hover/route:-translate-y-0.5 group-hover/route:shadow-soft ${compact ? "p-3" : ""}`}>
+                <div className={`rounded-card border p-4 shadow-sm transition duration-200 group-hover/route:-translate-y-0.5 group-hover/route:shadow-soft ${compact ? "p-3" : ""} ${replaced ? "border-emerald-300 bg-emerald-50/70 ring-2 ring-emerald-400/40" : cancelled ? "border-slate-100 bg-slate-50/70 opacity-60" : "border-slate-100 bg-white/80"}`}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="font-mono text-xs font-bold text-ink-soft">{formatTime(node.plannedStart)} — {formatTime(node.plannedEnd)}</p>
                     <StatusBadge status={node.status} />
                   </div>
-                  <button type="button" onClick={() => onNodeClick ? onNodeClick(node) : setSelectedNode(node)} className="group mt-2 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold text-ink transition hover:text-coral focus-visible:outline-offset-2 motion-reduce:transition-none">
+                  <button type="button" onClick={() => onNodeClick ? onNodeClick(node) : setSelectedNode(node)} className={`group mt-2 flex max-w-full items-center gap-2 rounded-lg text-left font-semibold transition hover:text-coral focus-visible:outline-offset-2 motion-reduce:transition-none ${replaced ? "text-emerald-900" : cancelled ? "text-ink-soft line-through decoration-ink-soft/50" : "text-ink"}`}>
                     <span className="truncate">{node.name}</span><Info size={14} className="shrink-0 text-sky opacity-60 transition group-hover:opacity-100" />
                   </button>
-                  <p className="mt-1 text-xs text-ink-soft">{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>
+                  <p className={`mt-1 text-xs ${replaced ? "text-emerald-800" : "text-ink-soft"}`}>{node.placeName} · {nodeNames[node.nodeType]} · ¥{node.cost}</p>
+                  {replaced && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                      <Sparkles size={12} />这是投票替换后的新安排
+                    </p>
+                  )}
+                  {cancelled && <p className="mt-2 text-[11px] font-semibold text-ink-soft">该节点已被替代方案移除，仅作留档</p>}
                   {node.status === "AFFECTED" && (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       {(uniqueEvents.length > 0 ? uniqueEvents : [undefined]).map((event, eventIndex) => (
@@ -120,7 +132,7 @@ export function RouteTrail({
                   {showSegments && index < topLevelNodes.length - 1 && (
                     <RouteSegment from={node} to={topLevelNodes[index + 1]} compact={compact} />
                   )}
-                  {showNearby && (
+                  {showNearby && !cancelled && (
                     <NearbyPlay node={node} compact={compact} onNodeClick={onNodeClick ?? setSelectedNode} />
                   )}
                   {(childrenByParent.get(node.id) ?? []).length > 0 && (

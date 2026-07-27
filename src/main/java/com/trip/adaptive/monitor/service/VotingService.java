@@ -112,6 +112,7 @@ public class VotingService {
                 ItineraryNode n = c.getOriginalNode();
                 if (n == null) return;
                 // 记录变更前快照，供后续「回退」恢复。
+                c.setPrevName(n.getName());
                 c.setPrevPlaceName(n.getPlaceName());
                 c.setPrevLatitude(n.getLatitude());
                 c.setPrevLongitude(n.getLongitude());
@@ -123,6 +124,9 @@ public class VotingService {
                 if (c.getChangeType() == Enums.ChangeType.REMOVE)
                   n.setStatus(Enums.NodeStatus.CANCELLED);
                 else {
+                  // 换地点后节点标题也要跟着换，否则行程里仍以原地点名示人。
+                  if (c.getChangeType() == Enums.ChangeType.REPLACE && c.getNewPlaceName() != null)
+                    n.setName(c.getNewPlaceName());
                   n.setPlaceName(c.getNewPlaceName());
                   if (c.getNewLatitude() != null) n.setLatitude(c.getNewLatitude());
                   if (c.getNewLongitude() != null) n.setLongitude(c.getNewLongitude());
@@ -174,6 +178,7 @@ public class VotingService {
               if (!c.isApplied()) return;
               ItineraryNode n = c.getOriginalNode();
               if (n != null) {
+                if (c.getPrevName() != null) n.setName(c.getPrevName());
                 n.setPlaceName(c.getPrevPlaceName());
                 n.setLatitude(c.getPrevLatitude());
                 n.setLongitude(c.getPrevLongitude());
